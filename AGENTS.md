@@ -31,7 +31,7 @@ Start with the task's files; read only relevant sections of these references, no
 - Bun workspaces: `cli`, `shared`, `hub`, `web`, `website`, `docs`, `relay`. Run workspace scripts from the root; package-scoped commands may use `bun run --cwd <package> ...` or that package's directory. iOS and Android use separate toolchains.
 - TypeScript strict; keep code typed. Prefer 4-space indentation. `@/*` resolves to a package's `src/*`.
 - Shared protocol is `@hapi/protocol`; runtime schemas live in `shared/src/schemas.ts` (Zod).
-- No backward compatibility required for formats changed by the task; do not add compatibility layers or change unrelated formats.
+- This fork requires backward compatibility for historical HAPI SQLite databases during PostgreSQL migration and for existing public protocols and configuration affected by that work. Follow the [PostgreSQL migration plan](docs/guide/postgresql-migration-plan.md), preserve historical migration paths, and add compatibility coverage for affected versions. Keep unrelated formats unchanged.
 
 ## Cross-component invariants
 

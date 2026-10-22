@@ -4,6 +4,10 @@ Run official Claude Code / Codex / Cursor Agent / Grok Build / OpenCode / Kimi /
 
 > **Why HAPI?** HAPI is a local-first alternative to Happy. See [Why Not Happy?](docs/guide/why-hapi.md) for the key differences.
 
+## Fork development plan
+
+This fork plans PostgreSQL storage, automatic migration of historical HAPI SQLite databases during deployment, and scheduled-message query optimization. See the [PostgreSQL and historical SQLite migration plan](docs/guide/postgresql-migration-plan.md) for compatibility requirements, implementation stages, and release acceptance criteria. Status: planned; runtime behavior currently follows upstream.
+
 ## Features
 
 - **Seamless Handoff** - Work locally, switch to remote when needed, switch back anytime. No context loss, no session restart.

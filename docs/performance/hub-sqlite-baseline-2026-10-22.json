@@ -1,0 +1,550 @@
+{
+  "baseline_id": "hapi-hub-sqlite-2026-10-22",
+  "started_utc": "2026-10-22T10:26:18+00:00",
+  "container": {
+    "name": "hapi-hub",
+    "image": "local/hapi-hub:0.30.7",
+    "image_id": "sha256:5f3500f40485af6b24ad8f99422272ef5651820a0c0fe5d9df55e1c6ba2710ab",
+    "init_pid": 2986264,
+    "started_at": "2026-10-22T09:27:11.704372377Z",
+    "restarts": 0,
+    "oom_killed": false,
+    "limits": {
+      "Memory": 0,
+      "MemoryReservation": 0,
+      "MemorySwap": 0,
+      "NanoCpus": 0,
+      "CpuQuota": 0,
+      "CpuPeriod": 0,
+      "CpuShares": 0,
+      "CpusetCpus": "",
+      "PidsLimit": null,
+      "BlkioWeight": 0
+    }
+  },
+  "process": {
+    "main_pid": 2986361,
+    "uptime_seconds_at_start": 3546.91,
+    "binary_sha256": "a85eaf72ab157f920600c2b64d15623e83bae5c79849f8867b19d3e89ba26eed"
+  },
+  "host": {
+    "architecture": "aarch64",
+    "kernel": "6.17.0-1020-oracle",
+    "logical_cpus": 16,
+    "memory_total_kib": 65703940,
+    "memory_available_kib": 51935284,
+    "swap_total_kib": 0,
+    "load_average": [
+      1.7939453125,
+      2.17919921875,
+      3.09423828125
+    ],
+    "data_mount": {
+      "target": "/data",
+      "source": "/dev/sdb",
+      "fstype": "ext4",
+      "options": "rw,noatime,stripe=256"
+    },
+    "data_total_bytes": 1081101176832,
+    "data_available_bytes": 55526678528
+  },
+  "passive_sample": {
+    "duration_seconds": 5.0006,
+    "main_thread_cpu_percent_one_core": 1.0,
+    "main_thread_user_cpu_percent_one_core": 0.8,
+    "main_thread_system_cpu_percent_one_core": 0.2,
+    "host_idle_percent": 91.681,
+    "host_iowait_percent": 0.013,
+    "rss_kib_before": 904520,
+    "rss_kib_after": 904552,
+    "threads_before": 18,
+    "threads_after": 18,
+    "process_io_delta": {
+      "rchar": 281900,
+      "wchar": 333,
+      "syscr": 95,
+      "syscw": 35,
+      "read_bytes": 0,
+      "write_bytes": 0,
+      "cancelled_write_bytes": 0
+    }
+  },
+  "cgroup": {
+    "cpu_max": "max 100000",
+    "memory_max": "max",
+    "cpuset": "0-15",
+    "cpu_stat": "usage_usec 3081094640\nuser_usec 1525949446\nsystem_usec 1555145193\nnice_usec 0\ncore_sched.force_idle_usec 0\nnr_periods 0\nnr_throttled 0\nthrottled_usec 0\nnr_bursts 0\nburst_usec 0"
+  },
+  "docker_stats": {
+    "BlockIO": "17MB / 20MB",
+    "CPUPerc": "1.75%",
+    "Container": "hapi-hub",
+    "ID": "58fa751a4f38",
+    "MemPerc": "1.38%",
+    "MemUsage": "886.5MiB / 62.66GiB",
+    "Name": "hapi-hub",
+    "NetIO": "977MB / 162MB",
+    "PIDs": "19"
+  },
+  "database_benchmark": {
+    "started_utc": "2026-10-22T10:26:25.032Z",
+    "bun": "1.4.0",
+    "sqlite": "3.53.2",
+    "schema": 26,
+    "page_count": 257072,
+    "page_size": 4096,
+    "table_counts": {
+      "sessions": 177,
+      "machines": 1,
+      "messages": 510420,
+      "message_epochs": 10,
+      "users": 0,
+      "push_subscriptions": 3,
+      "fcm_devices": 0,
+      "session_scratchlist": 0,
+      "usage_events": 124574,
+      "usage_scan_state": 177,
+      "events": 0,
+      "event_links": 0
+    },
+    "namespace_session_ids": 177,
+    "query_now_ms": 1792664785267,
+    "pending_scheduled_rows": 0,
+    "queries": [
+      {
+        "name": "scheduled_count",
+        "sql_template": "SELECT session_id, COUNT(*) AS value FROM messages WHERE session_id IN (<session ID placeholders>) AND invoked_at IS NULL AND local_id IS NOT NULL AND scheduled_at IS NOT NULL AND scheduled_at > ? AND delivery_state = 'queued' GROUP BY session_id",
+        "original": {
+          "plan": [
+            "SEARCH messages USING INDEX idx_messages_local_id (session_id=? AND local_id>?)"
+          ],
+          "samples": [
+            {
+              "wall_ms": 531.482,
+              "cpu_ms": 531.457,
+              "result_rows": 0
+            },
+            {
+              "wall_ms": 529.81,
+              "cpu_ms": 529.82,
+              "result_rows": 0
+            },
+            {
+              "wall_ms": 530.186,
+              "cpu_ms": 530.193,
+              "result_rows": 0
+            }
+          ]
+        },
+        "scheduled_index": {
+          "plan": [
+            "SEARCH messages USING INDEX idx_messages_scheduled_pending (scheduled_at>?)",
+            "USE TEMP B-TREE FOR GROUP BY"
+          ],
+          "samples": [
+            {
+              "wall_ms": 0.199,
+              "cpu_ms": 0.196,
+              "result_rows": 0
+            },
+            {
+              "wall_ms": 0.124,
+              "cpu_ms": 0.122,
+              "result_rows": 0
+            },
+            {
+              "wall_ms": 0.123,
+              "cpu_ms": 0.122,
+              "result_rows": 0
+            }
+          ]
+        },
+        "equal_results": true
+      },
+      {
+        "name": "scheduled_min",
+        "sql_template": "SELECT session_id, MIN(scheduled_at) AS value FROM messages WHERE session_id IN (<session ID placeholders>) AND invoked_at IS NULL AND local_id IS NOT NULL AND scheduled_at IS NOT NULL AND scheduled_at > ? AND delivery_state = 'queued' GROUP BY session_id",
+        "original": {
+          "plan": [
+            "SEARCH messages USING INDEX idx_messages_local_id (session_id=? AND local_id>?)"
+          ],
+          "samples": [
+            {
+              "wall_ms": 528.712,
+              "cpu_ms": 528.748,
+              "result_rows": 0
+            },
+            {
+              "wall_ms": 525.501,
+              "cpu_ms": 525.497,
+              "result_rows": 0
+            },
+            {
+              "wall_ms": 526.592,
+              "cpu_ms": 526.615,
+              "result_rows": 0
+            }
+          ]
+        },
+        "scheduled_index": {
+          "plan": [
+            "SEARCH messages USING INDEX idx_messages_scheduled_pending (scheduled_at>?)",
+            "USE TEMP B-TREE FOR GROUP BY"
+          ],
+          "samples": [
+            {
+              "wall_ms": 0.168,
+              "cpu_ms": 0.165,
+              "result_rows": 0
+            },
+            {
+              "wall_ms": 0.142,
+              "cpu_ms": 0.14,
+              "result_rows": 0
+            },
+            {
+              "wall_ms": 0.345,
+              "cpu_ms": 0.342,
+              "result_rows": 0
+            }
+          ]
+        },
+        "equal_results": true
+      }
+    ],
+    "ended_utc": "2026-10-22T10:26:28.442Z"
+  },
+  "database_file_bytes": 1052946432,
+  "http": {
+    "base": "http://127.0.0.1:3006",
+    "timeout_seconds": 20,
+    "concurrency": 1,
+    "samples_per_endpoint": 5,
+    "background_traffic": "Existing live clients and other host workloads remained active.",
+    "samples": [
+      {
+        "sample_index": 1,
+        "path": "/api/sessions",
+        "started_utc": "2026-10-22T10:26:28+00:00",
+        "headers_ms": 1060.767,
+        "status": 200,
+        "response_bytes": 137886,
+        "sessions": 177,
+        "total_ms": 1070.15
+      },
+      {
+        "sample_index": 1,
+        "path": "/health",
+        "started_utc": "2026-10-22T10:26:29+00:00",
+        "headers_ms": 1.305,
+        "status": 200,
+        "response_bytes": 93,
+        "total_ms": 1.43
+      },
+      {
+        "sample_index": 2,
+        "path": "/api/sessions",
+        "started_utc": "2026-10-22T10:26:29+00:00",
+        "headers_ms": 1069.266,
+        "status": 200,
+        "response_bytes": 137886,
+        "sessions": 177,
+        "total_ms": 1071.312
+      },
+      {
+        "sample_index": 2,
+        "path": "/health",
+        "started_utc": "2026-10-22T10:26:30+00:00",
+        "headers_ms": 5.615,
+        "status": 200,
+        "response_bytes": 93,
+        "total_ms": 5.72
+      },
+      {
+        "sample_index": 3,
+        "path": "/api/sessions",
+        "started_utc": "2026-10-22T10:26:30+00:00",
+        "headers_ms": 1074.684,
+        "status": 200,
+        "response_bytes": 137886,
+        "sessions": 177,
+        "total_ms": 1078.637
+      },
+      {
+        "sample_index": 3,
+        "path": "/health",
+        "started_utc": "2026-10-22T10:26:31+00:00",
+        "headers_ms": 6.719,
+        "status": 200,
+        "response_bytes": 93,
+        "total_ms": 6.807
+      },
+      {
+        "sample_index": 4,
+        "path": "/api/sessions",
+        "started_utc": "2026-10-22T10:26:31+00:00",
+        "headers_ms": 1071.455,
+        "status": 200,
+        "response_bytes": 137886,
+        "sessions": 177,
+        "total_ms": 1073.573
+      },
+      {
+        "sample_index": 4,
+        "path": "/health",
+        "started_utc": "2026-10-22T10:26:32+00:00",
+        "headers_ms": 4.889,
+        "status": 200,
+        "response_bytes": 93,
+        "total_ms": 4.991
+      },
+      {
+        "sample_index": 5,
+        "path": "/api/sessions",
+        "started_utc": "2026-10-22T10:26:32+00:00",
+        "headers_ms": 1065.937,
+        "status": 200,
+        "response_bytes": 137886,
+        "sessions": 177,
+        "total_ms": 1067.846
+      },
+      {
+        "sample_index": 5,
+        "path": "/health",
+        "started_utc": "2026-10-22T10:26:33+00:00",
+        "headers_ms": 8.261,
+        "status": 200,
+        "response_bytes": 93,
+        "total_ms": 8.371
+      }
+    ],
+    "summary": [
+      {
+        "path": "/api/sessions",
+        "attempts": 5,
+        "successful": 5,
+        "min_ms": 1067.846,
+        "median_ms": 1071.312,
+        "max_ms": 1078.637
+      },
+      {
+        "path": "/health",
+        "attempts": 5,
+        "successful": 5,
+        "min_ms": 1.43,
+        "median_ms": 5.72,
+        "max_ms": 8.371
+      }
+    ]
+  },
+  "recent_logs": {
+    "requested_window_seconds": 180,
+    "tail_limit": 5000,
+    "first_completed_request_utc": "2026-10-22T10:23:44.917054211Z",
+    "last_completed_request_utc": "2026-10-22T10:26:33.868805336Z",
+    "duration_resolution": "Application log durations are formatted as whole ms or whole seconds.",
+    "includes_probe_requests": true,
+    "routes": [
+      {
+        "route": "GET /api/sessions",
+        "count": 13,
+        "avg_ms": 1000.0,
+        "max_ms": 1000
+      },
+      {
+        "route": "POST /api/visibility",
+        "count": 6,
+        "avg_ms": 2.833,
+        "max_ms": 8
+      },
+      {
+        "route": "GET /api/hub-settings",
+        "count": 10,
+        "avg_ms": 1.6,
+        "max_ms": 9
+      },
+      {
+        "route": "GET /api/sessions/:id/skills",
+        "count": 1,
+        "avg_ms": 15.0,
+        "max_ms": 15
+      },
+      {
+        "route": "GET /api/sessions/:id/slash-commands",
+        "count": 1,
+        "avg_ms": 9.0,
+        "max_ms": 9
+      },
+      {
+        "route": "GET /api/sessions/:id/messages",
+        "count": 2,
+        "avg_ms": 1.5,
+        "max_ms": 2
+      },
+      {
+        "route": "POST /api/auth",
+        "count": 1,
+        "avg_ms": 1.0,
+        "max_ms": 1
+      },
+      {
+        "route": "GET /health",
+        "count": 11,
+        "avg_ms": 0.0,
+        "max_ms": 0
+      },
+      {
+        "route": "GET /sw.js",
+        "count": 2,
+        "avg_ms": 0.0,
+        "max_ms": 0
+      }
+    ]
+  },
+  "ended_utc": "2026-10-22T10:26:34+00:00",
+  "earlier_perf_sample": {
+    "bytes": 1112644,
+    "sha256": "a3909138efeccfa7b77e0c7c52df7259e7269597b6271cba7ab42a79b2f7a37a",
+    "command": "perf record -e cpu-clock:u -F 49 --call-graph dwarf,4096 -t <main TID> -- sleep 12",
+    "samples": 247,
+    "lost_samples": 0,
+    "storage": "Original perf data remains on the development volume; only metadata is published."
+  },
+  "record_format_version": 1,
+  "earlier_incident": {
+    "date_utc": "2026-10-22",
+    "timing": "Earlier in the same investigation; per-measurement UTC timestamps were not captured consistently.",
+    "container_process_instances": [
+      {
+        "started_utc": "2026-10-22T09:07:26.493546483Z",
+        "init_pid": 2914491,
+        "main_pid": 2914570
+      },
+      {
+        "started_utc": "2026-10-22T09:27:11.704372377Z",
+        "init_pid": 2986264,
+        "main_pid": 2986361
+      }
+    ],
+    "database": {
+      "sessions": 177,
+      "messages": 510326,
+      "file_bytes": 1052782592,
+      "pending_scheduled_rows": 0
+    },
+    "docker_stats_sample": {
+      "cpu_percent_one_core": 102.34,
+      "memory_usage_gib": 3.74,
+      "memory_limit_gib": 62.66
+    },
+    "thread_ps_samples": {
+      "main_cpu_percent_range": [
+        99.1,
+        99.8
+      ],
+      "background_threads_typically_percent": [
+        0.0,
+        0.7
+      ],
+      "cpu_semantics": "ps percentage is averaged over process/thread lifetime."
+    },
+    "host_vmstat_samples": {
+      "idle_percent_range": [
+        84,
+        87
+      ],
+      "iowait_percent": 0,
+      "available_memory_approximately_gib": 46
+    },
+    "authenticated_http_samples": [
+      {
+        "path": "/api/sessions?limit=1",
+        "status": 200,
+        "total_ms": 873.12,
+        "response_bytes": 783,
+        "sessions": 1
+      },
+      {
+        "path": "/api/sessions",
+        "status": 200,
+        "total_ms": 4592.46,
+        "response_bytes": 137881,
+        "sessions": 177
+      },
+      {
+        "path": "/api/sessions?limit=1",
+        "status": 200,
+        "total_ms": 2968.32,
+        "response_bytes": 783,
+        "sessions": 1
+      },
+      {
+        "path": "/health",
+        "status": 200,
+        "total_ms": 596.63,
+        "response_bytes": 93
+      }
+    ],
+    "curl_probes": [
+      {
+        "path": "/health",
+        "authenticated": false,
+        "timeout_seconds": 15,
+        "status": null,
+        "total_ms": 15002.323
+      },
+      {
+        "path": "/",
+        "authenticated": false,
+        "status": 200,
+        "total_ms": 2524.54
+      },
+      {
+        "path": "/api/sessions",
+        "authenticated": false,
+        "timeout_seconds": 15,
+        "status": null,
+        "total_ms": 15002.54
+      }
+    ],
+    "recent_log_sample": {
+      "requested_window_seconds": 180,
+      "route": "GET /api/sessions",
+      "count": 125,
+      "formatted_average_ms": 1192.0,
+      "formatted_max_ms": 2000,
+      "note": "Application log durations use whole milliseconds or seconds."
+    },
+    "native_sql_samples": [
+      {
+        "name": "scheduled_count",
+        "original_wall_ms": 552.272,
+        "original_cpu_ms": 552.232,
+        "indexed_wall_ms": 0.15,
+        "indexed_cpu_ms": 0.147,
+        "result_rows": 0,
+        "equal_results": true
+      },
+      {
+        "name": "scheduled_min",
+        "original_wall_ms": 551.595,
+        "original_cpu_ms": 551.583,
+        "indexed_wall_ms": 0.15,
+        "indexed_cpu_ms": 0.146,
+        "result_rows": 0,
+        "equal_results": true
+      }
+    ],
+    "intermediate_thread_ps_sample": {
+      "main_pid": 2986361,
+      "main_cpu_percent_lifetime": 99.8,
+      "memory_percent_physical": 20.3,
+      "capture_time_bounds_utc": [
+        "2026-10-22T10:09:33+00:00",
+        "2026-10-22T10:26:18+00:00"
+      ],
+      "memory_percent_resolution_decimal_places": 1,
+      "note": "Separate docker top/ps snapshot before the precise 5-second sample. Same main PID; memory change was not continuously measured."
+    }
+  }
+}

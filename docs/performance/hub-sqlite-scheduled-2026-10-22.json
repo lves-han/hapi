@@ -1,0 +1,1222 @@
+{
+  "recordedAt": "2026-10-22T10:39:59.145Z",
+  "environment": {
+    "bun": "1.4.0",
+    "sqlite": {
+      "version": "3.53.2"
+    },
+    "arch": "arm64",
+    "kernel": "6.17.0-1020-oracle",
+    "cpu": "unknown",
+    "logicalCpus": 16,
+    "memoryBytes": 67280834560
+  },
+  "fixture": {
+    "storage": "in-memory",
+    "sessionCount": 177,
+    "historyCount": 510420,
+    "history": "all rows have local_id and invoked_at = 0; scheduled_at = NULL",
+    "statistics": "no ANALYZE, matching fresh schema defaults",
+    "warmups": 3,
+    "samples": 20,
+    "now": 2000000000000,
+    "concurrency": 1,
+    "backgroundTraffic": "none in fixture; host load uncontrolled"
+  },
+  "cases": [
+    {
+      "pendingCount": 0,
+      "query": "scheduled_count",
+      "resultRows": 0,
+      "originalPlan": [
+        {
+          "id": 7,
+          "parent": 0,
+          "notused": 136,
+          "detail": "SEARCH messages USING INDEX idx_messages_local_id (session_id=? AND local_id>?)"
+        }
+      ],
+      "indexedPlan": [
+        {
+          "id": 7,
+          "parent": 0,
+          "notused": 192,
+          "detail": "SEARCH messages USING INDEX idx_messages_scheduled_pending (scheduled_at>?)"
+        },
+        {
+          "id": 556,
+          "parent": 0,
+          "notused": 0,
+          "detail": "USE TEMP B-TREE FOR GROUP BY"
+        }
+      ],
+      "original": {
+        "p50Ms": 384.44875800000045,
+        "p95Ms": 409.56728100000055,
+        "timings": [
+          {
+            "wallMs": 409.56728100000055,
+            "cpuMs": 409.569
+          },
+          {
+            "wallMs": 405.89425200000005,
+            "cpuMs": 405.902
+          },
+          {
+            "wallMs": 398.5221529999999,
+            "cpuMs": 398.529
+          },
+          {
+            "wallMs": 363.8707110000005,
+            "cpuMs": 363.87
+          },
+          {
+            "wallMs": 384.44875800000045,
+            "cpuMs": 384.456
+          },
+          {
+            "wallMs": 372.02677700000004,
+            "cpuMs": 372.084
+          },
+          {
+            "wallMs": 379.9120410000005,
+            "cpuMs": 379.934
+          },
+          {
+            "wallMs": 371.7376949999998,
+            "cpuMs": 371.745
+          },
+          {
+            "wallMs": 378.50439000000097,
+            "cpuMs": 378.501
+          },
+          {
+            "wallMs": 372.88110400000005,
+            "cpuMs": 372.888
+          },
+          {
+            "wallMs": 386.40821399999913,
+            "cpuMs": 386.408
+          },
+          {
+            "wallMs": 398.6966339999999,
+            "cpuMs": 398.694
+          },
+          {
+            "wallMs": 381.9251779999995,
+            "cpuMs": 381.931
+          },
+          {
+            "wallMs": 397.72266599999966,
+            "cpuMs": 398.176
+          },
+          {
+            "wallMs": 371.49525299999914,
+            "cpuMs": 371.607
+          },
+          {
+            "wallMs": 369.7041989999998,
+            "cpuMs": 369.71
+          },
+          {
+            "wallMs": 392.41154300000017,
+            "cpuMs": 392.406
+          },
+          {
+            "wallMs": 397.86650700000064,
+            "cpuMs": 397.873
+          },
+          {
+            "wallMs": 406.6840179999999,
+            "cpuMs": 406.69
+          },
+          {
+            "wallMs": 411.9629409999998,
+            "cpuMs": 411.959
+          }
+        ]
+      },
+      "optimized": {
+        "p50Ms": 0.04608100000041304,
+        "p95Ms": 0.06063999999969383,
+        "timings": [
+          {
+            "wallMs": 0.05824000000029628,
+            "cpuMs": 0.123
+          },
+          {
+            "wallMs": 0.0452000000004773,
+            "cpuMs": 0.047
+          },
+          {
+            "wallMs": 0.04352099999960046,
+            "cpuMs": 0.045
+          },
+          {
+            "wallMs": 0.046999999998661224,
+            "cpuMs": 0.051
+          },
+          {
+            "wallMs": 0.052440999999816995,
+            "cpuMs": 0.054
+          },
+          {
+            "wallMs": 0.06063999999969383,
+            "cpuMs": 0.062
+          },
+          {
+            "wallMs": 0.04468099999940023,
+            "cpuMs": 0.047
+          },
+          {
+            "wallMs": 0.046000000000276486,
+            "cpuMs": 0.168
+          },
+          {
+            "wallMs": 0.04804100000001199,
+            "cpuMs": 0.05
+          },
+          {
+            "wallMs": 0.05715999999847554,
+            "cpuMs": 0.149
+          },
+          {
+            "wallMs": 0.04608100000041304,
+            "cpuMs": 0.048
+          },
+          {
+            "wallMs": 0.08604000000013912,
+            "cpuMs": 0.087
+          },
+          {
+            "wallMs": 0.04352100000141945,
+            "cpuMs": 0.045
+          },
+          {
+            "wallMs": 0.04523999999946682,
+            "cpuMs": 0.047
+          },
+          {
+            "wallMs": 0.04464100000041071,
+            "cpuMs": 0.046
+          },
+          {
+            "wallMs": 0.049759999999878346,
+            "cpuMs": 0.143
+          },
+          {
+            "wallMs": 0.04948100000001432,
+            "cpuMs": 0.051
+          },
+          {
+            "wallMs": 0.04584000000068045,
+            "cpuMs": 0.049
+          },
+          {
+            "wallMs": 0.05388099999981932,
+            "cpuMs": 0.055
+          },
+          {
+            "wallMs": 0.04348000000027241,
+            "cpuMs": 0.045
+          }
+        ]
+      }
+    },
+    {
+      "pendingCount": 0,
+      "query": "scheduled_min",
+      "resultRows": 0,
+      "originalPlan": [
+        {
+          "id": 7,
+          "parent": 0,
+          "notused": 136,
+          "detail": "SEARCH messages USING INDEX idx_messages_local_id (session_id=? AND local_id>?)"
+        }
+      ],
+      "indexedPlan": [
+        {
+          "id": 7,
+          "parent": 0,
+          "notused": 192,
+          "detail": "SEARCH messages USING INDEX idx_messages_scheduled_pending (scheduled_at>?)"
+        },
+        {
+          "id": 556,
+          "parent": 0,
+          "notused": 0,
+          "detail": "USE TEMP B-TREE FOR GROUP BY"
+        }
+      ],
+      "original": {
+        "p50Ms": 411.8200599999982,
+        "p95Ms": 457.6593520000024,
+        "timings": [
+          {
+            "wallMs": 423.2082330000012,
+            "cpuMs": 423.22
+          },
+          {
+            "wallMs": 404.7107619999988,
+            "cpuMs": 404.704
+          },
+          {
+            "wallMs": 431.7449009999982,
+            "cpuMs": 431.751
+          },
+          {
+            "wallMs": 439.92132799999854,
+            "cpuMs": 439.913
+          },
+          {
+            "wallMs": 410.99001399999906,
+            "cpuMs": 410.996
+          },
+          {
+            "wallMs": 391.33485400000063,
+            "cpuMs": 391.326
+          },
+          {
+            "wallMs": 411.8200599999982,
+            "cpuMs": 411.827
+          },
+          {
+            "wallMs": 408.3705919999993,
+            "cpuMs": 408.397
+          },
+          {
+            "wallMs": 415.44472999999925,
+            "cpuMs": 415.398
+          },
+          {
+            "wallMs": 408.85187600000063,
+            "cpuMs": 408.812
+          },
+          {
+            "wallMs": 429.1232400000008,
+            "cpuMs": 429.112
+          },
+          {
+            "wallMs": 434.01012000000264,
+            "cpuMs": 433.906
+          },
+          {
+            "wallMs": 421.3655770000005,
+            "cpuMs": 421.347
+          },
+          {
+            "wallMs": 457.6593520000024,
+            "cpuMs": 457.621
+          },
+          {
+            "wallMs": 465.4513749999969,
+            "cpuMs": 465.44
+          },
+          {
+            "wallMs": 453.1100349999979,
+            "cpuMs": 453.101
+          },
+          {
+            "wallMs": 388.2002689999972,
+            "cpuMs": 388.098
+          },
+          {
+            "wallMs": 374.09263400000054,
+            "cpuMs": 374.015
+          },
+          {
+            "wallMs": 386.04421100000036,
+            "cpuMs": 385.891
+          },
+          {
+            "wallMs": 397.1639009999999,
+            "cpuMs": 397.131
+          }
+        ]
+      },
+      "optimized": {
+        "p50Ms": 0.046201000001019565,
+        "p95Ms": 0.07128100000045379,
+        "timings": [
+          {
+            "wallMs": 0.06032099999720231,
+            "cpuMs": 0.064
+          },
+          {
+            "wallMs": 0.04528000000209431,
+            "cpuMs": 0.047
+          },
+          {
+            "wallMs": 0.05140100000062375,
+            "cpuMs": 0.054
+          },
+          {
+            "wallMs": 0.044279999998252606,
+            "cpuMs": 0.045
+          },
+          {
+            "wallMs": 0.04512000000249827,
+            "cpuMs": 0.046
+          },
+          {
+            "wallMs": 0.046201000001019565,
+            "cpuMs": 0.048
+          },
+          {
+            "wallMs": 0.05456000000049244,
+            "cpuMs": 0.057
+          },
+          {
+            "wallMs": 0.07128100000045379,
+            "cpuMs": 0.073
+          },
+          {
+            "wallMs": 0.08440100000007078,
+            "cpuMs": 0.201
+          },
+          {
+            "wallMs": 0.05248000000210595,
+            "cpuMs": 0.054
+          },
+          {
+            "wallMs": 0.06044099999780883,
+            "cpuMs": 0.062
+          },
+          {
+            "wallMs": 0.048480000001291046,
+            "cpuMs": 0.05
+          },
+          {
+            "wallMs": 0.04467999999906169,
+            "cpuMs": 0.046
+          },
+          {
+            "wallMs": 0.04515999999784981,
+            "cpuMs": 0.047
+          },
+          {
+            "wallMs": 0.04711999999926775,
+            "cpuMs": 0.048
+          },
+          {
+            "wallMs": 0.0450410000012198,
+            "cpuMs": 0.047
+          },
+          {
+            "wallMs": 0.046239999999670545,
+            "cpuMs": 0.047
+          },
+          {
+            "wallMs": 0.04520100000081584,
+            "cpuMs": 0.047
+          },
+          {
+            "wallMs": 0.043079999999463325,
+            "cpuMs": 0.045
+          },
+          {
+            "wallMs": 0.042559999998047715,
+            "cpuMs": 0.044
+          }
+        ]
+      }
+    },
+    {
+      "pendingCount": 1,
+      "query": "scheduled_count",
+      "resultRows": 1,
+      "originalPlan": [
+        {
+          "id": 7,
+          "parent": 0,
+          "notused": 136,
+          "detail": "SEARCH messages USING INDEX idx_messages_local_id (session_id=? AND local_id>?)"
+        }
+      ],
+      "indexedPlan": [
+        {
+          "id": 7,
+          "parent": 0,
+          "notused": 192,
+          "detail": "SEARCH messages USING INDEX idx_messages_scheduled_pending (scheduled_at>?)"
+        },
+        {
+          "id": 556,
+          "parent": 0,
+          "notused": 0,
+          "detail": "USE TEMP B-TREE FOR GROUP BY"
+        }
+      ],
+      "original": {
+        "p50Ms": 380.9241289999991,
+        "p95Ms": 420.33216900000116,
+        "timings": [
+          {
+            "wallMs": 382.5471030000008,
+            "cpuMs": 382.39
+          },
+          {
+            "wallMs": 384.9998020000021,
+            "cpuMs": 384.966
+          },
+          {
+            "wallMs": 380.9241289999991,
+            "cpuMs": 380.93
+          },
+          {
+            "wallMs": 390.91705,
+            "cpuMs": 390.831
+          },
+          {
+            "wallMs": 387.1170990000028,
+            "cpuMs": 387.074
+          },
+          {
+            "wallMs": 386.110052,
+            "cpuMs": 386.02
+          },
+          {
+            "wallMs": 369.00107200000275,
+            "cpuMs": 368.99
+          },
+          {
+            "wallMs": 377.3115400000024,
+            "cpuMs": 377.307
+          },
+          {
+            "wallMs": 378.5507899999975,
+            "cpuMs": 378.462
+          },
+          {
+            "wallMs": 411.56865800000014,
+            "cpuMs": 411.535
+          },
+          {
+            "wallMs": 420.33216900000116,
+            "cpuMs": 420.229
+          },
+          {
+            "wallMs": 422.9670699999988,
+            "cpuMs": 422.953
+          },
+          {
+            "wallMs": 418.916158,
+            "cpuMs": 418.908
+          },
+          {
+            "wallMs": 380.0351620000001,
+            "cpuMs": 379.947
+          },
+          {
+            "wallMs": 383.8246330000002,
+            "cpuMs": 383.76
+          },
+          {
+            "wallMs": 377.42878100000235,
+            "cpuMs": 377.335
+          },
+          {
+            "wallMs": 379.18215500000224,
+            "cpuMs": 379.171
+          },
+          {
+            "wallMs": 377.16733899999963,
+            "cpuMs": 377.137
+          },
+          {
+            "wallMs": 372.30585900000005,
+            "cpuMs": 372.208
+          },
+          {
+            "wallMs": 355.78836500000034,
+            "cpuMs": 355.794
+          }
+        ]
+      },
+      "optimized": {
+        "p50Ms": 0.09347999999954482,
+        "p95Ms": 0.13076100000034785,
+        "timings": [
+          {
+            "wallMs": 0.13076100000034785,
+            "cpuMs": 0.134
+          },
+          {
+            "wallMs": 0.0977999999995518,
+            "cpuMs": 0.099
+          },
+          {
+            "wallMs": 0.09188100000028498,
+            "cpuMs": 0.093
+          },
+          {
+            "wallMs": 0.10724100000152248,
+            "cpuMs": 0.573
+          },
+          {
+            "wallMs": 0.11212099999829661,
+            "cpuMs": 0.259
+          },
+          {
+            "wallMs": 0.09544100000130129,
+            "cpuMs": 0.097
+          },
+          {
+            "wallMs": 0.10164099999747123,
+            "cpuMs": 0.254
+          },
+          {
+            "wallMs": 0.333042000002024,
+            "cpuMs": 0.531
+          },
+          {
+            "wallMs": 0.11076000000321073,
+            "cpuMs": 0.113
+          },
+          {
+            "wallMs": 0.1030399999981455,
+            "cpuMs": 0.105
+          },
+          {
+            "wallMs": 0.09347999999954482,
+            "cpuMs": 0.118
+          },
+          {
+            "wallMs": 0.09392099999968195,
+            "cpuMs": 0.095
+          },
+          {
+            "wallMs": 0.09212099999786005,
+            "cpuMs": 0.094
+          },
+          {
+            "wallMs": 0.08692099999825587,
+            "cpuMs": 0.089
+          },
+          {
+            "wallMs": 0.09096000000135973,
+            "cpuMs": 0.092
+          },
+          {
+            "wallMs": 0.08932000000277185,
+            "cpuMs": 0.091
+          },
+          {
+            "wallMs": 0.08728100000007544,
+            "cpuMs": 0.088
+          },
+          {
+            "wallMs": 0.0919209999992745,
+            "cpuMs": 0.093
+          },
+          {
+            "wallMs": 0.08936099999846192,
+            "cpuMs": 0.091
+          },
+          {
+            "wallMs": 0.08963999999832595,
+            "cpuMs": 0.091
+          }
+        ]
+      }
+    },
+    {
+      "pendingCount": 1,
+      "query": "scheduled_min",
+      "resultRows": 1,
+      "originalPlan": [
+        {
+          "id": 7,
+          "parent": 0,
+          "notused": 136,
+          "detail": "SEARCH messages USING INDEX idx_messages_local_id (session_id=? AND local_id>?)"
+        }
+      ],
+      "indexedPlan": [
+        {
+          "id": 7,
+          "parent": 0,
+          "notused": 192,
+          "detail": "SEARCH messages USING INDEX idx_messages_scheduled_pending (scheduled_at>?)"
+        },
+        {
+          "id": 556,
+          "parent": 0,
+          "notused": 0,
+          "detail": "USE TEMP B-TREE FOR GROUP BY"
+        }
+      ],
+      "original": {
+        "p50Ms": 374.81467999999586,
+        "p95Ms": 403.39443200000096,
+        "timings": [
+          {
+            "wallMs": 377.63058300000193,
+            "cpuMs": 377.587
+          },
+          {
+            "wallMs": 375.06244199999855,
+            "cpuMs": 375.046
+          },
+          {
+            "wallMs": 372.5643009999985,
+            "cpuMs": 372.476
+          },
+          {
+            "wallMs": 388.12846799999534,
+            "cpuMs": 388.052
+          },
+          {
+            "wallMs": 389.64628000000084,
+            "cpuMs": 389.619
+          },
+          {
+            "wallMs": 366.860775000001,
+            "cpuMs": 366.866
+          },
+          {
+            "wallMs": 386.68897599999764,
+            "cpuMs": 386.617
+          },
+          {
+            "wallMs": 399.36271800000395,
+            "cpuMs": 399.308
+          },
+          {
+            "wallMs": 403.39443200000096,
+            "cpuMs": 403.39
+          },
+          {
+            "wallMs": 437.6431490000032,
+            "cpuMs": 437.636
+          },
+          {
+            "wallMs": 390.64432800000213,
+            "cpuMs": 390.636
+          },
+          {
+            "wallMs": 374.81467999999586,
+            "cpuMs": 374.764
+          },
+          {
+            "wallMs": 387.0346189999982,
+            "cpuMs": 386.995
+          },
+          {
+            "wallMs": 367.77986200000305,
+            "cpuMs": 367.696
+          },
+          {
+            "wallMs": 370.6198450000011,
+            "cpuMs": 370.609
+          },
+          {
+            "wallMs": 360.08896000000095,
+            "cpuMs": 360.085
+          },
+          {
+            "wallMs": 356.3403699999981,
+            "cpuMs": 356.281
+          },
+          {
+            "wallMs": 359.3749549999993,
+            "cpuMs": 359.381
+          },
+          {
+            "wallMs": 370.757405999997,
+            "cpuMs": 370.704
+          },
+          {
+            "wallMs": 362.3328579999943,
+            "cpuMs": 362.303
+          }
+        ]
+      },
+      "optimized": {
+        "p50Ms": 0.0934800000031828,
+        "p95Ms": 0.11292099999991478,
+        "timings": [
+          {
+            "wallMs": 0.09428099999786355,
+            "cpuMs": 0.097
+          },
+          {
+            "wallMs": 0.10536100000172155,
+            "cpuMs": 0.107
+          },
+          {
+            "wallMs": 0.0934800000031828,
+            "cpuMs": 0.095
+          },
+          {
+            "wallMs": 0.09212100000149803,
+            "cpuMs": 0.094
+          },
+          {
+            "wallMs": 0.10904099999606842,
+            "cpuMs": 0.11
+          },
+          {
+            "wallMs": 0.09652099999948405,
+            "cpuMs": 0.098
+          },
+          {
+            "wallMs": 0.0975209999960498,
+            "cpuMs": 0.29
+          },
+          {
+            "wallMs": 0.1270409999997355,
+            "cpuMs": 0.256
+          },
+          {
+            "wallMs": 0.11292099999991478,
+            "cpuMs": 0.116
+          },
+          {
+            "wallMs": 0.09964100000070175,
+            "cpuMs": 0.103
+          },
+          {
+            "wallMs": 0.10568100000091363,
+            "cpuMs": 0.107
+          },
+          {
+            "wallMs": 0.08999999999650754,
+            "cpuMs": 0.092
+          },
+          {
+            "wallMs": 0.09796099999948638,
+            "cpuMs": 0.099
+          },
+          {
+            "wallMs": 0.09208100000250852,
+            "cpuMs": 0.093
+          },
+          {
+            "wallMs": 0.09168099999806145,
+            "cpuMs": 0.093
+          },
+          {
+            "wallMs": 0.08764099999825703,
+            "cpuMs": 0.089
+          },
+          {
+            "wallMs": 0.09324000000196975,
+            "cpuMs": 0.095
+          },
+          {
+            "wallMs": 0.09331999999994878,
+            "cpuMs": 0.095
+          },
+          {
+            "wallMs": 0.09112100000493228,
+            "cpuMs": 0.093
+          },
+          {
+            "wallMs": 0.08764099999825703,
+            "cpuMs": 0.089
+          }
+        ]
+      }
+    },
+    {
+      "pendingCount": 1000,
+      "query": "scheduled_count",
+      "resultRows": 177,
+      "originalPlan": [
+        {
+          "id": 7,
+          "parent": 0,
+          "notused": 136,
+          "detail": "SEARCH messages USING INDEX idx_messages_local_id (session_id=? AND local_id>?)"
+        }
+      ],
+      "indexedPlan": [
+        {
+          "id": 7,
+          "parent": 0,
+          "notused": 192,
+          "detail": "SEARCH messages USING INDEX idx_messages_scheduled_pending (scheduled_at>?)"
+        },
+        {
+          "id": 556,
+          "parent": 0,
+          "notused": 0,
+          "detail": "USE TEMP B-TREE FOR GROUP BY"
+        }
+      ],
+      "original": {
+        "p50Ms": 388.6872319999966,
+        "p95Ms": 424.24935999999434,
+        "timings": [
+          {
+            "wallMs": 439.60320499999943,
+            "cpuMs": 439.552
+          },
+          {
+            "wallMs": 407.73850699999457,
+            "cpuMs": 407.733
+          },
+          {
+            "wallMs": 400.5918889999957,
+            "cpuMs": 400.617
+          },
+          {
+            "wallMs": 400.0322040000028,
+            "cpuMs": 399.984
+          },
+          {
+            "wallMs": 400.2217659999951,
+            "cpuMs": 400.232
+          },
+          {
+            "wallMs": 386.1535709999953,
+            "cpuMs": 386.112
+          },
+          {
+            "wallMs": 372.11977700000716,
+            "cpuMs": 372.116
+          },
+          {
+            "wallMs": 414.18767800000205,
+            "cpuMs": 426.686
+          },
+          {
+            "wallMs": 424.24935999999434,
+            "cpuMs": 424.198
+          },
+          {
+            "wallMs": 388.6872319999966,
+            "cpuMs": 388.662
+          },
+          {
+            "wallMs": 399.0271159999975,
+            "cpuMs": 398.945
+          },
+          {
+            "wallMs": 400.47764800000004,
+            "cpuMs": 400.434
+          },
+          {
+            "wallMs": 401.3765749999948,
+            "cpuMs": 401.292
+          },
+          {
+            "wallMs": 387.54502299999876,
+            "cpuMs": 387.489
+          },
+          {
+            "wallMs": 381.1865309999994,
+            "cpuMs": 381.216
+          },
+          {
+            "wallMs": 377.8990640000047,
+            "cpuMs": 377.724
+          },
+          {
+            "wallMs": 372.26089800000045,
+            "cpuMs": 372.229
+          },
+          {
+            "wallMs": 372.7551830000011,
+            "cpuMs": 372.704
+          },
+          {
+            "wallMs": 374.7587990000029,
+            "cpuMs": 374.749
+          },
+          {
+            "wallMs": 376.02668899999844,
+            "cpuMs": 375.979
+          }
+        ]
+      },
+      "optimized": {
+        "p50Ms": 0.7467260000048555,
+        "p95Ms": 0.7745260000010603,
+        "timings": [
+          {
+            "wallMs": 0.7578060000014375,
+            "cpuMs": 0.763
+          },
+          {
+            "wallMs": 0.7745260000010603,
+            "cpuMs": 0.777
+          },
+          {
+            "wallMs": 0.7638860000006389,
+            "cpuMs": 0.766
+          },
+          {
+            "wallMs": 0.7824460000047111,
+            "cpuMs": 0.784
+          },
+          {
+            "wallMs": 0.7418860000034329,
+            "cpuMs": 0.744
+          },
+          {
+            "wallMs": 0.7467260000048555,
+            "cpuMs": 0.749
+          },
+          {
+            "wallMs": 0.7586060000030557,
+            "cpuMs": 0.761
+          },
+          {
+            "wallMs": 0.7495659999985946,
+            "cpuMs": 1.354
+          },
+          {
+            "wallMs": 0.7494470000019646,
+            "cpuMs": 1.067
+          },
+          {
+            "wallMs": 0.7494059999953606,
+            "cpuMs": 0.752
+          },
+          {
+            "wallMs": 0.7391659999993863,
+            "cpuMs": 0.742
+          },
+          {
+            "wallMs": 0.7538459999996121,
+            "cpuMs": 0.756
+          },
+          {
+            "wallMs": 0.7453659999955562,
+            "cpuMs": 0.747
+          },
+          {
+            "wallMs": 0.7278860000005807,
+            "cpuMs": 0.731
+          },
+          {
+            "wallMs": 0.7292860000015935,
+            "cpuMs": 0.731
+          },
+          {
+            "wallMs": 0.7660059999980149,
+            "cpuMs": 0.769
+          },
+          {
+            "wallMs": 0.7388859999991837,
+            "cpuMs": 0.741
+          },
+          {
+            "wallMs": 0.7219659999973373,
+            "cpuMs": 0.724
+          },
+          {
+            "wallMs": 0.7331659999981639,
+            "cpuMs": 0.735
+          },
+          {
+            "wallMs": 0.7414860000062617,
+            "cpuMs": 0.744
+          }
+        ]
+      }
+    },
+    {
+      "pendingCount": 1000,
+      "query": "scheduled_min",
+      "resultRows": 177,
+      "originalPlan": [
+        {
+          "id": 7,
+          "parent": 0,
+          "notused": 136,
+          "detail": "SEARCH messages USING INDEX idx_messages_local_id (session_id=? AND local_id>?)"
+        }
+      ],
+      "indexedPlan": [
+        {
+          "id": 7,
+          "parent": 0,
+          "notused": 192,
+          "detail": "SEARCH messages USING INDEX idx_messages_scheduled_pending (scheduled_at>?)"
+        },
+        {
+          "id": 556,
+          "parent": 0,
+          "notused": 0,
+          "detail": "USE TEMP B-TREE FOR GROUP BY"
+        }
+      ],
+      "original": {
+        "p50Ms": 372.8858640000035,
+        "p95Ms": 384.8730409999989,
+        "timings": [
+          {
+            "wallMs": 372.7543420000002,
+            "cpuMs": 372.75
+          },
+          {
+            "wallMs": 389.9550020000024,
+            "cpuMs": 389.904
+          },
+          {
+            "wallMs": 383.8505529999966,
+            "cpuMs": 383.781
+          },
+          {
+            "wallMs": 366.2326099999991,
+            "cpuMs": 366.167
+          },
+          {
+            "wallMs": 366.2205699999977,
+            "cpuMs": 366.229
+          },
+          {
+            "wallMs": 372.8858640000035,
+            "cpuMs": 372.883
+          },
+          {
+            "wallMs": 372.3842189999996,
+            "cpuMs": 373.313
+          },
+          {
+            "wallMs": 377.9246639999983,
+            "cpuMs": 377.896
+          },
+          {
+            "wallMs": 368.90559100000246,
+            "cpuMs": 368.815
+          },
+          {
+            "wallMs": 378.33578800000396,
+            "cpuMs": 378.327
+          },
+          {
+            "wallMs": 384.2867960000003,
+            "cpuMs": 384.746
+          },
+          {
+            "wallMs": 366.60933300000033,
+            "cpuMs": 366.725
+          },
+          {
+            "wallMs": 380.0806420000008,
+            "cpuMs": 380.086
+          },
+          {
+            "wallMs": 383.452148999997,
+            "cpuMs": 383.359
+          },
+          {
+            "wallMs": 384.8730409999989,
+            "cpuMs": 384.856
+          },
+          {
+            "wallMs": 363.0393439999971,
+            "cpuMs": 363.033
+          },
+          {
+            "wallMs": 368.60298899999907,
+            "cpuMs": 368.59
+          },
+          {
+            "wallMs": 368.17634499999986,
+            "cpuMs": 368.122
+          },
+          {
+            "wallMs": 381.3248920000042,
+            "cpuMs": 381.275
+          },
+          {
+            "wallMs": 381.893296000002,
+            "cpuMs": 382.2
+          }
+        ]
+      },
+      "optimized": {
+        "p50Ms": 0.8160470000002533,
+        "p95Ms": 0.8505270000023302,
+        "timings": [
+          {
+            "wallMs": 0.8220460000011371,
+            "cpuMs": 0.827
+          },
+          {
+            "wallMs": 0.8505270000023302,
+            "cpuMs": 0.853
+          },
+          {
+            "wallMs": 0.7986459999956423,
+            "cpuMs": 0.801
+          },
+          {
+            "wallMs": 0.8572469999999157,
+            "cpuMs": 0.859
+          },
+          {
+            "wallMs": 0.8160470000002533,
+            "cpuMs": 0.818
+          },
+          {
+            "wallMs": 0.8128870000000461,
+            "cpuMs": 0.815
+          },
+          {
+            "wallMs": 0.8486469999988913,
+            "cpuMs": 0.851
+          },
+          {
+            "wallMs": 0.8228070000041043,
+            "cpuMs": 1.532
+          },
+          {
+            "wallMs": 0.8227260000057868,
+            "cpuMs": 1.072
+          },
+          {
+            "wallMs": 0.8240060000025551,
+            "cpuMs": 0.826
+          },
+          {
+            "wallMs": 0.8037269999986165,
+            "cpuMs": 0.806
+          },
+          {
+            "wallMs": 0.8198869999978342,
+            "cpuMs": 0.822
+          },
+          {
+            "wallMs": 0.8051659999982803,
+            "cpuMs": 0.807
+          },
+          {
+            "wallMs": 0.8232060000009369,
+            "cpuMs": 0.826
+          },
+          {
+            "wallMs": 0.7868069999967702,
+            "cpuMs": 0.788
+          },
+          {
+            "wallMs": 0.8303270000033081,
+            "cpuMs": 0.832
+          },
+          {
+            "wallMs": 0.805765999997675,
+            "cpuMs": 0.807
+          },
+          {
+            "wallMs": 0.7959269999992102,
+            "cpuMs": 0.798
+          },
+          {
+            "wallMs": 0.8050469999943743,
+            "cpuMs": 0.807
+          },
+          {
+            "wallMs": 0.8005260000063572,
+            "cpuMs": 0.802
+          }
+        ]
+      }
+    }
+  ]
+}

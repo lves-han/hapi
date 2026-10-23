@@ -1,0 +1,3347 @@
+{
+  "recordedAt": "2026-10-22T12:18:57.496Z",
+  "environment": {
+    "bun": "1.4.0",
+    "postgres": "PostgreSQL 16.15 (Debian 16.15-1.pgdg12+2) on aarch64-unknown-linux-gnu, compiled by gcc (Debian 12.2.0-14+deb12u1) 12.2.0, 64-bit",
+    "arch": "arm64",
+    "logicalCpus": 16
+  },
+  "fixture": {
+    "sessions": 177,
+    "historyCount": 510420,
+    "samples": 50,
+    "warmups": 3,
+    "concurrency": 1,
+    "storage": "SQLite snapshot imported into PostgreSQL on /data",
+    "hardwareLoad": "host services continue; benchmark database isolated",
+    "http": "local HTTP, fetch keep-alive, complete response, alternating sessions/health",
+    "now": 1792671476700
+  },
+  "importMs": 35891.4647,
+  "passive": {
+    "intervalMs": 5000.207575,
+    "cpuMs": 82.692,
+    "rssBefore": 149835776,
+    "rssAfter": 142868480
+  },
+  "eventLoop": {
+    "p50Ms": 0.10083799999847542,
+    "p95Ms": 0.4778409999998985,
+    "maxMs": 6.379767999998876,
+    "samples": [
+      0.25219900000229245,
+      0.028877999997348525,
+      0.15459800000098767,
+      1.36736799999926,
+      0.164558999997098,
+      0.1210380000047735,
+      0.21615899999596877,
+      0.11867899999924703,
+      0.11683800000173505,
+      0.08815799999865703,
+      0.10287800000514835,
+      0.15791799999715295,
+      0.08655800000269664,
+      0.11755899999843678,
+      0.10595800000010058,
+      0.11631800000031944,
+      0.10135799999989104,
+      0.18491899999935413,
+      0.12759799999912502,
+      0.11595800000213785,
+      0.1127589999960037,
+      0.09559799999988172,
+      0.06999800000630785,
+      0.09075799999845913,
+      1.1903259999962756,
+      2.222135000003618,
+      0.09475799999927403,
+      0.12499799999932293,
+      0.09827799999766285,
+      0.08539800000289688,
+      0.12795899999764515,
+      0.11663799999951152,
+      0.09227800000371644,
+      0.1993189999993774,
+      0,
+      0.09983800000190968,
+      0.09119799999461975,
+      0.1261990000057267,
+      0.10139799999888055,
+      0.11439799999789102,
+      0.07411799999681534,
+      0.0951580000037211,
+      0.09035800000128802,
+      0.10207799999625422,
+      0.11799800000153482,
+      0.13047899999946821,
+      0.09375800000270829,
+      0.08591799999703653,
+      0.12835800000175368,
+      0.09495800000149757,
+      0.08467799999925774,
+      0.10631799999828218,
+      0.11275800000294112,
+      0.11919900000066264,
+      0.1133579999950598,
+      0.10751800000434741,
+      0.13635799999610754,
+      0.23036000000138301,
+      0.1271580000029644,
+      0.11979799999971874,
+      0.21087899999838555,
+      0.0941579999998794,
+      0.10415800000191666,
+      0.12691899999481393,
+      0.15231800000037765,
+      0.08511800000269432,
+      0.10755799999606097,
+      0.1043580000041402,
+      0.08507799999642884,
+      0.10391900000104215,
+      0.1179580000025453,
+      0.08867800000007264,
+      0.09183800000027986,
+      0.06383800000185147,
+      1.240286999993259,
+      0.07727800000429852,
+      0.08487800000148127,
+      0.10743799999909243,
+      0.1178379999983008,
+      0.1501990000033402,
+      0.17107799999939743,
+      0.10815799999545561,
+      0.14351900000474416,
+      0.02991699999984121,
+      0.0961989999996149,
+      0.0849579999994603,
+      0.0985179999988759,
+      0.07943800000066403,
+      0.1318780000001425,
+      0.09251799999765353,
+      0.09055800000351155,
+      0.09183800000027986,
+      0.09127799999987474,
+      0.10939800000051036,
+      0.08615799999824958,
+      0.0980379999964498,
+      0.07651800000166986,
+      0.07687799999985145,
+      0.07555800000409363,
+      0.11039799999707611,
+      0.08511800000269432,
+      0.08207799999945564,
+      0.08791799999744399,
+      0.10695899999700487,
+      0.10271800000191433,
+      0.10203800000454066,
+      0.09623799999826588,
+      0.10227799999847775,
+      0.08431800000107614,
+      0.07883800000126939,
+      0.08427799999481067,
+      0.08335800000349991,
+      0.07843799999682233,
+      0.07043800000246847,
+      0.08523799999966286,
+      0.07419800000207033,
+      0.11387799999647541,
+      0.0885580000031041,
+      0.0879579999964335,
+      0.09659800000372343,
+      0.07751799999823561,
+      0.07215800000267336,
+      0.1037579999974696,
+      0.07907800000248244,
+      1.1544059999941965,
+      0.09751900000264868,
+      0.11023800000111805,
+      0.09015799999906449,
+      0.0924379999996745,
+      0.07871800000430085,
+      0.08231799999339273,
+      0.13539800000580726,
+      0.13023899999825517,
+      0.09751800000231015,
+      0.10075799999322044,
+      0.10667800000373973,
+      0.09147800000209827,
+      0.08819799999764655,
+      0.09895800000231247,
+      0.09095800000068266,
+      0.1225579999954789,
+      0.1485190000021248,
+      0.061477999995986465,
+      0.12787800000660354,
+      0.08815799999865703,
+      0.1716390000001411,
+      0.13519799999630777,
+      0.11187800000334391,
+      0.10979899999802001,
+      0.10243800000171177,
+      0.09975799999665469,
+      0.10639800000353716,
+      0.15155899999808753,
+      0.164757999998983,
+      0.18739900000218768,
+      0.11419799999566749,
+      0.10875800000212621,
+      0.0909590000010212,
+      0.11731799999688519,
+      0.0973980000053416,
+      0.12311799999588402,
+      0.10095800000271993,
+      0.09047799999825656,
+      0.0889580000002752,
+      0.09035800000128802,
+      0.10323899999639252,
+      0.8074430000051507,
+      0.0804779999962193,
+      0.09171800000331132,
+      0.33567999999650056,
+      0.23788000000058673,
+      0.1442380000007688,
+      0.11943800000153715,
+      1.610370000002149,
+      0.10055799999827286,
+      0.1287190000002738,
+      0.10175799999706214,
+      0.14411800000380026,
+      0.09675900000002002,
+      0.10663799999747425,
+      0.08611799999926006,
+      0.12623800000437768,
+      0.14211799999611685,
+      0.10151900000346359,
+      0.09907799999928102,
+      0.10699799999565585,
+      0.11051800000132062,
+      0.09451799999806099,
+      0.09895800000231247,
+      0.10067800000251736,
+      0.11891900000046007,
+      0.11975800000072923,
+      0.11463799999910407,
+      0.16203899999527493,
+      0.09811800000170479,
+      0.1205580000023474,
+      0.09655799999745796,
+      0.10295900000346592,
+      0.10175799999706214,
+      0.12159799999790266,
+      0.08995800000411691,
+      0.1011579999976675,
+      0.1051179999994929,
+      0.11591900000348687,
+      0.09983799999463372,
+      0.13451800000621006,
+      0.10519799999747192,
+      0.10195899999962421,
+      0.10567799999989802,
+      0.1129979999968782,
+      0.15827900000294903,
+      0.09499800000048708,
+      0.09151800000108778,
+      0.09871800000109943,
+      0.09787800000049174,
+      0.08515799999440787,
+      0.09655800000473391,
+      0.10467799999605631,
+      0.09891800000332296,
+      0.1071589999992284,
+      0.10083799999847542,
+      0.0920380000025034,
+      0.11903799999709008,
+      1.2743269999991753,
+      0.1168790000010631,
+      0.09335799999826122,
+      0.09039800000027753,
+      0.19211899999936577,
+      0.12747800000215648,
+      0.11887800000113202,
+      0.0867179999986547,
+      0.10079799999948591,
+      0.10899900000367779,
+      0.10335800000029849,
+      0.08787799999845447,
+      0.08195799999521114,
+      0.11771800000133226,
+      0.10883800000010524,
+      0.12371900000289315,
+      0.1064780000015162,
+      0.09451799999806099,
+      0.09459800000331597,
+      0.07643799999641487,
+      0.09083799999643816,
+      0.13651900000695605,
+      0.10943799999949988,
+      0.06711799999902723,
+      0.037476999998034444,
+      0.06119800000305986,
+      0.09515799999644514,
+      0.10207800000353018,
+      0.18971899999451125,
+      0.11507800000254065,
+      0.10375899999780813,
+      0.0907980000047246,
+      0.09343799999624025,
+      0.08443799999804469,
+      0.09395800000493182,
+      0.0879579999964335,
+      0.09715800000412855,
+      0.09807799999543931,
+      0.10987800000293646,
+      0.07303800000227056,
+      0.08379799999966053,
+      0.07503799999540206,
+      0.7660040000046138,
+      0.39091999999800464,
+      0.09447799999907147,
+      1.8742920000004233,
+      0.31644000000233063,
+      0.21923899999819696,
+      0.11399900000105845,
+      1.1884859999991022,
+      0.09699800000089454,
+      0.08363799999642652,
+      0.0885580000031041,
+      0.08475799999723677,
+      0.6370030000034603,
+      0.09643800000048941,
+      0.08811799999966752,
+      0.08735799999703886,
+      0.11023800000111805,
+      0.09191799999825889,
+      0.13759900000150083,
+      0.07707800000207499,
+      0.09411800000088988,
+      0.10563799999363255,
+      0.0956380000061472,
+      0.08743799999501789,
+      0.2944400000051246,
+      0.12627799999609124,
+      0.050798000003851485,
+      0.29431999999360414,
+      0.10607800000434509,
+      0.08875799999805167,
+      0.08483800000249175,
+      0.4778409999998985,
+      0.028357999995932914,
+      0.548041000001831,
+      0.07831799999985378,
+      0.035838000003423076,
+      0.4125209999983781,
+      0.09843800000089686,
+      0.17143799999757903,
+      3.1214620000027935,
+      6.379767999998876,
+      0.11947800000052666,
+      0.08675799999764422,
+      0.096797999998671,
+      0.11111900000105379,
+      0.12115800000174204,
+      0.0920380000025034,
+      0.12027799999486888,
+      0.09267800000088755,
+      0.09663900000305148,
+      0.1068779999986873,
+      0.09927800000150455,
+      0.09923799999523908,
+      0.09491800000250805,
+      0.09999799999786774,
+      0.10547900000528898,
+      0.0870779999968363,
+      0.07595800000126474,
+      0.08787799999845447,
+      0.07819800000288524,
+      0.0771180000010645,
+      0.0804779999962193,
+      0.08191800000349758,
+      0.07859800000005635,
+      0.08791799999744399,
+      0.07163800000125775,
+      0.08239799999864772,
+      0.08891800000128569,
+      0.08391799999662908,
+      0.09523800000170013,
+      0.19903899999917485,
+      0.09495800000149757,
+      0.0804779999962193,
+      0.08799800000269897,
+      0.026037000003270805,
+      0.33732099999906495,
+      0.08291800000006333,
+      0.0718769999948563,
+      0.46656200000143144,
+      0.13255800000479212,
+      0.5440419999940787,
+      0.42000000000552973,
+      0.9446449999959441,
+      0.07107800000085263,
+      0.10067800000251736,
+      0.08131799999682698,
+      0.09003800000209594,
+      0.2107190000024275,
+      0.09655799999745796,
+      0.08639899999980116,
+      0.12123799999972107,
+      0.12075799999729497,
+      0.09131799999886425,
+      0.09151800000108778,
+      0.12075900000490947,
+      0.2329989999998361,
+      0.2863999999972293,
+      0.9676449999969918
+    ]
+  },
+  "databaseStats": {
+    "numbackends": 18,
+    "xact_commit": "846",
+    "xact_rollback": "65",
+    "blks_read": "513",
+    "blks_hit": "4278138",
+    "tup_inserted": "511591"
+  },
+  "cases": [
+    {
+      "pending": 0,
+      "count": {
+        "p50Ms": 0.37300300000060815,
+        "p95Ms": 0.6242850000053295,
+        "maxMs": 1.0190880000009201,
+        "samples": [
+          0.6242850000053295,
+          0.6162449999974342,
+          0.5978440000035334,
+          0.4126440000036382,
+          0.34692200000426965,
+          0.37924300000304356,
+          0.3464830000011716,
+          0.3597230000013951,
+          0.38496300000406336,
+          0.35396299999410985,
+          0.37052300000505056,
+          1.0190880000009201,
+          0.7148449999949662,
+          0.5450849999979255,
+          0.5693240000036894,
+          0.4065630000040983,
+          0.38748299999861047,
+          0.3470030000025872,
+          0.3370430000068154,
+          0.33100199999898905,
+          0.3380429999961052,
+          0.5880450000040582,
+          0.39060299999982817,
+          0.3610430000044289,
+          0.37376299999596085,
+          0.35084199999982957,
+          0.3903629999986151,
+          0.38340299999981653,
+          0.37300300000060815,
+          0.3884429999961867,
+          0.3971640000017942,
+          0.40688300000329036,
+          0.3901229999974021,
+          0.37060299999575363,
+          0.3477619999976014,
+          0.3334430000031716,
+          0.36156299999856856,
+          0.33628300000418676,
+          0.3361220000006142,
+          0.35760299999674316,
+          0.3400829999955022,
+          0.37384300000121584,
+          0.396563000002061,
+          0.3378819999998086,
+          0.35584299999754876,
+          0.38924300000508083,
+          0.3565230000021984,
+          0.3814429999983986,
+          0.3546429999987595,
+          0.3492829999959213
+        ]
+      },
+      "min": {
+        "p50Ms": 0.3911630000002333,
+        "p95Ms": 0.6037250000008498,
+        "maxMs": 0.6553649999987101,
+        "samples": [
+          0.6053650000030757,
+          0.6037250000008498,
+          0.6553649999987101,
+          0.36988299999939045,
+          0.3456830000068294,
+          0.36992199999804143,
+          0.35296199999720557,
+          0.4897639999981038,
+          0.37604300000384683,
+          0.357043000003614,
+          0.46572399999422487,
+          0.42736300000251504,
+          0.4572039999984554,
+          0.455643000001146,
+          0.45184400000289315,
+          0.5237639999977546,
+          0.5623640000048908,
+          0.5489250000027823,
+          0.4279630000019097,
+          0.38968300000124145,
+          0.33604299999569776,
+          0.42328299999644514,
+          0.3363230000031763,
+          0.37872300000162795,
+          0.41292300000350224,
+          0.3534029999937047,
+          0.3491219999996247,
+          0.3228030000027502,
+          0.34448300000076415,
+          0.359002999997756,
+          0.4889629999961471,
+          0.45636400000512367,
+          0.5240439999979571,
+          0.43280399999639485,
+          0.3912429999982123,
+          0.35168200000043726,
+          0.3705229999977746,
+          0.5438849999991362,
+          0.47384299999976065,
+          0.5374450000017532,
+          0.4244429999962449,
+          0.3820430000050692,
+          0.350523000000976,
+          0.4177629999976489,
+          0.3907630000030622,
+          0.3845229999933508,
+          0.38360300000204006,
+          0.3891230000008363,
+          0.3911630000002333,
+          0.34568299999955343
+        ]
+      },
+      "plans": [
+        [
+          {
+            "QUERY PLAN": [
+              {
+                "Plan": {
+                  "Node Type": "Aggregate",
+                  "Strategy": "Sorted",
+                  "Partial Mode": "Simple",
+                  "Parallel Aware": false,
+                  "Async Capable": false,
+                  "Startup Cost": 8.6,
+                  "Total Cost": 8.62,
+                  "Plan Rows": 1,
+                  "Plan Width": 24,
+                  "Actual Startup Time": 0.008,
+                  "Actual Total Time": 0.008,
+                  "Actual Rows": 0,
+                  "Actual Loops": 1,
+                  "Group Key": [
+                    "session_id"
+                  ],
+                  "Shared Hit Blocks": 2,
+                  "Shared Read Blocks": 0,
+                  "Shared Dirtied Blocks": 0,
+                  "Shared Written Blocks": 0,
+                  "Local Hit Blocks": 0,
+                  "Local Read Blocks": 0,
+                  "Local Dirtied Blocks": 0,
+                  "Local Written Blocks": 0,
+                  "Temp Read Blocks": 0,
+                  "Temp Written Blocks": 0,
+                  "Plans": [
+                    {
+                      "Node Type": "Sort",
+                      "Parent Relationship": "Outer",
+                      "Parallel Aware": false,
+                      "Async Capable": false,
+                      "Startup Cost": 8.6,
+                      "Total Cost": 8.61,
+                      "Plan Rows": 1,
+                      "Plan Width": 16,
+                      "Actual Startup Time": 0.007,
+                      "Actual Total Time": 0.007,
+                      "Actual Rows": 0,
+                      "Actual Loops": 1,
+                      "Sort Key": [
+                        "session_id"
+                      ],
+                      "Sort Method": "quicksort",
+                      "Sort Space Used": 25,
+                      "Sort Space Type": "Memory",
+                      "Shared Hit Blocks": 2,
+                      "Shared Read Blocks": 0,
+                      "Shared Dirtied Blocks": 0,
+                      "Shared Written Blocks": 0,
+                      "Local Hit Blocks": 0,
+                      "Local Read Blocks": 0,
+                      "Local Dirtied Blocks": 0,
+                      "Local Written Blocks": 0,
+                      "Temp Read Blocks": 0,
+                      "Temp Written Blocks": 0,
+                      "Plans": [
+                        {
+                          "Node Type": "Index Scan",
+                          "Parent Relationship": "Outer",
+                          "Parallel Aware": false,
+                          "Async Capable": false,
+                          "Scan Direction": "Forward",
+                          "Index Name": "idx_messages_scheduled_pending",
+                          "Relation Name": "messages",
+                          "Alias": "messages",
+                          "Startup Cost": 0.57,
+                          "Total Cost": 8.59,
+                          "Plan Rows": 1,
+                          "Plan Width": 16,
+                          "Actual Startup Time": 0.003,
+                          "Actual Total Time": 0.004,
+                          "Actual Rows": 0,
+                          "Actual Loops": 1,
+                          "Index Cond": "(scheduled_at > '1792671476700'::bigint)",
+                          "Rows Removed by Index Recheck": 0,
+                          "Filter": "((local_id IS NOT NULL) AND (delivery_state = 'queued'::text) AND (session_id = ANY ('{perf-session-0,perf-session-1,perf-session-2,perf-session-3,perf-session-4,perf-session-5,perf-session-6,perf-session-7,perf-session-8,perf-session-9,perf-session-10,perf-session-11,perf-session-12,perf-session-13,perf-session-14,perf-session-15,perf-session-16,perf-session-17,perf-session-18,perf-session-19,perf-session-20,perf-session-21,perf-session-22,perf-session-23,perf-session-24,perf-session-25,perf-session-26,perf-session-27,perf-session-28,perf-session-29,perf-session-30,perf-session-31,perf-session-32,perf-session-33,perf-session-34,perf-session-35,perf-session-36,perf-session-37,perf-session-38,perf-session-39,perf-session-40,perf-session-41,perf-session-42,perf-session-43,perf-session-44,perf-session-45,perf-session-46,perf-session-47,perf-session-48,perf-session-49,perf-session-50,perf-session-51,perf-session-52,perf-session-53,perf-session-54,perf-session-55,perf-session-56,perf-session-57,perf-session-58,perf-session-59,perf-session-60,perf-session-61,perf-session-62,perf-session-63,perf-session-64,perf-session-65,perf-session-66,perf-session-67,perf-session-68,perf-session-69,perf-session-70,perf-session-71,perf-session-72,perf-session-73,perf-session-74,perf-session-75,perf-session-76,perf-session-77,perf-session-78,perf-session-79,perf-session-80,perf-session-81,perf-session-82,perf-session-83,perf-session-84,perf-session-85,perf-session-86,perf-session-87,perf-session-88,perf-session-89,perf-session-90,perf-session-91,perf-session-92,perf-session-93,perf-session-94,perf-session-95,perf-session-96,perf-session-97,perf-session-98,perf-session-99,perf-session-100,perf-session-101,perf-session-102,perf-session-103,perf-session-104,perf-session-105,perf-session-106,perf-session-107,perf-session-108,perf-session-109,perf-session-110,perf-session-111,perf-session-112,perf-session-113,perf-session-114,perf-session-115,perf-session-116,perf-session-117,perf-session-118,perf-session-119,perf-session-120,perf-session-121,perf-session-122,perf-session-123,perf-session-124,perf-session-125,perf-session-126,perf-session-127,perf-session-128,perf-session-129,perf-session-130,perf-session-131,perf-session-132,perf-session-133,perf-session-134,perf-session-135,perf-session-136,perf-session-137,perf-session-138,perf-session-139,perf-session-140,perf-session-141,perf-session-142,perf-session-143,perf-session-144,perf-session-145,perf-session-146,perf-session-147,perf-session-148,perf-session-149,perf-session-150,perf-session-151,perf-session-152,perf-session-153,perf-session-154,perf-session-155,perf-session-156,perf-session-157,perf-session-158,perf-session-159,perf-session-160,perf-session-161,perf-session-162,perf-session-163,perf-session-164,perf-session-165,perf-session-166,perf-session-167,perf-session-168,perf-session-169,perf-session-170,perf-session-171,perf-session-172,perf-session-173,perf-session-174,perf-session-175,perf-session-176}'::text[])))",
+                          "Rows Removed by Filter": 0,
+                          "Shared Hit Blocks": 2,
+                          "Shared Read Blocks": 0,
+                          "Shared Dirtied Blocks": 0,
+                          "Shared Written Blocks": 0,
+                          "Local Hit Blocks": 0,
+                          "Local Read Blocks": 0,
+                          "Local Dirtied Blocks": 0,
+                          "Local Written Blocks": 0,
+                          "Temp Read Blocks": 0,
+                          "Temp Written Blocks": 0
+                        }
+                      ]
+                    }
+                  ]
+                },
+                "Planning": {
+                  "Shared Hit Blocks": 43,
+                  "Shared Read Blocks": 0,
+                  "Shared Dirtied Blocks": 0,
+                  "Shared Written Blocks": 0,
+                  "Local Hit Blocks": 0,
+                  "Local Read Blocks": 0,
+                  "Local Dirtied Blocks": 0,
+                  "Local Written Blocks": 0,
+                  "Temp Read Blocks": 0,
+                  "Temp Written Blocks": 0
+                },
+                "Planning Time": 0.395,
+                "Triggers": [],
+                "Execution Time": 0.025
+              }
+            ]
+          }
+        ],
+        [
+          {
+            "QUERY PLAN": [
+              {
+                "Plan": {
+                  "Node Type": "Aggregate",
+                  "Strategy": "Sorted",
+                  "Partial Mode": "Simple",
+                  "Parallel Aware": false,
+                  "Async Capable": false,
+                  "Startup Cost": 8.6,
+                  "Total Cost": 8.62,
+                  "Plan Rows": 1,
+                  "Plan Width": 24,
+                  "Actual Startup Time": 0.005,
+                  "Actual Total Time": 0.005,
+                  "Actual Rows": 0,
+                  "Actual Loops": 1,
+                  "Group Key": [
+                    "session_id"
+                  ],
+                  "Shared Hit Blocks": 2,
+                  "Shared Read Blocks": 0,
+                  "Shared Dirtied Blocks": 0,
+                  "Shared Written Blocks": 0,
+                  "Local Hit Blocks": 0,
+                  "Local Read Blocks": 0,
+                  "Local Dirtied Blocks": 0,
+                  "Local Written Blocks": 0,
+                  "Temp Read Blocks": 0,
+                  "Temp Written Blocks": 0,
+                  "Plans": [
+                    {
+                      "Node Type": "Sort",
+                      "Parent Relationship": "Outer",
+                      "Parallel Aware": false,
+                      "Async Capable": false,
+                      "Startup Cost": 8.6,
+                      "Total Cost": 8.61,
+                      "Plan Rows": 1,
+                      "Plan Width": 24,
+                      "Actual Startup Time": 0.004,
+                      "Actual Total Time": 0.005,
+                      "Actual Rows": 0,
+                      "Actual Loops": 1,
+                      "Sort Key": [
+                        "session_id"
+                      ],
+                      "Sort Method": "quicksort",
+                      "Sort Space Used": 25,
+                      "Sort Space Type": "Memory",
+                      "Shared Hit Blocks": 2,
+                      "Shared Read Blocks": 0,
+                      "Shared Dirtied Blocks": 0,
+                      "Shared Written Blocks": 0,
+                      "Local Hit Blocks": 0,
+                      "Local Read Blocks": 0,
+                      "Local Dirtied Blocks": 0,
+                      "Local Written Blocks": 0,
+                      "Temp Read Blocks": 0,
+                      "Temp Written Blocks": 0,
+                      "Plans": [
+                        {
+                          "Node Type": "Index Scan",
+                          "Parent Relationship": "Outer",
+                          "Parallel Aware": false,
+                          "Async Capable": false,
+                          "Scan Direction": "Forward",
+                          "Index Name": "idx_messages_scheduled_pending",
+                          "Relation Name": "messages",
+                          "Alias": "messages",
+                          "Startup Cost": 0.57,
+                          "Total Cost": 8.59,
+                          "Plan Rows": 1,
+                          "Plan Width": 24,
+                          "Actual Startup Time": 0.002,
+                          "Actual Total Time": 0.002,
+                          "Actual Rows": 0,
+                          "Actual Loops": 1,
+                          "Index Cond": "(scheduled_at > '1792671476700'::bigint)",
+                          "Rows Removed by Index Recheck": 0,
+                          "Filter": "((local_id IS NOT NULL) AND (delivery_state = 'queued'::text) AND (session_id = ANY ('{perf-session-0,perf-session-1,perf-session-2,perf-session-3,perf-session-4,perf-session-5,perf-session-6,perf-session-7,perf-session-8,perf-session-9,perf-session-10,perf-session-11,perf-session-12,perf-session-13,perf-session-14,perf-session-15,perf-session-16,perf-session-17,perf-session-18,perf-session-19,perf-session-20,perf-session-21,perf-session-22,perf-session-23,perf-session-24,perf-session-25,perf-session-26,perf-session-27,perf-session-28,perf-session-29,perf-session-30,perf-session-31,perf-session-32,perf-session-33,perf-session-34,perf-session-35,perf-session-36,perf-session-37,perf-session-38,perf-session-39,perf-session-40,perf-session-41,perf-session-42,perf-session-43,perf-session-44,perf-session-45,perf-session-46,perf-session-47,perf-session-48,perf-session-49,perf-session-50,perf-session-51,perf-session-52,perf-session-53,perf-session-54,perf-session-55,perf-session-56,perf-session-57,perf-session-58,perf-session-59,perf-session-60,perf-session-61,perf-session-62,perf-session-63,perf-session-64,perf-session-65,perf-session-66,perf-session-67,perf-session-68,perf-session-69,perf-session-70,perf-session-71,perf-session-72,perf-session-73,perf-session-74,perf-session-75,perf-session-76,perf-session-77,perf-session-78,perf-session-79,perf-session-80,perf-session-81,perf-session-82,perf-session-83,perf-session-84,perf-session-85,perf-session-86,perf-session-87,perf-session-88,perf-session-89,perf-session-90,perf-session-91,perf-session-92,perf-session-93,perf-session-94,perf-session-95,perf-session-96,perf-session-97,perf-session-98,perf-session-99,perf-session-100,perf-session-101,perf-session-102,perf-session-103,perf-session-104,perf-session-105,perf-session-106,perf-session-107,perf-session-108,perf-session-109,perf-session-110,perf-session-111,perf-session-112,perf-session-113,perf-session-114,perf-session-115,perf-session-116,perf-session-117,perf-session-118,perf-session-119,perf-session-120,perf-session-121,perf-session-122,perf-session-123,perf-session-124,perf-session-125,perf-session-126,perf-session-127,perf-session-128,perf-session-129,perf-session-130,perf-session-131,perf-session-132,perf-session-133,perf-session-134,perf-session-135,perf-session-136,perf-session-137,perf-session-138,perf-session-139,perf-session-140,perf-session-141,perf-session-142,perf-session-143,perf-session-144,perf-session-145,perf-session-146,perf-session-147,perf-session-148,perf-session-149,perf-session-150,perf-session-151,perf-session-152,perf-session-153,perf-session-154,perf-session-155,perf-session-156,perf-session-157,perf-session-158,perf-session-159,perf-session-160,perf-session-161,perf-session-162,perf-session-163,perf-session-164,perf-session-165,perf-session-166,perf-session-167,perf-session-168,perf-session-169,perf-session-170,perf-session-171,perf-session-172,perf-session-173,perf-session-174,perf-session-175,perf-session-176}'::text[])))",
+                          "Rows Removed by Filter": 0,
+                          "Shared Hit Blocks": 2,
+                          "Shared Read Blocks": 0,
+                          "Shared Dirtied Blocks": 0,
+                          "Shared Written Blocks": 0,
+                          "Local Hit Blocks": 0,
+                          "Local Read Blocks": 0,
+                          "Local Dirtied Blocks": 0,
+                          "Local Written Blocks": 0,
+                          "Temp Read Blocks": 0,
+                          "Temp Written Blocks": 0
+                        }
+                      ]
+                    }
+                  ]
+                },
+                "Planning": {
+                  "Shared Hit Blocks": 5,
+                  "Shared Read Blocks": 0,
+                  "Shared Dirtied Blocks": 0,
+                  "Shared Written Blocks": 0,
+                  "Local Hit Blocks": 0,
+                  "Local Read Blocks": 0,
+                  "Local Dirtied Blocks": 0,
+                  "Local Written Blocks": 0,
+                  "Temp Read Blocks": 0,
+                  "Temp Written Blocks": 0
+                },
+                "Planning Time": 0.231,
+                "Triggers": [],
+                "Execution Time": 0.018
+              }
+            ]
+          }
+        ]
+      ],
+      "sessions": {
+        "p50Ms": 2.359898000002431,
+        "p95Ms": 4.498195000000123,
+        "maxMs": 9.480514000002586,
+        "samples": [
+          9.480514000002586,
+          3.686268999997992,
+          3.094064000004437,
+          3.0485439999974915,
+          2.8606220000001485,
+          3.2095849999968777,
+          2.7032210000033956,
+          2.229857999998785,
+          2.3370189999986906,
+          2.1607370000056108,
+          2.385219000003417,
+          2.4189789999945788,
+          2.472819000002346,
+          2.606740000002901,
+          2.5033799999946496,
+          2.449259000000893,
+          2.6173800000033225,
+          6.385929999996733,
+          2.692021000002569,
+          2.428460000002815,
+          2.256657999998424,
+          2.259656999995059,
+          2.178737000002002,
+          2.0675370000026305,
+          2.3013779999964754,
+          2.1261369999992894,
+          2.024336000002222,
+          2.3766989999930956,
+          2.2473380000010366,
+          2.172536999998556,
+          2.3902190000007977,
+          2.6043810000046506,
+          2.376979000000574,
+          2.3274579999997513,
+          2.627900999999838,
+          2.343739000003552,
+          2.1552169999995385,
+          2.068217000000004,
+          4.498195000000123,
+          2.433379000001878,
+          2.1066569999966305,
+          2.065335999999661,
+          1.9475749999983236,
+          4.164392999999109,
+          2.359898000002431,
+          2.0546959999992396,
+          1.9996160000009695,
+          1.9655750000019907,
+          1.988416000000143,
+          1.8320939999975963
+        ]
+      },
+      "health": {
+        "p50Ms": 0.36156299999856856,
+        "p95Ms": 0.4922440000009374,
+        "maxMs": 0.5720440000004601,
+        "samples": [
+          0.5689249999995809,
+          0.4423640000022715,
+          0.3927629999961937,
+          0.42232399999920744,
+          0.3858829999953741,
+          0.4542829999991227,
+          0.3698030000014114,
+          0.3763630000030389,
+          0.339443000004394,
+          0.42420400000264635,
+          0.2907619999969029,
+          0.3490429999947082,
+          0.3741630000004079,
+          0.36156299999856856,
+          0.41772299999865936,
+          0.3837229999990086,
+          0.4922440000009374,
+          0.4547240000028978,
+          0.33676199999899836,
+          0.37248299999919254,
+          0.38124299999617506,
+          0.4034429999956046,
+          0.30284199999732664,
+          0.34060300000419375,
+          0.37560300000041025,
+          0.33432299999549286,
+          0.3336029999991297,
+          0.4830839999995078,
+          0.37960300000122515,
+          0.3267219999979716,
+          0.40500299999985145,
+          0.3404020000016317,
+          0.37004300000262447,
+          0.3470820000002277,
+          0.3383220000032452,
+          0.3322829999960959,
+          0.3518019999974058,
+          0.337082999998529,
+          0.5720440000004601,
+          0.40280299999722047,
+          0.30588300000090385,
+          0.32536200000322424,
+          0.361363000003621,
+          0.49200399999972433,
+          0.3110430000015185,
+          0.32132300000375835,
+          0.2938030000004801,
+          0.28560200000356417,
+          0.2837629999994533,
+          0.3402029999997467
+        ]
+      },
+      "requests": [
+        {
+          "sessionMs": 9.480514000002586,
+          "healthMs": 0.5689249999995809,
+          "sessionStatus": 200,
+          "healthStatus": 200,
+          "bytes": 86103
+        },
+        {
+          "sessionMs": 3.686268999997992,
+          "healthMs": 0.4423640000022715,
+          "sessionStatus": 200,
+          "healthStatus": 200,
+          "bytes": 86103
+        },
+        {
+          "sessionMs": 3.094064000004437,
+          "healthMs": 0.3927629999961937,
+          "sessionStatus": 200,
+          "healthStatus": 200,
+          "bytes": 86103
+        },
+        {
+          "sessionMs": 3.0485439999974915,
+          "healthMs": 0.42232399999920744,
+          "sessionStatus": 200,
+          "healthStatus": 200,
+          "bytes": 86103
+        },
+        {
+          "sessionMs": 2.8606220000001485,
+          "healthMs": 0.3858829999953741,
+          "sessionStatus": 200,
+          "healthStatus": 200,
+          "bytes": 86103
+        },
+        {
+          "sessionMs": 3.2095849999968777,
+          "healthMs": 0.4542829999991227,
+          "sessionStatus": 200,
+          "healthStatus": 200,
+          "bytes": 86103
+        },
+        {
+          "sessionMs": 2.7032210000033956,
+          "healthMs": 0.3698030000014114,
+          "sessionStatus": 200,
+          "healthStatus": 200,
+          "bytes": 86103
+        },
+        {
+          "sessionMs": 2.229857999998785,
+          "healthMs": 0.3763630000030389,
+          "sessionStatus": 200,
+          "healthStatus": 200,
+          "bytes": 86103
+        },
+        {
+          "sessionMs": 2.3370189999986906,
+          "healthMs": 0.339443000004394,
+          "sessionStatus": 200,
+          "healthStatus": 200,
+          "bytes": 86103
+        },
+        {
+          "sessionMs": 2.1607370000056108,
+          "healthMs": 0.42420400000264635,
+          "sessionStatus": 200,
+          "healthStatus": 200,
+          "bytes": 86103
+        },
+        {
+          "sessionMs": 2.385219000003417,
+          "healthMs": 0.2907619999969029,
+          "sessionStatus": 200,
+          "healthStatus": 200,
+          "bytes": 86103
+        },
+        {
+          "sessionMs": 2.4189789999945788,
+          "healthMs": 0.3490429999947082,
+          "sessionStatus": 200,
+          "healthStatus": 200,
+          "bytes": 86103
+        },
+        {
+          "sessionMs": 2.472819000002346,
+          "healthMs": 0.3741630000004079,
+          "sessionStatus": 200,
+          "healthStatus": 200,
+          "bytes": 86103
+        },
+        {
+          "sessionMs": 2.606740000002901,
+          "healthMs": 0.36156299999856856,
+          "sessionStatus": 200,
+          "healthStatus": 200,
+          "bytes": 86103
+        },
+        {
+          "sessionMs": 2.5033799999946496,
+          "healthMs": 0.41772299999865936,
+          "sessionStatus": 200,
+          "healthStatus": 200,
+          "bytes": 86103
+        },
+        {
+          "sessionMs": 2.449259000000893,
+          "healthMs": 0.3837229999990086,
+          "sessionStatus": 200,
+          "healthStatus": 200,
+          "bytes": 86103
+        },
+        {
+          "sessionMs": 2.6173800000033225,
+          "healthMs": 0.4922440000009374,
+          "sessionStatus": 200,
+          "healthStatus": 200,
+          "bytes": 86103
+        },
+        {
+          "sessionMs": 6.385929999996733,
+          "healthMs": 0.4547240000028978,
+          "sessionStatus": 200,
+          "healthStatus": 200,
+          "bytes": 86103
+        },
+        {
+          "sessionMs": 2.692021000002569,
+          "healthMs": 0.33676199999899836,
+          "sessionStatus": 200,
+          "healthStatus": 200,
+          "bytes": 86103
+        },
+        {
+          "sessionMs": 2.428460000002815,
+          "healthMs": 0.37248299999919254,
+          "sessionStatus": 200,
+          "healthStatus": 200,
+          "bytes": 86103
+        },
+        {
+          "sessionMs": 2.256657999998424,
+          "healthMs": 0.38124299999617506,
+          "sessionStatus": 200,
+          "healthStatus": 200,
+          "bytes": 86103
+        },
+        {
+          "sessionMs": 2.259656999995059,
+          "healthMs": 0.4034429999956046,
+          "sessionStatus": 200,
+          "healthStatus": 200,
+          "bytes": 86103
+        },
+        {
+          "sessionMs": 2.178737000002002,
+          "healthMs": 0.30284199999732664,
+          "sessionStatus": 200,
+          "healthStatus": 200,
+          "bytes": 86103
+        },
+        {
+          "sessionMs": 2.0675370000026305,
+          "healthMs": 0.34060300000419375,
+          "sessionStatus": 200,
+          "healthStatus": 200,
+          "bytes": 86103
+        },
+        {
+          "sessionMs": 2.3013779999964754,
+          "healthMs": 0.37560300000041025,
+          "sessionStatus": 200,
+          "healthStatus": 200,
+          "bytes": 86103
+        },
+        {
+          "sessionMs": 2.1261369999992894,
+          "healthMs": 0.33432299999549286,
+          "sessionStatus": 200,
+          "healthStatus": 200,
+          "bytes": 86103
+        },
+        {
+          "sessionMs": 2.024336000002222,
+          "healthMs": 0.3336029999991297,
+          "sessionStatus": 200,
+          "healthStatus": 200,
+          "bytes": 86103
+        },
+        {
+          "sessionMs": 2.3766989999930956,
+          "healthMs": 0.4830839999995078,
+          "sessionStatus": 200,
+          "healthStatus": 200,
+          "bytes": 86103
+        },
+        {
+          "sessionMs": 2.2473380000010366,
+          "healthMs": 0.37960300000122515,
+          "sessionStatus": 200,
+          "healthStatus": 200,
+          "bytes": 86103
+        },
+        {
+          "sessionMs": 2.172536999998556,
+          "healthMs": 0.3267219999979716,
+          "sessionStatus": 200,
+          "healthStatus": 200,
+          "bytes": 86103
+        },
+        {
+          "sessionMs": 2.3902190000007977,
+          "healthMs": 0.40500299999985145,
+          "sessionStatus": 200,
+          "healthStatus": 200,
+          "bytes": 86103
+        },
+        {
+          "sessionMs": 2.6043810000046506,
+          "healthMs": 0.3404020000016317,
+          "sessionStatus": 200,
+          "healthStatus": 200,
+          "bytes": 86103
+        },
+        {
+          "sessionMs": 2.376979000000574,
+          "healthMs": 0.37004300000262447,
+          "sessionStatus": 200,
+          "healthStatus": 200,
+          "bytes": 86103
+        },
+        {
+          "sessionMs": 2.3274579999997513,
+          "healthMs": 0.3470820000002277,
+          "sessionStatus": 200,
+          "healthStatus": 200,
+          "bytes": 86103
+        },
+        {
+          "sessionMs": 2.627900999999838,
+          "healthMs": 0.3383220000032452,
+          "sessionStatus": 200,
+          "healthStatus": 200,
+          "bytes": 86103
+        },
+        {
+          "sessionMs": 2.343739000003552,
+          "healthMs": 0.3322829999960959,
+          "sessionStatus": 200,
+          "healthStatus": 200,
+          "bytes": 86103
+        },
+        {
+          "sessionMs": 2.1552169999995385,
+          "healthMs": 0.3518019999974058,
+          "sessionStatus": 200,
+          "healthStatus": 200,
+          "bytes": 86103
+        },
+        {
+          "sessionMs": 2.068217000000004,
+          "healthMs": 0.337082999998529,
+          "sessionStatus": 200,
+          "healthStatus": 200,
+          "bytes": 86103
+        },
+        {
+          "sessionMs": 4.498195000000123,
+          "healthMs": 0.5720440000004601,
+          "sessionStatus": 200,
+          "healthStatus": 200,
+          "bytes": 86103
+        },
+        {
+          "sessionMs": 2.433379000001878,
+          "healthMs": 0.40280299999722047,
+          "sessionStatus": 200,
+          "healthStatus": 200,
+          "bytes": 86103
+        },
+        {
+          "sessionMs": 2.1066569999966305,
+          "healthMs": 0.30588300000090385,
+          "sessionStatus": 200,
+          "healthStatus": 200,
+          "bytes": 86103
+        },
+        {
+          "sessionMs": 2.065335999999661,
+          "healthMs": 0.32536200000322424,
+          "sessionStatus": 200,
+          "healthStatus": 200,
+          "bytes": 86103
+        },
+        {
+          "sessionMs": 1.9475749999983236,
+          "healthMs": 0.361363000003621,
+          "sessionStatus": 200,
+          "healthStatus": 200,
+          "bytes": 86103
+        },
+        {
+          "sessionMs": 4.164392999999109,
+          "healthMs": 0.49200399999972433,
+          "sessionStatus": 200,
+          "healthStatus": 200,
+          "bytes": 86103
+        },
+        {
+          "sessionMs": 2.359898000002431,
+          "healthMs": 0.3110430000015185,
+          "sessionStatus": 200,
+          "healthStatus": 200,
+          "bytes": 86103
+        },
+        {
+          "sessionMs": 2.0546959999992396,
+          "healthMs": 0.32132300000375835,
+          "sessionStatus": 200,
+          "healthStatus": 200,
+          "bytes": 86103
+        },
+        {
+          "sessionMs": 1.9996160000009695,
+          "healthMs": 0.2938030000004801,
+          "sessionStatus": 200,
+          "healthStatus": 200,
+          "bytes": 86103
+        },
+        {
+          "sessionMs": 1.9655750000019907,
+          "healthMs": 0.28560200000356417,
+          "sessionStatus": 200,
+          "healthStatus": 200,
+          "bytes": 86103
+        },
+        {
+          "sessionMs": 1.988416000000143,
+          "healthMs": 0.2837629999994533,
+          "sessionStatus": 200,
+          "healthStatus": 200,
+          "bytes": 86103
+        },
+        {
+          "sessionMs": 1.8320939999975963,
+          "healthMs": 0.3402029999997467,
+          "sessionStatus": 200,
+          "healthStatus": 200,
+          "bytes": 86103
+        }
+      ]
+    },
+    {
+      "pending": 1,
+      "count": {
+        "p50Ms": 0.46584399999846937,
+        "p95Ms": 0.8000460000039311,
+        "maxMs": 1.0980480000071111,
+        "samples": [
+          0.6490449999982957,
+          0.6092050000006566,
+          0.5570039999947767,
+          0.5524440000008326,
+          0.5472850000005565,
+          0.5968439999996917,
+          0.5789650000006077,
+          0.735685999999987,
+          0.46640299999853596,
+          0.47584400000050664,
+          0.4825639999980922,
+          0.4286830000055488,
+          0.5313640000022133,
+          0.46584399999846937,
+          0.4648440000019036,
+          0.40376300000207266,
+          0.40064300000085495,
+          0.4326440000004368,
+          0.381083000000217,
+          0.38000299999839626,
+          0.45836299999791663,
+          0.6206050000037067,
+          0.8000460000039311,
+          0.5111239999969257,
+          0.4822839999978896,
+          0.4204830000016955,
+          0.4566040000063367,
+          0.5722450000030221,
+          0.42916300000069896,
+          0.44700299999385606,
+          0.4540439999982482,
+          0.4158830000014859,
+          0.43204400000104215,
+          0.3758830000006128,
+          0.4782829999967362,
+          0.40752400000201305,
+          0.3665229999969597,
+          0.39144300000043586,
+          0.37236299999494804,
+          0.4368029999968712,
+          0.9377269999968121,
+          0.39948399999411777,
+          1.0980480000071111,
+          0.42672399999719346,
+          0.536683999998786,
+          0.5249239999975543,
+          0.5721640000047046,
+          0.635325000002922,
+          0.4900039999993169,
+          0.40840400000161026
+        ]
+      },
+      "min": {
+        "p50Ms": 0.5090039999995497,
+        "p95Ms": 0.6830049999989569,
+        "maxMs": 0.9405669999978272,
+        "samples": [
+          0.6267250000018976,
+          0.5359239999961574,
+          0.5090039999995497,
+          0.40636300000187475,
+          0.4413630000053672,
+          0.438084000001254,
+          0.5038039999999455,
+          0.4582829999999376,
+          0.4538040000043111,
+          0.45968400000128895,
+          0.4391630000027362,
+          0.43292400000063935,
+          0.5303639999983716,
+          0.4025630000032834,
+          0.4910039999958826,
+          0.4736029999985476,
+          0.44464399999560555,
+          0.5676439999951981,
+          0.556044999997539,
+          0.6530849999981001,
+          0.5472039999949629,
+          0.5591649999987567,
+          0.6091639999940526,
+          0.529804999998305,
+          0.45452300000033574,
+          0.45172399999864865,
+          0.9405669999978272,
+          0.5919649999996182,
+          0.4526030000051833,
+          0.5210040000019944,
+          0.6080849999998463,
+          0.5725249999959487,
+          0.6011240000007092,
+          0.4691640000019106,
+          0.6534850000025472,
+          0.4690439999976661,
+          0.6317650000055437,
+          0.6830049999989569,
+          0.7865670000028331,
+          0.4816030000001774,
+          0.47708399999828544,
+          0.4382839999962016,
+          0.39968299999600276,
+          0.3941629999972065,
+          0.6649249999973108,
+          0.6367650000029244,
+          0.48756399999547284,
+          0.5348039999953471,
+          0.5457239999959711,
+          0.5863249999965774
+        ]
+      },
+      "plans": [
+        [
+          {
+            "QUERY PLAN": [
+              {
+                "Plan": {
+                  "Node Type": "Aggregate",
+                  "Strategy": "Sorted",
+                  "Partial Mode": "Simple",
+                  "Parallel Aware": false,
+                  "Async Capable": false,
+                  "Startup Cost": 8.6,
+                  "Total Cost": 8.62,
+                  "Plan Rows": 1,
+                  "Plan Width": 24,
+                  "Actual Startup Time": 0.029,
+                  "Actual Total Time": 0.029,
+                  "Actual Rows": 1,
+                  "Actual Loops": 1,
+                  "Group Key": [
+                    "session_id"
+                  ],
+                  "Shared Hit Blocks": 2,
+                  "Shared Read Blocks": 0,
+                  "Shared Dirtied Blocks": 0,
+                  "Shared Written Blocks": 0,
+                  "Local Hit Blocks": 0,
+                  "Local Read Blocks": 0,
+                  "Local Dirtied Blocks": 0,
+                  "Local Written Blocks": 0,
+                  "Temp Read Blocks": 0,
+                  "Temp Written Blocks": 0,
+                  "Plans": [
+                    {
+                      "Node Type": "Sort",
+                      "Parent Relationship": "Outer",
+                      "Parallel Aware": false,
+                      "Async Capable": false,
+                      "Startup Cost": 8.6,
+                      "Total Cost": 8.61,
+                      "Plan Rows": 1,
+                      "Plan Width": 16,
+                      "Actual Startup Time": 0.024,
+                      "Actual Total Time": 0.024,
+                      "Actual Rows": 1,
+                      "Actual Loops": 1,
+                      "Sort Key": [
+                        "session_id"
+                      ],
+                      "Sort Method": "quicksort",
+                      "Sort Space Used": 25,
+                      "Sort Space Type": "Memory",
+                      "Shared Hit Blocks": 2,
+                      "Shared Read Blocks": 0,
+                      "Shared Dirtied Blocks": 0,
+                      "Shared Written Blocks": 0,
+                      "Local Hit Blocks": 0,
+                      "Local Read Blocks": 0,
+                      "Local Dirtied Blocks": 0,
+                      "Local Written Blocks": 0,
+                      "Temp Read Blocks": 0,
+                      "Temp Written Blocks": 0,
+                      "Plans": [
+                        {
+                          "Node Type": "Index Scan",
+                          "Parent Relationship": "Outer",
+                          "Parallel Aware": false,
+                          "Async Capable": false,
+                          "Scan Direction": "Forward",
+                          "Index Name": "idx_messages_scheduled_pending",
+                          "Relation Name": "messages",
+                          "Alias": "messages",
+                          "Startup Cost": 0.57,
+                          "Total Cost": 8.59,
+                          "Plan Rows": 1,
+                          "Plan Width": 16,
+                          "Actual Startup Time": 0.018,
+                          "Actual Total Time": 0.019,
+                          "Actual Rows": 1,
+                          "Actual Loops": 1,
+                          "Index Cond": "(scheduled_at > '1792671476700'::bigint)",
+                          "Rows Removed by Index Recheck": 0,
+                          "Filter": "((local_id IS NOT NULL) AND (delivery_state = 'queued'::text) AND (session_id = ANY ('{perf-session-0,perf-session-1,perf-session-2,perf-session-3,perf-session-4,perf-session-5,perf-session-6,perf-session-7,perf-session-8,perf-session-9,perf-session-10,perf-session-11,perf-session-12,perf-session-13,perf-session-14,perf-session-15,perf-session-16,perf-session-17,perf-session-18,perf-session-19,perf-session-20,perf-session-21,perf-session-22,perf-session-23,perf-session-24,perf-session-25,perf-session-26,perf-session-27,perf-session-28,perf-session-29,perf-session-30,perf-session-31,perf-session-32,perf-session-33,perf-session-34,perf-session-35,perf-session-36,perf-session-37,perf-session-38,perf-session-39,perf-session-40,perf-session-41,perf-session-42,perf-session-43,perf-session-44,perf-session-45,perf-session-46,perf-session-47,perf-session-48,perf-session-49,perf-session-50,perf-session-51,perf-session-52,perf-session-53,perf-session-54,perf-session-55,perf-session-56,perf-session-57,perf-session-58,perf-session-59,perf-session-60,perf-session-61,perf-session-62,perf-session-63,perf-session-64,perf-session-65,perf-session-66,perf-session-67,perf-session-68,perf-session-69,perf-session-70,perf-session-71,perf-session-72,perf-session-73,perf-session-74,perf-session-75,perf-session-76,perf-session-77,perf-session-78,perf-session-79,perf-session-80,perf-session-81,perf-session-82,perf-session-83,perf-session-84,perf-session-85,perf-session-86,perf-session-87,perf-session-88,perf-session-89,perf-session-90,perf-session-91,perf-session-92,perf-session-93,perf-session-94,perf-session-95,perf-session-96,perf-session-97,perf-session-98,perf-session-99,perf-session-100,perf-session-101,perf-session-102,perf-session-103,perf-session-104,perf-session-105,perf-session-106,perf-session-107,perf-session-108,perf-session-109,perf-session-110,perf-session-111,perf-session-112,perf-session-113,perf-session-114,perf-session-115,perf-session-116,perf-session-117,perf-session-118,perf-session-119,perf-session-120,perf-session-121,perf-session-122,perf-session-123,perf-session-124,perf-session-125,perf-session-126,perf-session-127,perf-session-128,perf-session-129,perf-session-130,perf-session-131,perf-session-132,perf-session-133,perf-session-134,perf-session-135,perf-session-136,perf-session-137,perf-session-138,perf-session-139,perf-session-140,perf-session-141,perf-session-142,perf-session-143,perf-session-144,perf-session-145,perf-session-146,perf-session-147,perf-session-148,perf-session-149,perf-session-150,perf-session-151,perf-session-152,perf-session-153,perf-session-154,perf-session-155,perf-session-156,perf-session-157,perf-session-158,perf-session-159,perf-session-160,perf-session-161,perf-session-162,perf-session-163,perf-session-164,perf-session-165,perf-session-166,perf-session-167,perf-session-168,perf-session-169,perf-session-170,perf-session-171,perf-session-172,perf-session-173,perf-session-174,perf-session-175,perf-session-176}'::text[])))",
+                          "Rows Removed by Filter": 0,
+                          "Shared Hit Blocks": 2,
+                          "Shared Read Blocks": 0,
+                          "Shared Dirtied Blocks": 0,
+                          "Shared Written Blocks": 0,
+                          "Local Hit Blocks": 0,
+                          "Local Read Blocks": 0,
+                          "Local Dirtied Blocks": 0,
+                          "Local Written Blocks": 0,
+                          "Temp Read Blocks": 0,
+                          "Temp Written Blocks": 0
+                        }
+                      ]
+                    }
+                  ]
+                },
+                "Planning": {
+                  "Shared Hit Blocks": 64,
+                  "Shared Read Blocks": 0,
+                  "Shared Dirtied Blocks": 0,
+                  "Shared Written Blocks": 0,
+                  "Local Hit Blocks": 0,
+                  "Local Read Blocks": 0,
+                  "Local Dirtied Blocks": 0,
+                  "Local Written Blocks": 0,
+                  "Temp Read Blocks": 0,
+                  "Temp Written Blocks": 0
+                },
+                "Planning Time": 0.529,
+                "Triggers": [],
+                "Execution Time": 0.052
+              }
+            ]
+          }
+        ],
+        [
+          {
+            "QUERY PLAN": [
+              {
+                "Plan": {
+                  "Node Type": "Aggregate",
+                  "Strategy": "Sorted",
+                  "Partial Mode": "Simple",
+                  "Parallel Aware": false,
+                  "Async Capable": false,
+                  "Startup Cost": 8.6,
+                  "Total Cost": 8.62,
+                  "Plan Rows": 1,
+                  "Plan Width": 24,
+                  "Actual Startup Time": 0.032,
+                  "Actual Total Time": 0.033,
+                  "Actual Rows": 1,
+                  "Actual Loops": 1,
+                  "Group Key": [
+                    "session_id"
+                  ],
+                  "Shared Hit Blocks": 2,
+                  "Shared Read Blocks": 0,
+                  "Shared Dirtied Blocks": 0,
+                  "Shared Written Blocks": 0,
+                  "Local Hit Blocks": 0,
+                  "Local Read Blocks": 0,
+                  "Local Dirtied Blocks": 0,
+                  "Local Written Blocks": 0,
+                  "Temp Read Blocks": 0,
+                  "Temp Written Blocks": 0,
+                  "Plans": [
+                    {
+                      "Node Type": "Sort",
+                      "Parent Relationship": "Outer",
+                      "Parallel Aware": false,
+                      "Async Capable": false,
+                      "Startup Cost": 8.6,
+                      "Total Cost": 8.61,
+                      "Plan Rows": 1,
+                      "Plan Width": 24,
+                      "Actual Startup Time": 0.029,
+                      "Actual Total Time": 0.029,
+                      "Actual Rows": 1,
+                      "Actual Loops": 1,
+                      "Sort Key": [
+                        "session_id"
+                      ],
+                      "Sort Method": "quicksort",
+                      "Sort Space Used": 25,
+                      "Sort Space Type": "Memory",
+                      "Shared Hit Blocks": 2,
+                      "Shared Read Blocks": 0,
+                      "Shared Dirtied Blocks": 0,
+                      "Shared Written Blocks": 0,
+                      "Local Hit Blocks": 0,
+                      "Local Read Blocks": 0,
+                      "Local Dirtied Blocks": 0,
+                      "Local Written Blocks": 0,
+                      "Temp Read Blocks": 0,
+                      "Temp Written Blocks": 0,
+                      "Plans": [
+                        {
+                          "Node Type": "Index Scan",
+                          "Parent Relationship": "Outer",
+                          "Parallel Aware": false,
+                          "Async Capable": false,
+                          "Scan Direction": "Forward",
+                          "Index Name": "idx_messages_scheduled_pending",
+                          "Relation Name": "messages",
+                          "Alias": "messages",
+                          "Startup Cost": 0.57,
+                          "Total Cost": 8.59,
+                          "Plan Rows": 1,
+                          "Plan Width": 24,
+                          "Actual Startup Time": 0.022,
+                          "Actual Total Time": 0.023,
+                          "Actual Rows": 1,
+                          "Actual Loops": 1,
+                          "Index Cond": "(scheduled_at > '1792671476700'::bigint)",
+                          "Rows Removed by Index Recheck": 0,
+                          "Filter": "((local_id IS NOT NULL) AND (delivery_state = 'queued'::text) AND (session_id = ANY ('{perf-session-0,perf-session-1,perf-session-2,perf-session-3,perf-session-4,perf-session-5,perf-session-6,perf-session-7,perf-session-8,perf-session-9,perf-session-10,perf-session-11,perf-session-12,perf-session-13,perf-session-14,perf-session-15,perf-session-16,perf-session-17,perf-session-18,perf-session-19,perf-session-20,perf-session-21,perf-session-22,perf-session-23,perf-session-24,perf-session-25,perf-session-26,perf-session-27,perf-session-28,perf-session-29,perf-session-30,perf-session-31,perf-session-32,perf-session-33,perf-session-34,perf-session-35,perf-session-36,perf-session-37,perf-session-38,perf-session-39,perf-session-40,perf-session-41,perf-session-42,perf-session-43,perf-session-44,perf-session-45,perf-session-46,perf-session-47,perf-session-48,perf-session-49,perf-session-50,perf-session-51,perf-session-52,perf-session-53,perf-session-54,perf-session-55,perf-session-56,perf-session-57,perf-session-58,perf-session-59,perf-session-60,perf-session-61,perf-session-62,perf-session-63,perf-session-64,perf-session-65,perf-session-66,perf-session-67,perf-session-68,perf-session-69,perf-session-70,perf-session-71,perf-session-72,perf-session-73,perf-session-74,perf-session-75,perf-session-76,perf-session-77,perf-session-78,perf-session-79,perf-session-80,perf-session-81,perf-session-82,perf-session-83,perf-session-84,perf-session-85,perf-session-86,perf-session-87,perf-session-88,perf-session-89,perf-session-90,perf-session-91,perf-session-92,perf-session-93,perf-session-94,perf-session-95,perf-session-96,perf-session-97,perf-session-98,perf-session-99,perf-session-100,perf-session-101,perf-session-102,perf-session-103,perf-session-104,perf-session-105,perf-session-106,perf-session-107,perf-session-108,perf-session-109,perf-session-110,perf-session-111,perf-session-112,perf-session-113,perf-session-114,perf-session-115,perf-session-116,perf-session-117,perf-session-118,perf-session-119,perf-session-120,perf-session-121,perf-session-122,perf-session-123,perf-session-124,perf-session-125,perf-session-126,perf-session-127,perf-session-128,perf-session-129,perf-session-130,perf-session-131,perf-session-132,perf-session-133,perf-session-134,perf-session-135,perf-session-136,perf-session-137,perf-session-138,perf-session-139,perf-session-140,perf-session-141,perf-session-142,perf-session-143,perf-session-144,perf-session-145,perf-session-146,perf-session-147,perf-session-148,perf-session-149,perf-session-150,perf-session-151,perf-session-152,perf-session-153,perf-session-154,perf-session-155,perf-session-156,perf-session-157,perf-session-158,perf-session-159,perf-session-160,perf-session-161,perf-session-162,perf-session-163,perf-session-164,perf-session-165,perf-session-166,perf-session-167,perf-session-168,perf-session-169,perf-session-170,perf-session-171,perf-session-172,perf-session-173,perf-session-174,perf-session-175,perf-session-176}'::text[])))",
+                          "Rows Removed by Filter": 0,
+                          "Shared Hit Blocks": 2,
+                          "Shared Read Blocks": 0,
+                          "Shared Dirtied Blocks": 0,
+                          "Shared Written Blocks": 0,
+                          "Local Hit Blocks": 0,
+                          "Local Read Blocks": 0,
+                          "Local Dirtied Blocks": 0,
+                          "Local Written Blocks": 0,
+                          "Temp Read Blocks": 0,
+                          "Temp Written Blocks": 0
+                        }
+                      ]
+                    }
+                  ]
+                },
+                "Planning": {
+                  "Shared Hit Blocks": 1,
+                  "Shared Read Blocks": 0,
+                  "Shared Dirtied Blocks": 0,
+                  "Shared Written Blocks": 0,
+                  "Local Hit Blocks": 0,
+                  "Local Read Blocks": 0,
+                  "Local Dirtied Blocks": 0,
+                  "Local Written Blocks": 0,
+                  "Temp Read Blocks": 0,
+                  "Temp Written Blocks": 0
+                },
+                "Planning Time": 0.293,
+                "Triggers": [],
+                "Execution Time": 0.053
+              }
+            ]
+          }
+        ]
+      ],
+      "sessions": {
+        "p50Ms": 3.1333840000006603,
+        "p95Ms": 5.416402000002563,
+        "maxMs": 9.277913000005356,
+        "samples": [
+          4.465956000000006,
+          2.9397829999943497,
+          2.805661999998847,
+          3.5804280000011204,
+          4.381313999998383,
+          5.416402000002563,
+          3.1333840000006603,
+          2.827661999996053,
+          2.374338000001444,
+          2.44965900000534,
+          2.343899000006786,
+          2.607620999995561,
+          2.638580999999249,
+          3.0074640000020736,
+          2.917742999998154,
+          2.6056600000010803,
+          3.4533470000023954,
+          3.7862699999968754,
+          3.2871460000023944,
+          2.904383000000962,
+          4.014391999997315,
+          3.333907000000181,
+          3.0991849999991246,
+          2.8782219999993686,
+          4.019832000005408,
+          3.3422260000006645,
+          2.978063000002294,
+          5.522403999995731,
+          3.229065999999875,
+          3.276225000001432,
+          3.1493049999990035,
+          3.4779879999987315,
+          3.7657099999996717,
+          3.2125450000021374,
+          3.1625849999982165,
+          3.062183999994886,
+          3.4966669999994338,
+          3.013784000002488,
+          2.684380999999121,
+          3.1728650000004563,
+          2.897142999994685,
+          2.6597409999958472,
+          2.962983000004897,
+          2.9226630000048317,
+          3.5084270000006654,
+          3.0642640000005485,
+          3.2415059999984805,
+          3.051264000001538,
+          3.3917469999942114,
+          9.277913000005356
+        ]
+      },
+      "health": {
+        "p50Ms": 0.4747639999986859,
+        "p95Ms": 0.6253250000008848,
+        "maxMs": 0.7028449999997974,
+        "samples": [
+          0.4980839999989257,
+          0.4802440000057686,
+          0.3886029999994207,
+          0.5324439999967581,
+          0.35732300000381656,
+          0.6252849999946193,
+          0.3882430000012391,
+          0.3908039999951143,
+          0.35284300000057556,
+          0.2968419999961043,
+          0.36728299999958836,
+          0.4485629999981029,
+          0.3954029999949853,
+          0.4743640000015148,
+          0.4805239999986952,
+          0.4993240000039805,
+          0.5929650000034599,
+          0.5366439999997965,
+          0.44012300000031246,
+          0.41948299999785377,
+          0.6238050000029034,
+          0.4702830000023823,
+          0.6288849999982631,
+          0.6004849999953876,
+          0.5035639999987325,
+          0.3919629999945755,
+          0.40096300000004703,
+          0.5336039999965578,
+          0.44784400000207825,
+          0.6198050000020885,
+          0.589324000000488,
+          0.3941629999972065,
+          0.5302840000003926,
+          0.47692300000198884,
+          0.48336399999971036,
+          0.4988440000015544,
+          0.7028449999997974,
+          0.6071650000012596,
+          0.4287229999972624,
+          0.4535630000027595,
+          0.48556400000234134,
+          0.4718040000007022,
+          0.4747639999986859,
+          0.4550840000010794,
+          0.4142839999985881,
+          0.4270029999970575,
+          0.42240299999684794,
+          0.4847639999934472,
+          0.6253250000008848,
+          0.6016850000014529
+        ]
+      },
+      "requests": [
+        {
+          "sessionMs": 4.465956000000006,
+          "healthMs": 0.4980839999989257,
+          "sessionStatus": 200,
+          "healthStatus": 200,
+          "bytes": 86112
+        },
+        {
+          "sessionMs": 2.9397829999943497,
+          "healthMs": 0.4802440000057686,
+          "sessionStatus": 200,
+          "healthStatus": 200,
+          "bytes": 86112
+        },
+        {
+          "sessionMs": 2.805661999998847,
+          "healthMs": 0.3886029999994207,
+          "sessionStatus": 200,
+          "healthStatus": 200,
+          "bytes": 86112
+        },
+        {
+          "sessionMs": 3.5804280000011204,
+          "healthMs": 0.5324439999967581,
+          "sessionStatus": 200,
+          "healthStatus": 200,
+          "bytes": 86112
+        },
+        {
+          "sessionMs": 4.381313999998383,
+          "healthMs": 0.35732300000381656,
+          "sessionStatus": 200,
+          "healthStatus": 200,
+          "bytes": 86112
+        },
+        {
+          "sessionMs": 5.416402000002563,
+          "healthMs": 0.6252849999946193,
+          "sessionStatus": 200,
+          "healthStatus": 200,
+          "bytes": 86112
+        },
+        {
+          "sessionMs": 3.1333840000006603,
+          "healthMs": 0.3882430000012391,
+          "sessionStatus": 200,
+          "healthStatus": 200,
+          "bytes": 86112
+        },
+        {
+          "sessionMs": 2.827661999996053,
+          "healthMs": 0.3908039999951143,
+          "sessionStatus": 200,
+          "healthStatus": 200,
+          "bytes": 86112
+        },
+        {
+          "sessionMs": 2.374338000001444,
+          "healthMs": 0.35284300000057556,
+          "sessionStatus": 200,
+          "healthStatus": 200,
+          "bytes": 86112
+        },
+        {
+          "sessionMs": 2.44965900000534,
+          "healthMs": 0.2968419999961043,
+          "sessionStatus": 200,
+          "healthStatus": 200,
+          "bytes": 86112
+        },
+        {
+          "sessionMs": 2.343899000006786,
+          "healthMs": 0.36728299999958836,
+          "sessionStatus": 200,
+          "healthStatus": 200,
+          "bytes": 86112
+        },
+        {
+          "sessionMs": 2.607620999995561,
+          "healthMs": 0.4485629999981029,
+          "sessionStatus": 200,
+          "healthStatus": 200,
+          "bytes": 86112
+        },
+        {
+          "sessionMs": 2.638580999999249,
+          "healthMs": 0.3954029999949853,
+          "sessionStatus": 200,
+          "healthStatus": 200,
+          "bytes": 86112
+        },
+        {
+          "sessionMs": 3.0074640000020736,
+          "healthMs": 0.4743640000015148,
+          "sessionStatus": 200,
+          "healthStatus": 200,
+          "bytes": 86112
+        },
+        {
+          "sessionMs": 2.917742999998154,
+          "healthMs": 0.4805239999986952,
+          "sessionStatus": 200,
+          "healthStatus": 200,
+          "bytes": 86112
+        },
+        {
+          "sessionMs": 2.6056600000010803,
+          "healthMs": 0.4993240000039805,
+          "sessionStatus": 200,
+          "healthStatus": 200,
+          "bytes": 86112
+        },
+        {
+          "sessionMs": 3.4533470000023954,
+          "healthMs": 0.5929650000034599,
+          "sessionStatus": 200,
+          "healthStatus": 200,
+          "bytes": 86112
+        },
+        {
+          "sessionMs": 3.7862699999968754,
+          "healthMs": 0.5366439999997965,
+          "sessionStatus": 200,
+          "healthStatus": 200,
+          "bytes": 86112
+        },
+        {
+          "sessionMs": 3.2871460000023944,
+          "healthMs": 0.44012300000031246,
+          "sessionStatus": 200,
+          "healthStatus": 200,
+          "bytes": 86112
+        },
+        {
+          "sessionMs": 2.904383000000962,
+          "healthMs": 0.41948299999785377,
+          "sessionStatus": 200,
+          "healthStatus": 200,
+          "bytes": 86112
+        },
+        {
+          "sessionMs": 4.014391999997315,
+          "healthMs": 0.6238050000029034,
+          "sessionStatus": 200,
+          "healthStatus": 200,
+          "bytes": 86112
+        },
+        {
+          "sessionMs": 3.333907000000181,
+          "healthMs": 0.4702830000023823,
+          "sessionStatus": 200,
+          "healthStatus": 200,
+          "bytes": 86112
+        },
+        {
+          "sessionMs": 3.0991849999991246,
+          "healthMs": 0.6288849999982631,
+          "sessionStatus": 200,
+          "healthStatus": 200,
+          "bytes": 86112
+        },
+        {
+          "sessionMs": 2.8782219999993686,
+          "healthMs": 0.6004849999953876,
+          "sessionStatus": 200,
+          "healthStatus": 200,
+          "bytes": 86112
+        },
+        {
+          "sessionMs": 4.019832000005408,
+          "healthMs": 0.5035639999987325,
+          "sessionStatus": 200,
+          "healthStatus": 200,
+          "bytes": 86112
+        },
+        {
+          "sessionMs": 3.3422260000006645,
+          "healthMs": 0.3919629999945755,
+          "sessionStatus": 200,
+          "healthStatus": 200,
+          "bytes": 86112
+        },
+        {
+          "sessionMs": 2.978063000002294,
+          "healthMs": 0.40096300000004703,
+          "sessionStatus": 200,
+          "healthStatus": 200,
+          "bytes": 86112
+        },
+        {
+          "sessionMs": 5.522403999995731,
+          "healthMs": 0.5336039999965578,
+          "sessionStatus": 200,
+          "healthStatus": 200,
+          "bytes": 86112
+        },
+        {
+          "sessionMs": 3.229065999999875,
+          "healthMs": 0.44784400000207825,
+          "sessionStatus": 200,
+          "healthStatus": 200,
+          "bytes": 86112
+        },
+        {
+          "sessionMs": 3.276225000001432,
+          "healthMs": 0.6198050000020885,
+          "sessionStatus": 200,
+          "healthStatus": 200,
+          "bytes": 86112
+        },
+        {
+          "sessionMs": 3.1493049999990035,
+          "healthMs": 0.589324000000488,
+          "sessionStatus": 200,
+          "healthStatus": 200,
+          "bytes": 86112
+        },
+        {
+          "sessionMs": 3.4779879999987315,
+          "healthMs": 0.3941629999972065,
+          "sessionStatus": 200,
+          "healthStatus": 200,
+          "bytes": 86112
+        },
+        {
+          "sessionMs": 3.7657099999996717,
+          "healthMs": 0.5302840000003926,
+          "sessionStatus": 200,
+          "healthStatus": 200,
+          "bytes": 86112
+        },
+        {
+          "sessionMs": 3.2125450000021374,
+          "healthMs": 0.47692300000198884,
+          "sessionStatus": 200,
+          "healthStatus": 200,
+          "bytes": 86112
+        },
+        {
+          "sessionMs": 3.1625849999982165,
+          "healthMs": 0.48336399999971036,
+          "sessionStatus": 200,
+          "healthStatus": 200,
+          "bytes": 86112
+        },
+        {
+          "sessionMs": 3.062183999994886,
+          "healthMs": 0.4988440000015544,
+          "sessionStatus": 200,
+          "healthStatus": 200,
+          "bytes": 86112
+        },
+        {
+          "sessionMs": 3.4966669999994338,
+          "healthMs": 0.7028449999997974,
+          "sessionStatus": 200,
+          "healthStatus": 200,
+          "bytes": 86112
+        },
+        {
+          "sessionMs": 3.013784000002488,
+          "healthMs": 0.6071650000012596,
+          "sessionStatus": 200,
+          "healthStatus": 200,
+          "bytes": 86112
+        },
+        {
+          "sessionMs": 2.684380999999121,
+          "healthMs": 0.4287229999972624,
+          "sessionStatus": 200,
+          "healthStatus": 200,
+          "bytes": 86112
+        },
+        {
+          "sessionMs": 3.1728650000004563,
+          "healthMs": 0.4535630000027595,
+          "sessionStatus": 200,
+          "healthStatus": 200,
+          "bytes": 86112
+        },
+        {
+          "sessionMs": 2.897142999994685,
+          "healthMs": 0.48556400000234134,
+          "sessionStatus": 200,
+          "healthStatus": 200,
+          "bytes": 86112
+        },
+        {
+          "sessionMs": 2.6597409999958472,
+          "healthMs": 0.4718040000007022,
+          "sessionStatus": 200,
+          "healthStatus": 200,
+          "bytes": 86112
+        },
+        {
+          "sessionMs": 2.962983000004897,
+          "healthMs": 0.4747639999986859,
+          "sessionStatus": 200,
+          "healthStatus": 200,
+          "bytes": 86112
+        },
+        {
+          "sessionMs": 2.9226630000048317,
+          "healthMs": 0.4550840000010794,
+          "sessionStatus": 200,
+          "healthStatus": 200,
+          "bytes": 86112
+        },
+        {
+          "sessionMs": 3.5084270000006654,
+          "healthMs": 0.4142839999985881,
+          "sessionStatus": 200,
+          "healthStatus": 200,
+          "bytes": 86112
+        },
+        {
+          "sessionMs": 3.0642640000005485,
+          "healthMs": 0.4270029999970575,
+          "sessionStatus": 200,
+          "healthStatus": 200,
+          "bytes": 86112
+        },
+        {
+          "sessionMs": 3.2415059999984805,
+          "healthMs": 0.42240299999684794,
+          "sessionStatus": 200,
+          "healthStatus": 200,
+          "bytes": 86112
+        },
+        {
+          "sessionMs": 3.051264000001538,
+          "healthMs": 0.4847639999934472,
+          "sessionStatus": 200,
+          "healthStatus": 200,
+          "bytes": 86112
+        },
+        {
+          "sessionMs": 3.3917469999942114,
+          "healthMs": 0.6253250000008848,
+          "sessionStatus": 200,
+          "healthStatus": 200,
+          "bytes": 86112
+        },
+        {
+          "sessionMs": 9.277913000005356,
+          "healthMs": 0.6016850000014529,
+          "sessionStatus": 200,
+          "healthStatus": 200,
+          "bytes": 86112
+        }
+      ]
+    },
+    {
+      "pending": 1000,
+      "count": {
+        "p50Ms": 3.151225000001432,
+        "p95Ms": 3.2987060000014026,
+        "maxMs": 3.496707999998762,
+        "samples": [
+          3.167744999998831,
+          3.2794659999999567,
+          3.496707999998762,
+          3.230984999994689,
+          3.1499449999973876,
+          3.1588249999986147,
+          3.1735849999968195,
+          3.0927840000003926,
+          3.124904999996943,
+          3.1715040000053705,
+          3.1123850000003586,
+          3.0562640000061947,
+          3.112223999996786,
+          3.1116240000046673,
+          3.107744000000821,
+          3.068504999995639,
+          3.108064000000013,
+          3.2338650000019697,
+          3.2241460000004736,
+          3.229104999998526,
+          3.185104999996838,
+          3.106064999999944,
+          3.2137450000009267,
+          3.1646249999976135,
+          3.150985000000219,
+          3.160104999995383,
+          3.1224640000000363,
+          3.151225000001432,
+          3.195305000001099,
+          3.218185000005178,
+          3.1598250000024564,
+          3.276106000004802,
+          3.154145000000426,
+          3.2179849999956787,
+          3.2987060000014026,
+          3.1975450000027195,
+          3.3046659999963595,
+          3.1413850000026287,
+          3.1497050000034506,
+          3.129904000001261,
+          3.140944999999192,
+          3.1640650000044843,
+          3.130864999999176,
+          3.1137440000020433,
+          3.131424999999581,
+          3.1695850000032806,
+          3.111984000002849,
+          3.1506250000020373,
+          3.0928639999983716,
+          3.0908650000055786
+        ]
+      },
+      "min": {
+        "p50Ms": 3.267546000002767,
+        "p95Ms": 3.379666000000725,
+        "maxMs": 3.4157070000001113,
+        "samples": [
+          3.2988660000046366,
+          3.267546000002767,
+          3.2052249999978812,
+          3.2274259999976493,
+          3.1958249999952386,
+          3.2708649999985937,
+          3.209186000000045,
+          3.2455449999979464,
+          3.1699050000024727,
+          3.1892250000018976,
+          3.3107060000038473,
+          3.254425999999512,
+          3.315545999997994,
+          3.173784999999043,
+          3.180305000001681,
+          3.2814259999940987,
+          3.379666000000725,
+          3.2862260000038077,
+          3.239986000000499,
+          3.233025000001362,
+          3.3721070000028703,
+          3.2051049999936367,
+          3.309505999997782,
+          3.184704999999667,
+          3.1673049999953946,
+          3.266986000002362,
+          3.2057050000003073,
+          3.3706659999952535,
+          3.3180670000001555,
+          3.2418650000035996,
+          3.1961450000017066,
+          3.2763859999977285,
+          3.4059070000002976,
+          3.263184999996156,
+          3.4157070000001113,
+          3.3196660000030533,
+          3.334747000000789,
+          3.348226000001887,
+          3.274865999999747,
+          3.2885459999961313,
+          3.227064999999129,
+          3.2089449999984936,
+          3.3179459999955725,
+          3.3378670000020065,
+          3.27738600000157,
+          3.339266000002681,
+          3.2424249999967287,
+          3.2425860000003013,
+          3.3285459999970044,
+          3.3145860000004177
+        ]
+      },
+      "plans": [
+        [
+          {
+            "QUERY PLAN": [
+              {
+                "Plan": {
+                  "Node Type": "Aggregate",
+                  "Strategy": "Sorted",
+                  "Partial Mode": "Simple",
+                  "Parallel Aware": false,
+                  "Async Capable": false,
+                  "Startup Cost": 8.78,
+                  "Total Cost": 8.8,
+                  "Plan Rows": 1,
+                  "Plan Width": 24,
+                  "Actual Startup Time": 2.308,
+                  "Actual Total Time": 2.505,
+                  "Actual Rows": 177,
+                  "Actual Loops": 1,
+                  "Group Key": [
+                    "session_id"
+                  ],
+                  "Shared Hit Blocks": 22,
+                  "Shared Read Blocks": 0,
+                  "Shared Dirtied Blocks": 0,
+                  "Shared Written Blocks": 0,
+                  "Local Hit Blocks": 0,
+                  "Local Read Blocks": 0,
+                  "Local Dirtied Blocks": 0,
+                  "Local Written Blocks": 0,
+                  "Temp Read Blocks": 0,
+                  "Temp Written Blocks": 0,
+                  "Plans": [
+                    {
+                      "Node Type": "Sort",
+                      "Parent Relationship": "Outer",
+                      "Parallel Aware": false,
+                      "Async Capable": false,
+                      "Startup Cost": 8.78,
+                      "Total Cost": 8.78,
+                      "Plan Rows": 1,
+                      "Plan Width": 16,
+                      "Actual Startup Time": 2.303,
+                      "Actual Total Time": 2.356,
+                      "Actual Rows": 1000,
+                      "Actual Loops": 1,
+                      "Sort Key": [
+                        "session_id"
+                      ],
+                      "Sort Method": "quicksort",
+                      "Sort Space Used": 51,
+                      "Sort Space Type": "Memory",
+                      "Shared Hit Blocks": 22,
+                      "Shared Read Blocks": 0,
+                      "Shared Dirtied Blocks": 0,
+                      "Shared Written Blocks": 0,
+                      "Local Hit Blocks": 0,
+                      "Local Read Blocks": 0,
+                      "Local Dirtied Blocks": 0,
+                      "Local Written Blocks": 0,
+                      "Temp Read Blocks": 0,
+                      "Temp Written Blocks": 0,
+                      "Plans": [
+                        {
+                          "Node Type": "Index Scan",
+                          "Parent Relationship": "Outer",
+                          "Parallel Aware": false,
+                          "Async Capable": false,
+                          "Scan Direction": "Forward",
+                          "Index Name": "idx_messages_scheduled_pending",
+                          "Relation Name": "messages",
+                          "Alias": "messages",
+                          "Startup Cost": 0.72,
+                          "Total Cost": 8.77,
+                          "Plan Rows": 1,
+                          "Plan Width": 16,
+                          "Actual Startup Time": 0.026,
+                          "Actual Total Time": 0.41,
+                          "Actual Rows": 1000,
+                          "Actual Loops": 1,
+                          "Index Cond": "(scheduled_at > '1792671476700'::bigint)",
+                          "Rows Removed by Index Recheck": 0,
+                          "Filter": "((local_id IS NOT NULL) AND (delivery_state = 'queued'::text) AND (session_id = ANY ('{perf-session-0,perf-session-1,perf-session-2,perf-session-3,perf-session-4,perf-session-5,perf-session-6,perf-session-7,perf-session-8,perf-session-9,perf-session-10,perf-session-11,perf-session-12,perf-session-13,perf-session-14,perf-session-15,perf-session-16,perf-session-17,perf-session-18,perf-session-19,perf-session-20,perf-session-21,perf-session-22,perf-session-23,perf-session-24,perf-session-25,perf-session-26,perf-session-27,perf-session-28,perf-session-29,perf-session-30,perf-session-31,perf-session-32,perf-session-33,perf-session-34,perf-session-35,perf-session-36,perf-session-37,perf-session-38,perf-session-39,perf-session-40,perf-session-41,perf-session-42,perf-session-43,perf-session-44,perf-session-45,perf-session-46,perf-session-47,perf-session-48,perf-session-49,perf-session-50,perf-session-51,perf-session-52,perf-session-53,perf-session-54,perf-session-55,perf-session-56,perf-session-57,perf-session-58,perf-session-59,perf-session-60,perf-session-61,perf-session-62,perf-session-63,perf-session-64,perf-session-65,perf-session-66,perf-session-67,perf-session-68,perf-session-69,perf-session-70,perf-session-71,perf-session-72,perf-session-73,perf-session-74,perf-session-75,perf-session-76,perf-session-77,perf-session-78,perf-session-79,perf-session-80,perf-session-81,perf-session-82,perf-session-83,perf-session-84,perf-session-85,perf-session-86,perf-session-87,perf-session-88,perf-session-89,perf-session-90,perf-session-91,perf-session-92,perf-session-93,perf-session-94,perf-session-95,perf-session-96,perf-session-97,perf-session-98,perf-session-99,perf-session-100,perf-session-101,perf-session-102,perf-session-103,perf-session-104,perf-session-105,perf-session-106,perf-session-107,perf-session-108,perf-session-109,perf-session-110,perf-session-111,perf-session-112,perf-session-113,perf-session-114,perf-session-115,perf-session-116,perf-session-117,perf-session-118,perf-session-119,perf-session-120,perf-session-121,perf-session-122,perf-session-123,perf-session-124,perf-session-125,perf-session-126,perf-session-127,perf-session-128,perf-session-129,perf-session-130,perf-session-131,perf-session-132,perf-session-133,perf-session-134,perf-session-135,perf-session-136,perf-session-137,perf-session-138,perf-session-139,perf-session-140,perf-session-141,perf-session-142,perf-session-143,perf-session-144,perf-session-145,perf-session-146,perf-session-147,perf-session-148,perf-session-149,perf-session-150,perf-session-151,perf-session-152,perf-session-153,perf-session-154,perf-session-155,perf-session-156,perf-session-157,perf-session-158,perf-session-159,perf-session-160,perf-session-161,perf-session-162,perf-session-163,perf-session-164,perf-session-165,perf-session-166,perf-session-167,perf-session-168,perf-session-169,perf-session-170,perf-session-171,perf-session-172,perf-session-173,perf-session-174,perf-session-175,perf-session-176}'::text[])))",
+                          "Rows Removed by Filter": 0,
+                          "Shared Hit Blocks": 22,
+                          "Shared Read Blocks": 0,
+                          "Shared Dirtied Blocks": 0,
+                          "Shared Written Blocks": 0,
+                          "Local Hit Blocks": 0,
+                          "Local Read Blocks": 0,
+                          "Local Dirtied Blocks": 0,
+                          "Local Written Blocks": 0,
+                          "Temp Read Blocks": 0,
+                          "Temp Written Blocks": 0
+                        }
+                      ]
+                    }
+                  ]
+                },
+                "Planning": {
+                  "Shared Hit Blocks": 64,
+                  "Shared Read Blocks": 0,
+                  "Shared Dirtied Blocks": 0,
+                  "Shared Written Blocks": 0,
+                  "Local Hit Blocks": 0,
+                  "Local Read Blocks": 0,
+                  "Local Dirtied Blocks": 0,
+                  "Local Written Blocks": 0,
+                  "Temp Read Blocks": 0,
+                  "Temp Written Blocks": 0
+                },
+                "Planning Time": 0.4,
+                "Triggers": [],
+                "Execution Time": 2.531
+              }
+            ]
+          }
+        ],
+        [
+          {
+            "QUERY PLAN": [
+              {
+                "Plan": {
+                  "Node Type": "Aggregate",
+                  "Strategy": "Sorted",
+                  "Partial Mode": "Simple",
+                  "Parallel Aware": false,
+                  "Async Capable": false,
+                  "Startup Cost": 8.78,
+                  "Total Cost": 8.8,
+                  "Plan Rows": 1,
+                  "Plan Width": 24,
+                  "Actual Startup Time": 2.371,
+                  "Actual Total Time": 2.6,
+                  "Actual Rows": 177,
+                  "Actual Loops": 1,
+                  "Group Key": [
+                    "session_id"
+                  ],
+                  "Shared Hit Blocks": 22,
+                  "Shared Read Blocks": 0,
+                  "Shared Dirtied Blocks": 0,
+                  "Shared Written Blocks": 0,
+                  "Local Hit Blocks": 0,
+                  "Local Read Blocks": 0,
+                  "Local Dirtied Blocks": 0,
+                  "Local Written Blocks": 0,
+                  "Temp Read Blocks": 0,
+                  "Temp Written Blocks": 0,
+                  "Plans": [
+                    {
+                      "Node Type": "Sort",
+                      "Parent Relationship": "Outer",
+                      "Parallel Aware": false,
+                      "Async Capable": false,
+                      "Startup Cost": 8.78,
+                      "Total Cost": 8.78,
+                      "Plan Rows": 1,
+                      "Plan Width": 24,
+                      "Actual Startup Time": 2.366,
+                      "Actual Total Time": 2.417,
+                      "Actual Rows": 1000,
+                      "Actual Loops": 1,
+                      "Sort Key": [
+                        "session_id"
+                      ],
+                      "Sort Method": "quicksort",
+                      "Sort Space Used": 75,
+                      "Sort Space Type": "Memory",
+                      "Shared Hit Blocks": 22,
+                      "Shared Read Blocks": 0,
+                      "Shared Dirtied Blocks": 0,
+                      "Shared Written Blocks": 0,
+                      "Local Hit Blocks": 0,
+                      "Local Read Blocks": 0,
+                      "Local Dirtied Blocks": 0,
+                      "Local Written Blocks": 0,
+                      "Temp Read Blocks": 0,
+                      "Temp Written Blocks": 0,
+                      "Plans": [
+                        {
+                          "Node Type": "Index Scan",
+                          "Parent Relationship": "Outer",
+                          "Parallel Aware": false,
+                          "Async Capable": false,
+                          "Scan Direction": "Forward",
+                          "Index Name": "idx_messages_scheduled_pending",
+                          "Relation Name": "messages",
+                          "Alias": "messages",
+                          "Startup Cost": 0.72,
+                          "Total Cost": 8.77,
+                          "Plan Rows": 1,
+                          "Plan Width": 24,
+                          "Actual Startup Time": 0.025,
+                          "Actual Total Time": 0.434,
+                          "Actual Rows": 1000,
+                          "Actual Loops": 1,
+                          "Index Cond": "(scheduled_at > '1792671476700'::bigint)",
+                          "Rows Removed by Index Recheck": 0,
+                          "Filter": "((local_id IS NOT NULL) AND (delivery_state = 'queued'::text) AND (session_id = ANY ('{perf-session-0,perf-session-1,perf-session-2,perf-session-3,perf-session-4,perf-session-5,perf-session-6,perf-session-7,perf-session-8,perf-session-9,perf-session-10,perf-session-11,perf-session-12,perf-session-13,perf-session-14,perf-session-15,perf-session-16,perf-session-17,perf-session-18,perf-session-19,perf-session-20,perf-session-21,perf-session-22,perf-session-23,perf-session-24,perf-session-25,perf-session-26,perf-session-27,perf-session-28,perf-session-29,perf-session-30,perf-session-31,perf-session-32,perf-session-33,perf-session-34,perf-session-35,perf-session-36,perf-session-37,perf-session-38,perf-session-39,perf-session-40,perf-session-41,perf-session-42,perf-session-43,perf-session-44,perf-session-45,perf-session-46,perf-session-47,perf-session-48,perf-session-49,perf-session-50,perf-session-51,perf-session-52,perf-session-53,perf-session-54,perf-session-55,perf-session-56,perf-session-57,perf-session-58,perf-session-59,perf-session-60,perf-session-61,perf-session-62,perf-session-63,perf-session-64,perf-session-65,perf-session-66,perf-session-67,perf-session-68,perf-session-69,perf-session-70,perf-session-71,perf-session-72,perf-session-73,perf-session-74,perf-session-75,perf-session-76,perf-session-77,perf-session-78,perf-session-79,perf-session-80,perf-session-81,perf-session-82,perf-session-83,perf-session-84,perf-session-85,perf-session-86,perf-session-87,perf-session-88,perf-session-89,perf-session-90,perf-session-91,perf-session-92,perf-session-93,perf-session-94,perf-session-95,perf-session-96,perf-session-97,perf-session-98,perf-session-99,perf-session-100,perf-session-101,perf-session-102,perf-session-103,perf-session-104,perf-session-105,perf-session-106,perf-session-107,perf-session-108,perf-session-109,perf-session-110,perf-session-111,perf-session-112,perf-session-113,perf-session-114,perf-session-115,perf-session-116,perf-session-117,perf-session-118,perf-session-119,perf-session-120,perf-session-121,perf-session-122,perf-session-123,perf-session-124,perf-session-125,perf-session-126,perf-session-127,perf-session-128,perf-session-129,perf-session-130,perf-session-131,perf-session-132,perf-session-133,perf-session-134,perf-session-135,perf-session-136,perf-session-137,perf-session-138,perf-session-139,perf-session-140,perf-session-141,perf-session-142,perf-session-143,perf-session-144,perf-session-145,perf-session-146,perf-session-147,perf-session-148,perf-session-149,perf-session-150,perf-session-151,perf-session-152,perf-session-153,perf-session-154,perf-session-155,perf-session-156,perf-session-157,perf-session-158,perf-session-159,perf-session-160,perf-session-161,perf-session-162,perf-session-163,perf-session-164,perf-session-165,perf-session-166,perf-session-167,perf-session-168,perf-session-169,perf-session-170,perf-session-171,perf-session-172,perf-session-173,perf-session-174,perf-session-175,perf-session-176}'::text[])))",
+                          "Rows Removed by Filter": 0,
+                          "Shared Hit Blocks": 22,
+                          "Shared Read Blocks": 0,
+                          "Shared Dirtied Blocks": 0,
+                          "Shared Written Blocks": 0,
+                          "Local Hit Blocks": 0,
+                          "Local Read Blocks": 0,
+                          "Local Dirtied Blocks": 0,
+                          "Local Written Blocks": 0,
+                          "Temp Read Blocks": 0,
+                          "Temp Written Blocks": 0
+                        }
+                      ]
+                    }
+                  ]
+                },
+                "Planning": {
+                  "Shared Hit Blocks": 1,
+                  "Shared Read Blocks": 0,
+                  "Shared Dirtied Blocks": 0,
+                  "Shared Written Blocks": 0,
+                  "Local Hit Blocks": 0,
+                  "Local Read Blocks": 0,
+                  "Local Dirtied Blocks": 0,
+                  "Local Written Blocks": 0,
+                  "Temp Read Blocks": 0,
+                  "Temp Written Blocks": 0
+                },
+                "Planning Time": 0.197,
+                "Triggers": [],
+                "Execution Time": 2.623
+              }
+            ]
+          }
+        ]
+      ],
+      "sessions": {
+        "p50Ms": 8.262064999995346,
+        "p95Ms": 9.939038000004075,
+        "maxMs": 10.340441000000283,
+        "samples": [
+          9.892077999997127,
+          8.211425000001327,
+          8.12838400000328,
+          7.900541999995767,
+          7.923622000002069,
+          8.541546999993443,
+          8.031143000000156,
+          8.289065000004484,
+          7.8781420000013895,
+          8.269384999999602,
+          8.262064999995346,
+          8.01190299999871,
+          8.156624000002921,
+          8.01030300000275,
+          8.273744999998598,
+          7.798741999999038,
+          7.897821999998996,
+          7.901742000001832,
+          7.85870199999772,
+          7.944822000004933,
+          8.004342999993241,
+          7.878781999999774,
+          8.579146999996738,
+          8.752308999995876,
+          8.254665000000386,
+          7.958382999997411,
+          9.620915999999852,
+          7.903621999997995,
+          7.7730609999998705,
+          7.810181000000739,
+          7.707820999996329,
+          7.868822000004002,
+          8.186784999998054,
+          8.777469000000565,
+          8.783189000001585,
+          8.805148999999801,
+          8.984989999997197,
+          9.198872000000847,
+          8.879229999998643,
+          9.700957000000926,
+          9.939038000004075,
+          9.360953000003065,
+          8.945310999995854,
+          9.507234000004246,
+          9.83227700000134,
+          10.340441000000283,
+          9.455953999997291,
+          9.421674000004714,
+          9.534395000002405,
+          10.226520000003802
+        ]
+      },
+      "health": {
+        "p50Ms": 0.42136399999435525,
+        "p95Ms": 0.8277260000031674,
+        "maxMs": 4.595436999996309,
+        "samples": [
+          0.587005000001227,
+          0.3954429999939748,
+          0.4419629999974859,
+          0.3684429999993881,
+          0.42136399999435525,
+          0.42988299999706214,
+          0.36816299999918556,
+          0.47460299999511335,
+          0.35716300000058254,
+          0.4572039999984554,
+          0.5095240000009653,
+          0.3532829999967362,
+          0.3506820000038715,
+          0.5783640000008745,
+          0.4012829999992391,
+          0.32504200000403216,
+          0.3434029999989434,
+          0.35644300000421936,
+          0.3740029999971739,
+          0.4047629999986384,
+          0.41320400000404334,
+          0.3412419999949634,
+          0.554204000000027,
+          0.35636199999862583,
+          0.3880829999980051,
+          0.3594830000001821,
+          0.4800039999972796,
+          0.4210030000031111,
+          0.3537629999991623,
+          0.36916300000302726,
+          0.3650019999986398,
+          0.4195629999958328,
+          0.42252300000109244,
+          0.49576299999898765,
+          0.42340300000068964,
+          0.5212050000045565,
+          0.42112300000007963,
+          0.42344299999967916,
+          0.8277260000031674,
+          4.595436999996309,
+          0.5545649999985471,
+          0.4538830000019516,
+          0.5401249999995343,
+          0.4966039999999339,
+          0.44348400000308175,
+          0.6020449999996345,
+          0.5879649999988033,
+          0.4629239999994752,
+          0.9659279999978025,
+          0.3669220000010682
+        ]
+      },
+      "requests": [
+        {
+          "sessionMs": 9.892077999997127,
+          "healthMs": 0.587005000001227,
+          "sessionStatus": 200,
+          "healthStatus": 200,
+          "bytes": 87696
+        },
+        {
+          "sessionMs": 8.211425000001327,
+          "healthMs": 0.3954429999939748,
+          "sessionStatus": 200,
+          "healthStatus": 200,
+          "bytes": 87696
+        },
+        {
+          "sessionMs": 8.12838400000328,
+          "healthMs": 0.4419629999974859,
+          "sessionStatus": 200,
+          "healthStatus": 200,
+          "bytes": 87696
+        },
+        {
+          "sessionMs": 7.900541999995767,
+          "healthMs": 0.3684429999993881,
+          "sessionStatus": 200,
+          "healthStatus": 200,
+          "bytes": 87696
+        },
+        {
+          "sessionMs": 7.923622000002069,
+          "healthMs": 0.42136399999435525,
+          "sessionStatus": 200,
+          "healthStatus": 200,
+          "bytes": 87696
+        },
+        {
+          "sessionMs": 8.541546999993443,
+          "healthMs": 0.42988299999706214,
+          "sessionStatus": 200,
+          "healthStatus": 200,
+          "bytes": 87696
+        },
+        {
+          "sessionMs": 8.031143000000156,
+          "healthMs": 0.36816299999918556,
+          "sessionStatus": 200,
+          "healthStatus": 200,
+          "bytes": 87696
+        },
+        {
+          "sessionMs": 8.289065000004484,
+          "healthMs": 0.47460299999511335,
+          "sessionStatus": 200,
+          "healthStatus": 200,
+          "bytes": 87696
+        },
+        {
+          "sessionMs": 7.8781420000013895,
+          "healthMs": 0.35716300000058254,
+          "sessionStatus": 200,
+          "healthStatus": 200,
+          "bytes": 87696
+        },
+        {
+          "sessionMs": 8.269384999999602,
+          "healthMs": 0.4572039999984554,
+          "sessionStatus": 200,
+          "healthStatus": 200,
+          "bytes": 87696
+        },
+        {
+          "sessionMs": 8.262064999995346,
+          "healthMs": 0.5095240000009653,
+          "sessionStatus": 200,
+          "healthStatus": 200,
+          "bytes": 87696
+        },
+        {
+          "sessionMs": 8.01190299999871,
+          "healthMs": 0.3532829999967362,
+          "sessionStatus": 200,
+          "healthStatus": 200,
+          "bytes": 87696
+        },
+        {
+          "sessionMs": 8.156624000002921,
+          "healthMs": 0.3506820000038715,
+          "sessionStatus": 200,
+          "healthStatus": 200,
+          "bytes": 87696
+        },
+        {
+          "sessionMs": 8.01030300000275,
+          "healthMs": 0.5783640000008745,
+          "sessionStatus": 200,
+          "healthStatus": 200,
+          "bytes": 87696
+        },
+        {
+          "sessionMs": 8.273744999998598,
+          "healthMs": 0.4012829999992391,
+          "sessionStatus": 200,
+          "healthStatus": 200,
+          "bytes": 87696
+        },
+        {
+          "sessionMs": 7.798741999999038,
+          "healthMs": 0.32504200000403216,
+          "sessionStatus": 200,
+          "healthStatus": 200,
+          "bytes": 87696
+        },
+        {
+          "sessionMs": 7.897821999998996,
+          "healthMs": 0.3434029999989434,
+          "sessionStatus": 200,
+          "healthStatus": 200,
+          "bytes": 87696
+        },
+        {
+          "sessionMs": 7.901742000001832,
+          "healthMs": 0.35644300000421936,
+          "sessionStatus": 200,
+          "healthStatus": 200,
+          "bytes": 87696
+        },
+        {
+          "sessionMs": 7.85870199999772,
+          "healthMs": 0.3740029999971739,
+          "sessionStatus": 200,
+          "healthStatus": 200,
+          "bytes": 87696
+        },
+        {
+          "sessionMs": 7.944822000004933,
+          "healthMs": 0.4047629999986384,
+          "sessionStatus": 200,
+          "healthStatus": 200,
+          "bytes": 87696
+        },
+        {
+          "sessionMs": 8.004342999993241,
+          "healthMs": 0.41320400000404334,
+          "sessionStatus": 200,
+          "healthStatus": 200,
+          "bytes": 87696
+        },
+        {
+          "sessionMs": 7.878781999999774,
+          "healthMs": 0.3412419999949634,
+          "sessionStatus": 200,
+          "healthStatus": 200,
+          "bytes": 87696
+        },
+        {
+          "sessionMs": 8.579146999996738,
+          "healthMs": 0.554204000000027,
+          "sessionStatus": 200,
+          "healthStatus": 200,
+          "bytes": 87696
+        },
+        {
+          "sessionMs": 8.752308999995876,
+          "healthMs": 0.35636199999862583,
+          "sessionStatus": 200,
+          "healthStatus": 200,
+          "bytes": 87696
+        },
+        {
+          "sessionMs": 8.254665000000386,
+          "healthMs": 0.3880829999980051,
+          "sessionStatus": 200,
+          "healthStatus": 200,
+          "bytes": 87696
+        },
+        {
+          "sessionMs": 7.958382999997411,
+          "healthMs": 0.3594830000001821,
+          "sessionStatus": 200,
+          "healthStatus": 200,
+          "bytes": 87696
+        },
+        {
+          "sessionMs": 9.620915999999852,
+          "healthMs": 0.4800039999972796,
+          "sessionStatus": 200,
+          "healthStatus": 200,
+          "bytes": 87696
+        },
+        {
+          "sessionMs": 7.903621999997995,
+          "healthMs": 0.4210030000031111,
+          "sessionStatus": 200,
+          "healthStatus": 200,
+          "bytes": 87696
+        },
+        {
+          "sessionMs": 7.7730609999998705,
+          "healthMs": 0.3537629999991623,
+          "sessionStatus": 200,
+          "healthStatus": 200,
+          "bytes": 87696
+        },
+        {
+          "sessionMs": 7.810181000000739,
+          "healthMs": 0.36916300000302726,
+          "sessionStatus": 200,
+          "healthStatus": 200,
+          "bytes": 87696
+        },
+        {
+          "sessionMs": 7.707820999996329,
+          "healthMs": 0.3650019999986398,
+          "sessionStatus": 200,
+          "healthStatus": 200,
+          "bytes": 87696
+        },
+        {
+          "sessionMs": 7.868822000004002,
+          "healthMs": 0.4195629999958328,
+          "sessionStatus": 200,
+          "healthStatus": 200,
+          "bytes": 87696
+        },
+        {
+          "sessionMs": 8.186784999998054,
+          "healthMs": 0.42252300000109244,
+          "sessionStatus": 200,
+          "healthStatus": 200,
+          "bytes": 87696
+        },
+        {
+          "sessionMs": 8.777469000000565,
+          "healthMs": 0.49576299999898765,
+          "sessionStatus": 200,
+          "healthStatus": 200,
+          "bytes": 87696
+        },
+        {
+          "sessionMs": 8.783189000001585,
+          "healthMs": 0.42340300000068964,
+          "sessionStatus": 200,
+          "healthStatus": 200,
+          "bytes": 87696
+        },
+        {
+          "sessionMs": 8.805148999999801,
+          "healthMs": 0.5212050000045565,
+          "sessionStatus": 200,
+          "healthStatus": 200,
+          "bytes": 87696
+        },
+        {
+          "sessionMs": 8.984989999997197,
+          "healthMs": 0.42112300000007963,
+          "sessionStatus": 200,
+          "healthStatus": 200,
+          "bytes": 87696
+        },
+        {
+          "sessionMs": 9.198872000000847,
+          "healthMs": 0.42344299999967916,
+          "sessionStatus": 200,
+          "healthStatus": 200,
+          "bytes": 87696
+        },
+        {
+          "sessionMs": 8.879229999998643,
+          "healthMs": 0.8277260000031674,
+          "sessionStatus": 200,
+          "healthStatus": 200,
+          "bytes": 87696
+        },
+        {
+          "sessionMs": 9.700957000000926,
+          "healthMs": 4.595436999996309,
+          "sessionStatus": 200,
+          "healthStatus": 200,
+          "bytes": 87696
+        },
+        {
+          "sessionMs": 9.939038000004075,
+          "healthMs": 0.5545649999985471,
+          "sessionStatus": 200,
+          "healthStatus": 200,
+          "bytes": 87696
+        },
+        {
+          "sessionMs": 9.360953000003065,
+          "healthMs": 0.4538830000019516,
+          "sessionStatus": 200,
+          "healthStatus": 200,
+          "bytes": 87696
+        },
+        {
+          "sessionMs": 8.945310999995854,
+          "healthMs": 0.5401249999995343,
+          "sessionStatus": 200,
+          "healthStatus": 200,
+          "bytes": 87696
+        },
+        {
+          "sessionMs": 9.507234000004246,
+          "healthMs": 0.4966039999999339,
+          "sessionStatus": 200,
+          "healthStatus": 200,
+          "bytes": 87696
+        },
+        {
+          "sessionMs": 9.83227700000134,
+          "healthMs": 0.44348400000308175,
+          "sessionStatus": 200,
+          "healthStatus": 200,
+          "bytes": 87696
+        },
+        {
+          "sessionMs": 10.340441000000283,
+          "healthMs": 0.6020449999996345,
+          "sessionStatus": 200,
+          "healthStatus": 200,
+          "bytes": 87696
+        },
+        {
+          "sessionMs": 9.455953999997291,
+          "healthMs": 0.5879649999988033,
+          "sessionStatus": 200,
+          "healthStatus": 200,
+          "bytes": 87696
+        },
+        {
+          "sessionMs": 9.421674000004714,
+          "healthMs": 0.4629239999994752,
+          "sessionStatus": 200,
+          "healthStatus": 200,
+          "bytes": 87696
+        },
+        {
+          "sessionMs": 9.534395000002405,
+          "healthMs": 0.9659279999978025,
+          "sessionStatus": 200,
+          "healthStatus": 200,
+          "bytes": 87696
+        },
+        {
+          "sessionMs": 10.226520000003802,
+          "healthMs": 0.3669220000010682,
+          "sessionStatus": 200,
+          "healthStatus": 200,
+          "bytes": 87696
+        }
+      ]
+    }
+  ],
+  "postgresContainerRepeat": {
+    "startedAt": "2026-10-22T12:52:10.385294+00:00",
+    "finishedAt": "2026-10-22T12:54:17.726974+00:00",
+    "method": "Docker stats sampling of isolated PostgreSQL test container during complete repeated benchmark (fixture/import/idle/queries/HTTP/cleanup); host background services remain active",
+    "cpuPercentConvention": "100% is one logical CPU; samples are interval estimates",
+    "samples": [
+      {
+        "at": "2026-10-22T12:52:11.420731+00:00",
+        "CPUPerc": "4.63%",
+        "MemUsage": "162.8MiB / 62.66GiB",
+        "BlockIO": "40.8MB / 2.8GB",
+        "PIDs": "7"
+      },
+      {
+        "at": "2026-10-22T12:52:13.427401+00:00",
+        "CPUPerc": "0.02%",
+        "MemUsage": "162.4MiB / 62.66GiB",
+        "BlockIO": "40.8MB / 2.8GB",
+        "PIDs": "7"
+      },
+      {
+        "at": "2026-10-22T12:52:15.430266+00:00",
+        "CPUPerc": "0.01%",
+        "MemUsage": "162.2MiB / 62.66GiB",
+        "BlockIO": "40.8MB / 2.8GB",
+        "PIDs": "7"
+      },
+      {
+        "at": "2026-10-22T12:52:17.437901+00:00",
+        "CPUPerc": "0.01%",
+        "MemUsage": "162.2MiB / 62.66GiB",
+        "BlockIO": "40.8MB / 2.8GB",
+        "PIDs": "7"
+      },
+      {
+        "at": "2026-10-22T12:52:19.440711+00:00",
+        "CPUPerc": "0.01%",
+        "MemUsage": "162.2MiB / 62.66GiB",
+        "BlockIO": "40.8MB / 2.8GB",
+        "PIDs": "7"
+      },
+      {
+        "at": "2026-10-22T12:52:21.444518+00:00",
+        "CPUPerc": "0.01%",
+        "MemUsage": "162.2MiB / 62.66GiB",
+        "BlockIO": "40.8MB / 2.8GB",
+        "PIDs": "7"
+      },
+      {
+        "at": "2026-10-22T12:52:23.448304+00:00",
+        "CPUPerc": "0.01%",
+        "MemUsage": "162.2MiB / 62.66GiB",
+        "BlockIO": "40.8MB / 2.8GB",
+        "PIDs": "7"
+      },
+      {
+        "at": "2026-10-22T12:52:25.454454+00:00",
+        "CPUPerc": "0.00%",
+        "MemUsage": "175.2MiB / 62.66GiB",
+        "BlockIO": "40.8MB / 2.8GB",
+        "PIDs": "15"
+      },
+      {
+        "at": "2026-10-22T12:52:27.458244+00:00",
+        "CPUPerc": "0.19%",
+        "MemUsage": "176.6MiB / 62.66GiB",
+        "BlockIO": "40.8MB / 2.8GB",
+        "PIDs": "16"
+      },
+      {
+        "at": "2026-10-22T12:52:29.462041+00:00",
+        "CPUPerc": "0.00%",
+        "MemUsage": "175MiB / 62.66GiB",
+        "BlockIO": "40.8MB / 2.8GB",
+        "PIDs": "15"
+      },
+      {
+        "at": "2026-10-22T12:52:31.466688+00:00",
+        "CPUPerc": "0.70%",
+        "MemUsage": "175.9MiB / 62.66GiB",
+        "BlockIO": "40.8MB / 2.8GB",
+        "PIDs": "15"
+      },
+      {
+        "at": "2026-10-22T12:52:33.471932+00:00",
+        "CPUPerc": "3.92%",
+        "MemUsage": "177.9MiB / 62.66GiB",
+        "BlockIO": "40.8MB / 2.8GB",
+        "PIDs": "15"
+      },
+      {
+        "at": "2026-10-22T12:52:35.476410+00:00",
+        "CPUPerc": "23.01%",
+        "MemUsage": "178.3MiB / 62.66GiB",
+        "BlockIO": "40.8MB / 2.8GB",
+        "PIDs": "15"
+      },
+      {
+        "at": "2026-10-22T12:52:37.484015+00:00",
+        "CPUPerc": "21.70%",
+        "MemUsage": "178.1MiB / 62.66GiB",
+        "BlockIO": "40.8MB / 2.81GB",
+        "PIDs": "15"
+      },
+      {
+        "at": "2026-10-22T12:52:39.486246+00:00",
+        "CPUPerc": "9.62%",
+        "MemUsage": "178MiB / 62.66GiB",
+        "BlockIO": "40.8MB / 2.81GB",
+        "PIDs": "15"
+      },
+      {
+        "at": "2026-10-22T12:52:41.496610+00:00",
+        "CPUPerc": "25.92%",
+        "MemUsage": "177.2MiB / 62.66GiB",
+        "BlockIO": "40.8MB / 2.81GB",
+        "PIDs": "15"
+      },
+      {
+        "at": "2026-10-22T12:52:43.501145+00:00",
+        "CPUPerc": "14.54%",
+        "MemUsage": "176.2MiB / 62.66GiB",
+        "BlockIO": "40.8MB / 2.82GB",
+        "PIDs": "15"
+      },
+      {
+        "at": "2026-10-22T12:52:45.504779+00:00",
+        "CPUPerc": "63.03%",
+        "MemUsage": "175.4MiB / 62.66GiB",
+        "BlockIO": "40.8MB / 2.83GB",
+        "PIDs": "15"
+      },
+      {
+        "at": "2026-10-22T12:52:47.507465+00:00",
+        "CPUPerc": "44.02%",
+        "MemUsage": "174.1MiB / 62.66GiB",
+        "BlockIO": "40.8MB / 2.85GB",
+        "PIDs": "15"
+      },
+      {
+        "at": "2026-10-22T12:52:49.516049+00:00",
+        "CPUPerc": "34.70%",
+        "MemUsage": "174MiB / 62.66GiB",
+        "BlockIO": "40.8MB / 2.86GB",
+        "PIDs": "15"
+      },
+      {
+        "at": "2026-10-22T12:52:51.527090+00:00",
+        "CPUPerc": "45.82%",
+        "MemUsage": "174.8MiB / 62.66GiB",
+        "BlockIO": "40.8MB / 2.88GB",
+        "PIDs": "15"
+      },
+      {
+        "at": "2026-10-22T12:52:53.529650+00:00",
+        "CPUPerc": "50.11%",
+        "MemUsage": "175.6MiB / 62.66GiB",
+        "BlockIO": "40.8MB / 2.89GB",
+        "PIDs": "15"
+      },
+      {
+        "at": "2026-10-22T12:52:55.534927+00:00",
+        "CPUPerc": "23.90%",
+        "MemUsage": "175.4MiB / 62.66GiB",
+        "BlockIO": "40.8MB / 2.9GB",
+        "PIDs": "15"
+      },
+      {
+        "at": "2026-10-22T12:52:57.539717+00:00",
+        "CPUPerc": "23.20%",
+        "MemUsage": "176.5MiB / 62.66GiB",
+        "BlockIO": "40.8MB / 2.91GB",
+        "PIDs": "15"
+      },
+      {
+        "at": "2026-10-22T12:52:59.544800+00:00",
+        "CPUPerc": "33.83%",
+        "MemUsage": "175.9MiB / 62.66GiB",
+        "BlockIO": "40.8MB / 2.92GB",
+        "PIDs": "15"
+      },
+      {
+        "at": "2026-10-22T12:53:01.550906+00:00",
+        "CPUPerc": "21.40%",
+        "MemUsage": "175.2MiB / 62.66GiB",
+        "BlockIO": "40.9MB / 2.94GB",
+        "PIDs": "15"
+      },
+      {
+        "at": "2026-10-22T12:53:03.555081+00:00",
+        "CPUPerc": "1.59%",
+        "MemUsage": "174.9MiB / 62.66GiB",
+        "BlockIO": "40.9MB / 2.94GB",
+        "PIDs": "15"
+      },
+      {
+        "at": "2026-10-22T12:53:05.557872+00:00",
+        "CPUPerc": "19.25%",
+        "MemUsage": "175.5MiB / 62.66GiB",
+        "BlockIO": "40.9MB / 2.95GB",
+        "PIDs": "15"
+      },
+      {
+        "at": "2026-10-22T12:53:07.563852+00:00",
+        "CPUPerc": "17.88%",
+        "MemUsage": "175MiB / 62.66GiB",
+        "BlockIO": "40.9MB / 3.04GB",
+        "PIDs": "15"
+      },
+      {
+        "at": "2026-10-22T12:53:09.567413+00:00",
+        "CPUPerc": "33.88%",
+        "MemUsage": "176MiB / 62.66GiB",
+        "BlockIO": "40.9MB / 3.05GB",
+        "PIDs": "15"
+      },
+      {
+        "at": "2026-10-22T12:53:11.572297+00:00",
+        "CPUPerc": "23.84%",
+        "MemUsage": "174.8MiB / 62.66GiB",
+        "BlockIO": "40.9MB / 3.06GB",
+        "PIDs": "15"
+      },
+      {
+        "at": "2026-10-22T12:53:13.576545+00:00",
+        "CPUPerc": "13.34%",
+        "MemUsage": "174.8MiB / 62.66GiB",
+        "BlockIO": "40.9MB / 3.06GB",
+        "PIDs": "15"
+      },
+      {
+        "at": "2026-10-22T12:53:15.581742+00:00",
+        "CPUPerc": "15.92%",
+        "MemUsage": "175MiB / 62.66GiB",
+        "BlockIO": "40.9MB / 3.07GB",
+        "PIDs": "15"
+      },
+      {
+        "at": "2026-10-22T12:53:17.590677+00:00",
+        "CPUPerc": "30.97%",
+        "MemUsage": "175.6MiB / 62.66GiB",
+        "BlockIO": "40.9MB / 3.08GB",
+        "PIDs": "15"
+      },
+      {
+        "at": "2026-10-22T12:53:19.594034+00:00",
+        "CPUPerc": "24.93%",
+        "MemUsage": "175.7MiB / 62.66GiB",
+        "BlockIO": "40.9MB / 3.08GB",
+        "PIDs": "15"
+      },
+      {
+        "at": "2026-10-22T12:53:21.599490+00:00",
+        "CPUPerc": "28.92%",
+        "MemUsage": "174.9MiB / 62.66GiB",
+        "BlockIO": "40.9MB / 3.08GB",
+        "PIDs": "15"
+      },
+      {
+        "at": "2026-10-22T12:53:23.604367+00:00",
+        "CPUPerc": "0.35%",
+        "MemUsage": "173.9MiB / 62.66GiB",
+        "BlockIO": "41MB / 3.08GB",
+        "PIDs": "15"
+      },
+      {
+        "at": "2026-10-22T12:53:25.609213+00:00",
+        "CPUPerc": "8.73%",
+        "MemUsage": "174.9MiB / 62.66GiB",
+        "BlockIO": "41MB / 3.08GB",
+        "PIDs": "16"
+      },
+      {
+        "at": "2026-10-22T12:53:27.612448+00:00",
+        "CPUPerc": "201.94%",
+        "MemUsage": "189.2MiB / 62.66GiB",
+        "BlockIO": "41.1MB / 3.08GB",
+        "PIDs": "15"
+      },
+      {
+        "at": "2026-10-22T12:53:29.617650+00:00",
+        "CPUPerc": "15.66%",
+        "MemUsage": "176.4MiB / 62.66GiB",
+        "BlockIO": "41.1MB / 3.13GB",
+        "PIDs": "15"
+      },
+      {
+        "at": "2026-10-22T12:53:31.623850+00:00",
+        "CPUPerc": "116.04%",
+        "MemUsage": "195.1MiB / 62.66GiB",
+        "BlockIO": "41.1MB / 3.15GB",
+        "PIDs": "15"
+      },
+      {
+        "at": "2026-10-22T12:53:33.626596+00:00",
+        "CPUPerc": "140.96%",
+        "MemUsage": "225.4MiB / 62.66GiB",
+        "BlockIO": "41.1MB / 3.18GB",
+        "PIDs": "16"
+      },
+      {
+        "at": "2026-10-22T12:53:35.633454+00:00",
+        "CPUPerc": "10.78%",
+        "MemUsage": "176.4MiB / 62.66GiB",
+        "BlockIO": "41.2MB / 3.23GB",
+        "PIDs": "15"
+      },
+      {
+        "at": "2026-10-22T12:53:37.637315+00:00",
+        "CPUPerc": "7.15%",
+        "MemUsage": "184.7MiB / 62.66GiB",
+        "BlockIO": "41.6MB / 3.23GB",
+        "PIDs": "15"
+      },
+      {
+        "at": "2026-10-22T12:53:39.642652+00:00",
+        "CPUPerc": "0.57%",
+        "MemUsage": "201.4MiB / 62.66GiB",
+        "BlockIO": "41.8MB / 3.26GB",
+        "PIDs": "26"
+      },
+      {
+        "at": "2026-10-22T12:53:41.648485+00:00",
+        "CPUPerc": "1.45%",
+        "MemUsage": "203.4MiB / 62.66GiB",
+        "BlockIO": "45.6MB / 3.26GB",
+        "PIDs": "26"
+      },
+      {
+        "at": "2026-10-22T12:53:43.651542+00:00",
+        "CPUPerc": "0.22%",
+        "MemUsage": "206.3MiB / 62.66GiB",
+        "BlockIO": "46.1MB / 3.26GB",
+        "PIDs": "27"
+      },
+      {
+        "at": "2026-10-22T12:53:45.655158+00:00",
+        "CPUPerc": "0.15%",
+        "MemUsage": "205.7MiB / 62.66GiB",
+        "BlockIO": "46.5MB / 3.26GB",
+        "PIDs": "27"
+      },
+      {
+        "at": "2026-10-22T12:53:47.660019+00:00",
+        "CPUPerc": "0.13%",
+        "MemUsage": "206.3MiB / 62.66GiB",
+        "BlockIO": "46.9MB / 3.26GB",
+        "PIDs": "27"
+      },
+      {
+        "at": "2026-10-22T12:53:49.667214+00:00",
+        "CPUPerc": "0.48%",
+        "MemUsage": "202.3MiB / 62.66GiB",
+        "BlockIO": "47.1MB / 3.26GB",
+        "PIDs": "25"
+      },
+      {
+        "at": "2026-10-22T12:53:51.668521+00:00",
+        "CPUPerc": "0.00%",
+        "MemUsage": "201.7MiB / 62.66GiB",
+        "BlockIO": "47.1MB / 3.26GB",
+        "PIDs": "25"
+      },
+      {
+        "at": "2026-10-22T12:53:53.672532+00:00",
+        "CPUPerc": "0.00%",
+        "MemUsage": "201.5MiB / 62.66GiB",
+        "BlockIO": "47.1MB / 3.26GB",
+        "PIDs": "25"
+      },
+      {
+        "at": "2026-10-22T12:53:55.676572+00:00",
+        "CPUPerc": "0.00%",
+        "MemUsage": "201MiB / 62.66GiB",
+        "BlockIO": "47.1MB / 3.26GB",
+        "PIDs": "25"
+      },
+      {
+        "at": "2026-10-22T12:53:57.683478+00:00",
+        "CPUPerc": "0.59%",
+        "MemUsage": "201.1MiB / 62.66GiB",
+        "BlockIO": "47.1MB / 3.26GB",
+        "PIDs": "25"
+      },
+      {
+        "at": "2026-10-22T12:53:59.686427+00:00",
+        "CPUPerc": "0.03%",
+        "MemUsage": "200.9MiB / 62.66GiB",
+        "BlockIO": "47.1MB / 3.26GB",
+        "PIDs": "25"
+      },
+      {
+        "at": "2026-10-22T12:54:01.691068+00:00",
+        "CPUPerc": "0.01%",
+        "MemUsage": "194.1MiB / 62.66GiB",
+        "BlockIO": "47.1MB / 3.26GB",
+        "PIDs": "25"
+      },
+      {
+        "at": "2026-10-22T12:54:03.695236+00:00",
+        "CPUPerc": "0.01%",
+        "MemUsage": "194.1MiB / 62.66GiB",
+        "BlockIO": "47.1MB / 3.26GB",
+        "PIDs": "25"
+      },
+      {
+        "at": "2026-10-22T12:54:05.700352+00:00",
+        "CPUPerc": "0.01%",
+        "MemUsage": "194.1MiB / 62.66GiB",
+        "BlockIO": "47.1MB / 3.26GB",
+        "PIDs": "25"
+      },
+      {
+        "at": "2026-10-22T12:54:07.705413+00:00",
+        "CPUPerc": "7.72%",
+        "MemUsage": "201.1MiB / 62.66GiB",
+        "BlockIO": "48MB / 3.26GB",
+        "PIDs": "25"
+      },
+      {
+        "at": "2026-10-22T12:54:09.709822+00:00",
+        "CPUPerc": "0.02%",
+        "MemUsage": "202.4MiB / 62.66GiB",
+        "BlockIO": "53.2MB / 3.26GB",
+        "PIDs": "25"
+      },
+      {
+        "at": "2026-10-22T12:54:11.714603+00:00",
+        "CPUPerc": "0.00%",
+        "MemUsage": "201.5MiB / 62.66GiB",
+        "BlockIO": "53.2MB / 3.26GB",
+        "PIDs": "25"
+      },
+      {
+        "at": "2026-10-22T12:54:13.718472+00:00",
+        "CPUPerc": "14.11%",
+        "MemUsage": "211.3MiB / 62.66GiB",
+        "BlockIO": "54.8MB / 3.26GB",
+        "PIDs": "25"
+      },
+      {
+        "at": "2026-10-22T12:54:15.724069+00:00",
+        "CPUPerc": "80.20%",
+        "MemUsage": "209.9MiB / 62.66GiB",
+        "BlockIO": "57MB / 3.27GB",
+        "PIDs": "25"
+      },
+      {
+        "at": "2026-10-22T12:54:17.726887+00:00",
+        "CPUPerc": "0.02%",
+        "MemUsage": "152.2MiB / 62.66GiB",
+        "BlockIO": "57.1MB / 3.27GB",
+        "PIDs": "6"
+      }
+    ],
+    "benchmark": {
+      "recordedAt": "2026-10-22T12:54:15.876Z",
+      "importMs": 73967.892456,
+      "cases": [
+        {
+          "pending": 0,
+          "count": 0.6162449999974342,
+          "min": 0.600365000005695,
+          "sessions": 4.557596999991802,
+          "health": 0.4956040000106441
+        },
+        {
+          "pending": 1,
+          "count": 0.4346040000091307,
+          "min": 0.4042430000117747,
+          "sessions": 2.297699000002467,
+          "health": 0.5409639999998035
+        },
+        {
+          "pending": 1000,
+          "count": 3.3231870000017807,
+          "min": 3.4449880000029225,
+          "sessions": 9.871681000004173,
+          "health": 0.4936440000019502
+        }
+      ]
+    }
+  }
+}

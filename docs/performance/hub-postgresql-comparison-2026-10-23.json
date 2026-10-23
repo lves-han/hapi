@@ -1,0 +1,3643 @@
+{
+  "comparison_id": "hapi-postgresql-vs-sqlite-production-2026-10-23",
+  "baseline": {
+    "file": "hub-sqlite-baseline-2026-10-22.json",
+    "sha256": "0d69a278f35e028e7fa4e5473c81026678887de37b66c8668475f97c25ff82dc",
+    "started_utc": "2026-10-22T10:26:18+00:00",
+    "ended_utc": "2026-10-22T10:26:34+00:00"
+  },
+  "current": {
+    "record_format_version": 1,
+    "capture_id": "hapi-postgresql-production-2026-10-23",
+    "started_utc": "2026-10-23T02:55:08+00:00",
+    "collector_sha256": "4a9bbbed6baaa5f74df4686f372cafb07557e714110527c96d90cf853ea220a7",
+    "legacy_collector_sha256": "ab62aeb6a32e31f5b92e8645729d085c485b52651e7ebb6fd6f8bca7ae184ce7",
+    "containers": {
+      "hapi-hub": {
+        "name": "hapi-hub",
+        "image": "local/hapi-fork-hub:pg-20261023T021306Z-r2",
+        "image_id": "sha256:1e695c3d68a51e8b8f01e43268892d8c461f0119eeb0fee22f3d1cade113c601",
+        "init_pid": 2305341,
+        "started_at": "2026-10-23T02:36:09.795571126Z",
+        "restarts": 0,
+        "oom_killed": false,
+        "limits": {
+          "Memory": 0,
+          "MemoryReservation": 0,
+          "MemorySwap": 0,
+          "NanoCpus": 0,
+          "CpuQuota": 0,
+          "CpuPeriod": 0,
+          "CpuShares": 0,
+          "CpusetCpus": "",
+          "PidsLimit": null,
+          "BlkioWeight": 0
+        }
+      },
+      "hapi-postgres": {
+        "name": "hapi-postgres",
+        "image": "postgres:16-bookworm",
+        "image_id": "sha256:d81f7b51697014367236d07ec58b54153fc28f828b72bf247fe5c7487520bcb0",
+        "init_pid": 2230314,
+        "started_at": "2026-10-23T02:16:22.229671257Z",
+        "restarts": 0,
+        "oom_killed": false,
+        "limits": {
+          "Memory": 0,
+          "MemoryReservation": 0,
+          "MemorySwap": 0,
+          "NanoCpus": 0,
+          "CpuQuota": 0,
+          "CpuPeriod": 0,
+          "CpuShares": 0,
+          "CpusetCpus": "",
+          "PidsLimit": null,
+          "BlkioWeight": 0
+        }
+      }
+    },
+    "process": {
+      "main_pid": 2305416,
+      "uptime_seconds_at_start": 1138.14,
+      "binary_sha256": "086c4121c8738a8e0f5ed730e8a461bc3973b4444e372ddb77aef9a747fa2ae9",
+      "hub_bundle_sha256": "29679d65d0a3f110b9f5ee5c5048a48ed8949e614589b92e27430786789b6b50"
+    },
+    "host": {
+      "architecture": "aarch64",
+      "kernel": "6.17.0-1020-oracle",
+      "logical_cpus": 16,
+      "memory_total_kib": 65703940,
+      "memory_available_kib": 48664212,
+      "swap_total_kib": 0,
+      "load_average": [
+        1.57666015625,
+        1.71240234375,
+        1.39794921875
+      ],
+      "data_mount": {
+        "target": "/data",
+        "source": "/dev/sdb",
+        "fstype": "ext4",
+        "options": "rw,noatime,stripe=256"
+      },
+      "data_total_bytes": 1081101176832,
+      "data_available_bytes": 4906242048,
+      "io_pressure_at_start": "some avg10=0.00 avg60=2.51 avg300=4.37 total=8937147561\nfull avg10=0.00 avg60=2.48 avg300=4.29 total=8582160487",
+      "io_pressure_at_end": "some avg10=14.51 avg60=7.23 avg300=5.12 total=8942177818\nfull avg10=14.36 avg60=7.17 avg300=5.04 total=8587138642"
+    },
+    "cgroups": {
+      "hapi-hub": {
+        "cpu_max": "max 100000",
+        "memory_max": "max",
+        "cpuset": "0-15"
+      },
+      "hapi-postgres": {
+        "cpu_max": "max 100000",
+        "memory_max": "max",
+        "cpuset": "0-15"
+      }
+    },
+    "passive_sample": {
+      "started_utc": "2026-10-23T02:55:08+00:00",
+      "ended_utc": "2026-10-23T02:55:13+00:00",
+      "duration_seconds": 5.0011,
+      "main_thread_cpu_percent_one_core": 1.2,
+      "main_thread_user_cpu_percent_one_core": 0.8,
+      "main_thread_system_cpu_percent_one_core": 0.4,
+      "process_cpu_percent_one_core": 2.599,
+      "host_idle_percent": 91.528,
+      "host_iowait_percent": 0.013,
+      "rss_kib_before": 477396,
+      "rss_kib_after": 478360,
+      "threads_before": 12,
+      "threads_after": 13,
+      "process_io_delta": {
+        "rchar": 390,
+        "wchar": 257,
+        "syscr": 10,
+        "syscw": 28,
+        "read_bytes": 0,
+        "write_bytes": 0,
+        "cancelled_write_bytes": 0
+      },
+      "containers": {
+        "hapi-hub": {
+          "cpu_percent_one_core": 2.963,
+          "before": {
+            "cpu_stat": {
+              "usage_usec": 232583204,
+              "user_usec": 159095014,
+              "system_usec": 73488189,
+              "nice_usec": 0,
+              "core_sched.force_idle_usec": 0,
+              "nr_periods": 0,
+              "nr_throttled": 0,
+              "throttled_usec": 0,
+              "nr_bursts": 0,
+              "burst_usec": 0
+            },
+            "memory_current_bytes": 1355780096,
+            "memory_stat": {
+              "anon": 442642432,
+              "file": 891326464,
+              "kernel": 21688320,
+              "shmem": 0,
+              "inactive_file": 891326464,
+              "active_file": 0,
+              "file_mapped": 204800
+            },
+            "io_stat": "8:16 rbytes=10248192 wbytes=2026184704 rios=2086 wios=8320 dbytes=0 dios=0"
+          },
+          "after": {
+            "cpu_stat": {
+              "usage_usec": 232731384,
+              "user_usec": 159202094,
+              "system_usec": 73529289,
+              "nice_usec": 0,
+              "core_sched.force_idle_usec": 0,
+              "nr_periods": 0,
+              "nr_throttled": 0,
+              "throttled_usec": 0,
+              "nr_bursts": 0,
+              "burst_usec": 0
+            },
+            "memory_current_bytes": 1357537280,
+            "memory_stat": {
+              "anon": 442802176,
+              "file": 891326464,
+              "kernel": 21688320,
+              "shmem": 0,
+              "inactive_file": 891326464,
+              "active_file": 0,
+              "file_mapped": 204800
+            },
+            "io_stat": "8:16 rbytes=10248192 wbytes=2026184704 rios=2086 wios=8320 dbytes=0 dios=0"
+          }
+        },
+        "hapi-postgres": {
+          "cpu_percent_one_core": 1.392,
+          "before": {
+            "cpu_stat": {
+              "usage_usec": 173565029,
+              "user_usec": 108839221,
+              "system_usec": 64725807,
+              "nice_usec": 0,
+              "core_sched.force_idle_usec": 0,
+              "nr_periods": 0,
+              "nr_throttled": 0,
+              "throttled_usec": 0,
+              "nr_bursts": 0,
+              "burst_usec": 0
+            },
+            "memory_current_bytes": 2504744960,
+            "memory_stat": {
+              "anon": 1069293568,
+              "file": 1402736640,
+              "kernel": 31305728,
+              "shmem": 147202048,
+              "inactive_file": 1098383360,
+              "active_file": 157151232,
+              "file_mapped": 182272000
+            },
+            "io_stat": "8:16 rbytes=165089280 wbytes=7798865920 rios=1754 wios=79097 dbytes=0 dios=0"
+          },
+          "after": {
+            "cpu_stat": {
+              "usage_usec": 173634625,
+              "user_usec": 108879417,
+              "system_usec": 64755207,
+              "nice_usec": 0,
+              "core_sched.force_idle_usec": 0,
+              "nr_periods": 0,
+              "nr_throttled": 0,
+              "throttled_usec": 0,
+              "nr_bursts": 0,
+              "burst_usec": 0
+            },
+            "memory_current_bytes": 2504105984,
+            "memory_stat": {
+              "anon": 1069293568,
+              "file": 1402736640,
+              "kernel": 31305728,
+              "shmem": 147202048,
+              "inactive_file": 1098383360,
+              "active_file": 157151232,
+              "file_mapped": 182272000
+            },
+            "io_stat": "8:16 rbytes=165089280 wbytes=7798882304 rios=1754 wios=79099 dbytes=0 dios=0"
+          }
+        }
+      }
+    },
+    "docker_stats": [
+      {
+        "BlockIO": "10.2MB / 2.03GB",
+        "CPUPerc": "2.05%",
+        "Container": "hapi-hub",
+        "ID": "4e757c2a5951",
+        "MemPerc": "0.69%",
+        "MemUsage": "444.4MiB / 62.66GiB",
+        "Name": "hapi-hub",
+        "NetIO": "1.92GB / 1.01GB",
+        "PIDs": "14"
+      },
+      {
+        "BlockIO": "165MB / 7.8GB",
+        "CPUPerc": "0.42%",
+        "Container": "hapi-postgres",
+        "ID": "27d60547585b",
+        "MemPerc": "2.09%",
+        "MemUsage": "1.31GiB / 62.66GiB",
+        "Name": "hapi-postgres",
+        "NetIO": "1.78GB / 3.22GB",
+        "PIDs": "15"
+      }
+    ],
+    "database_benchmark": {
+      "started_utc": "2026-10-23T02:55:15.634Z",
+      "bun": "1.4.0",
+      "postgres": "PostgreSQL 16.15 (Debian 16.15-1.pgdg12+2) on aarch64-unknown-linux-gnu, compiled by gcc (Debian 12.2.0-14+deb12u1) 12.2.0, 64-bit",
+      "schema": 26,
+      "importer_version": 1,
+      "transaction": "repeatable read read only",
+      "connection_max": 1,
+      "table_counts": {
+        "sessions": 178,
+        "machines": 1,
+        "messages": 515459,
+        "message_epochs": 10,
+        "users": 0,
+        "push_subscriptions": 3,
+        "fcm_devices": 0,
+        "session_scratchlist": 0,
+        "usage_events": 124574,
+        "usage_scan_state": 177,
+        "events": 0,
+        "event_links": 0
+      },
+      "namespace_session_ids": 178,
+      "query_now_ms": 1792724115631,
+      "pending_scheduled_rows": 0,
+      "database_bytes": 1064778775,
+      "queries": [
+        {
+          "name": "scheduled_count",
+          "sql_template": "SELECT session_id, COUNT(*) AS value FROM messages WHERE session_id IN (<session ID placeholders>) AND invoked_at IS NULL AND local_id IS NOT NULL AND scheduled_at IS NOT NULL AND scheduled_at > <now> AND delivery_state = 'queued' GROUP BY session_id",
+          "samples": [
+            {
+              "wall_ms": 3.695,
+              "client_cpu_ms": 0.533,
+              "result_rows": 0
+            },
+            {
+              "wall_ms": 1.554,
+              "client_cpu_ms": 0.258,
+              "result_rows": 0
+            },
+            {
+              "wall_ms": 0.921,
+              "client_cpu_ms": 0.195,
+              "result_rows": 0
+            }
+          ],
+          "extended": {
+            "warmups": 3,
+            "samples": [
+              {
+                "wall_ms": 0.271,
+                "client_cpu_ms": 0.184,
+                "result_rows": 0
+              },
+              {
+                "wall_ms": 0.248,
+                "client_cpu_ms": 0.182,
+                "result_rows": 0
+              },
+              {
+                "wall_ms": 0.271,
+                "client_cpu_ms": 0.2,
+                "result_rows": 0
+              },
+              {
+                "wall_ms": 0.226,
+                "client_cpu_ms": 0.168,
+                "result_rows": 0
+              },
+              {
+                "wall_ms": 0.221,
+                "client_cpu_ms": 0.171,
+                "result_rows": 0
+              },
+              {
+                "wall_ms": 1.46,
+                "client_cpu_ms": 1.393,
+                "result_rows": 0
+              },
+              {
+                "wall_ms": 1.905,
+                "client_cpu_ms": 1.829,
+                "result_rows": 0
+              },
+              {
+                "wall_ms": 0.425,
+                "client_cpu_ms": 0.348,
+                "result_rows": 0
+              },
+              {
+                "wall_ms": 0.269,
+                "client_cpu_ms": 0.195,
+                "result_rows": 0
+              },
+              {
+                "wall_ms": 0.268,
+                "client_cpu_ms": 0.192,
+                "result_rows": 0
+              },
+              {
+                "wall_ms": 0.379,
+                "client_cpu_ms": 0.297,
+                "result_rows": 0
+              },
+              {
+                "wall_ms": 0.374,
+                "client_cpu_ms": 0.193,
+                "result_rows": 0
+              },
+              {
+                "wall_ms": 0.243,
+                "client_cpu_ms": 0.18,
+                "result_rows": 0
+              },
+              {
+                "wall_ms": 0.208,
+                "client_cpu_ms": 0.151,
+                "result_rows": 0
+              },
+              {
+                "wall_ms": 0.25,
+                "client_cpu_ms": 0.187,
+                "result_rows": 0
+              },
+              {
+                "wall_ms": 0.235,
+                "client_cpu_ms": 0.168,
+                "result_rows": 0
+              },
+              {
+                "wall_ms": 0.195,
+                "client_cpu_ms": 0.138,
+                "result_rows": 0
+              },
+              {
+                "wall_ms": 0.78,
+                "client_cpu_ms": 0.709,
+                "result_rows": 0
+              },
+              {
+                "wall_ms": 0.264,
+                "client_cpu_ms": 0.187,
+                "result_rows": 0
+              },
+              {
+                "wall_ms": 0.236,
+                "client_cpu_ms": 0.161,
+                "result_rows": 0
+              },
+              {
+                "wall_ms": 0.24,
+                "client_cpu_ms": 0.171,
+                "result_rows": 0
+              },
+              {
+                "wall_ms": 0.268,
+                "client_cpu_ms": 0.186,
+                "result_rows": 0
+              },
+              {
+                "wall_ms": 0.455,
+                "client_cpu_ms": 0.372,
+                "result_rows": 0
+              },
+              {
+                "wall_ms": 0.259,
+                "client_cpu_ms": 0.18,
+                "result_rows": 0
+              },
+              {
+                "wall_ms": 0.213,
+                "client_cpu_ms": 0.151,
+                "result_rows": 0
+              },
+              {
+                "wall_ms": 0.209,
+                "client_cpu_ms": 0.152,
+                "result_rows": 0
+              },
+              {
+                "wall_ms": 0.215,
+                "client_cpu_ms": 0.178,
+                "result_rows": 0
+              },
+              {
+                "wall_ms": 0.241,
+                "client_cpu_ms": 0.177,
+                "result_rows": 0
+              },
+              {
+                "wall_ms": 0.245,
+                "client_cpu_ms": 0.188,
+                "result_rows": 0
+              },
+              {
+                "wall_ms": 0.212,
+                "client_cpu_ms": 0.155,
+                "result_rows": 0
+              },
+              {
+                "wall_ms": 0.198,
+                "client_cpu_ms": 0.14,
+                "result_rows": 0
+              },
+              {
+                "wall_ms": 0.224,
+                "client_cpu_ms": 0.162,
+                "result_rows": 0
+              },
+              {
+                "wall_ms": 0.211,
+                "client_cpu_ms": 0.151,
+                "result_rows": 0
+              },
+              {
+                "wall_ms": 0.196,
+                "client_cpu_ms": 0.139,
+                "result_rows": 0
+              },
+              {
+                "wall_ms": 0.195,
+                "client_cpu_ms": 0.135,
+                "result_rows": 0
+              },
+              {
+                "wall_ms": 0.196,
+                "client_cpu_ms": 0.135,
+                "result_rows": 0
+              },
+              {
+                "wall_ms": 0.218,
+                "client_cpu_ms": 0.161,
+                "result_rows": 0
+              },
+              {
+                "wall_ms": 0.21,
+                "client_cpu_ms": 0.147,
+                "result_rows": 0
+              },
+              {
+                "wall_ms": 0.205,
+                "client_cpu_ms": 0.141,
+                "result_rows": 0
+              },
+              {
+                "wall_ms": 0.834,
+                "client_cpu_ms": 0.75,
+                "result_rows": 0
+              },
+              {
+                "wall_ms": 0.284,
+                "client_cpu_ms": 0.209,
+                "result_rows": 0
+              },
+              {
+                "wall_ms": 0.272,
+                "client_cpu_ms": 0.193,
+                "result_rows": 0
+              },
+              {
+                "wall_ms": 0.23,
+                "client_cpu_ms": 0.149,
+                "result_rows": 0
+              },
+              {
+                "wall_ms": 0.228,
+                "client_cpu_ms": 0.148,
+                "result_rows": 0
+              },
+              {
+                "wall_ms": 0.24,
+                "client_cpu_ms": 0.158,
+                "result_rows": 0
+              },
+              {
+                "wall_ms": 0.216,
+                "client_cpu_ms": 0.168,
+                "result_rows": 0
+              },
+              {
+                "wall_ms": 0.872,
+                "client_cpu_ms": 0.799,
+                "result_rows": 0
+              },
+              {
+                "wall_ms": 0.274,
+                "client_cpu_ms": 0.2,
+                "result_rows": 0
+              },
+              {
+                "wall_ms": 0.247,
+                "client_cpu_ms": 0.171,
+                "result_rows": 0
+              },
+              {
+                "wall_ms": 0.234,
+                "client_cpu_ms": 0.156,
+                "result_rows": 0
+              }
+            ]
+          },
+          "equal_to_independent_row_reference": true,
+          "plan": [
+            {
+              "Plan": {
+                "Node Type": "Aggregate",
+                "Strategy": "Sorted",
+                "Partial Mode": "Simple",
+                "Parallel Aware": false,
+                "Async Capable": false,
+                "Startup Cost": 8.61,
+                "Total Cost": 8.62,
+                "Plan Rows": 1,
+                "Plan Width": 45,
+                "Actual Startup Time": 0.021,
+                "Actual Total Time": 0.021,
+                "Actual Rows": 0,
+                "Actual Loops": 1,
+                "Group Key": [
+                  "session_id"
+                ],
+                "Shared Hit Blocks": 2,
+                "Shared Read Blocks": 0,
+                "Shared Dirtied Blocks": 0,
+                "Shared Written Blocks": 0,
+                "Local Hit Blocks": 0,
+                "Local Read Blocks": 0,
+                "Local Dirtied Blocks": 0,
+                "Local Written Blocks": 0,
+                "Temp Read Blocks": 0,
+                "Temp Written Blocks": 0,
+                "Plans": [
+                  {
+                    "Node Type": "Sort",
+                    "Parent Relationship": "Outer",
+                    "Parallel Aware": false,
+                    "Async Capable": false,
+                    "Startup Cost": 8.61,
+                    "Total Cost": 8.61,
+                    "Plan Rows": 1,
+                    "Plan Width": 37,
+                    "Actual Startup Time": 0.02,
+                    "Actual Total Time": 0.021,
+                    "Actual Rows": 0,
+                    "Actual Loops": 1,
+                    "Sort Key": [
+                      "session_id"
+                    ],
+                    "Sort Method": "quicksort",
+                    "Sort Space Used": 25,
+                    "Sort Space Type": "Memory",
+                    "Shared Hit Blocks": 2,
+                    "Shared Read Blocks": 0,
+                    "Shared Dirtied Blocks": 0,
+                    "Shared Written Blocks": 0,
+                    "Local Hit Blocks": 0,
+                    "Local Read Blocks": 0,
+                    "Local Dirtied Blocks": 0,
+                    "Local Written Blocks": 0,
+                    "Temp Read Blocks": 0,
+                    "Temp Written Blocks": 0,
+                    "Plans": [
+                      {
+                        "Node Type": "Index Scan",
+                        "Parent Relationship": "Outer",
+                        "Parallel Aware": false,
+                        "Async Capable": false,
+                        "Scan Direction": "Forward",
+                        "Index Name": "idx_messages_scheduled_pending",
+                        "Relation Name": "messages",
+                        "Alias": "messages",
+                        "Startup Cost": 0.57,
+                        "Total Cost": 8.6,
+                        "Plan Rows": 1,
+                        "Plan Width": 37,
+                        "Actual Startup Time": 0.015,
+                        "Actual Total Time": 0.015,
+                        "Actual Rows": 0,
+                        "Actual Loops": 1,
+                        "Index Cond": "(scheduled_at > '1792724115631'::bigint)",
+                        "Rows Removed by Index Recheck": 0,
+                        "Filter": "((local_id IS NOT NULL) AND (delivery_state = 'queued'::text) AND (session_id = ANY ('{<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>}'::text[])))",
+                        "Rows Removed by Filter": 0,
+                        "Shared Hit Blocks": 2,
+                        "Shared Read Blocks": 0,
+                        "Shared Dirtied Blocks": 0,
+                        "Shared Written Blocks": 0,
+                        "Local Hit Blocks": 0,
+                        "Local Read Blocks": 0,
+                        "Local Dirtied Blocks": 0,
+                        "Local Written Blocks": 0,
+                        "Temp Read Blocks": 0,
+                        "Temp Written Blocks": 0
+                      }
+                    ]
+                  }
+                ]
+              },
+              "Planning": {
+                "Shared Hit Blocks": 1,
+                "Shared Read Blocks": 0,
+                "Shared Dirtied Blocks": 0,
+                "Shared Written Blocks": 0,
+                "Local Hit Blocks": 0,
+                "Local Read Blocks": 0,
+                "Local Dirtied Blocks": 0,
+                "Local Written Blocks": 0,
+                "Temp Read Blocks": 0,
+                "Temp Written Blocks": 0
+              },
+              "Planning Time": 0.547,
+              "Triggers": [],
+              "Execution Time": 0.037
+            }
+          ],
+          "plan_timing": "EXPLAIN ANALYZE after the three baseline-compatible wall samples"
+        },
+        {
+          "name": "scheduled_min",
+          "sql_template": "SELECT session_id, MIN(scheduled_at) AS value FROM messages WHERE session_id IN (<session ID placeholders>) AND invoked_at IS NULL AND local_id IS NOT NULL AND scheduled_at IS NOT NULL AND scheduled_at > <now> AND delivery_state = 'queued' GROUP BY session_id",
+          "samples": [
+            {
+              "wall_ms": 1.346,
+              "client_cpu_ms": 0.299,
+              "result_rows": 0
+            },
+            {
+              "wall_ms": 0.899,
+              "client_cpu_ms": 0.235,
+              "result_rows": 0
+            },
+            {
+              "wall_ms": 0.802,
+              "client_cpu_ms": 0.168,
+              "result_rows": 0
+            }
+          ],
+          "extended": {
+            "warmups": 3,
+            "samples": [
+              {
+                "wall_ms": 0.292,
+                "client_cpu_ms": 0.182,
+                "result_rows": 0
+              },
+              {
+                "wall_ms": 0.273,
+                "client_cpu_ms": 0.173,
+                "result_rows": 0
+              },
+              {
+                "wall_ms": 0.256,
+                "client_cpu_ms": 0.164,
+                "result_rows": 0
+              },
+              {
+                "wall_ms": 0.241,
+                "client_cpu_ms": 0.165,
+                "result_rows": 0
+              },
+              {
+                "wall_ms": 0.264,
+                "client_cpu_ms": 0.156,
+                "result_rows": 0
+              },
+              {
+                "wall_ms": 0.202,
+                "client_cpu_ms": 0.146,
+                "result_rows": 0
+              },
+              {
+                "wall_ms": 0.195,
+                "client_cpu_ms": 0.134,
+                "result_rows": 0
+              },
+              {
+                "wall_ms": 0.266,
+                "client_cpu_ms": 0.162,
+                "result_rows": 0
+              },
+              {
+                "wall_ms": 0.25,
+                "client_cpu_ms": 0.164,
+                "result_rows": 0
+              },
+              {
+                "wall_ms": 0.215,
+                "client_cpu_ms": 0.15,
+                "result_rows": 0
+              },
+              {
+                "wall_ms": 0.213,
+                "client_cpu_ms": 0.158,
+                "result_rows": 0
+              },
+              {
+                "wall_ms": 0.202,
+                "client_cpu_ms": 0.144,
+                "result_rows": 0
+              },
+              {
+                "wall_ms": 0.244,
+                "client_cpu_ms": 0.191,
+                "result_rows": 0
+              },
+              {
+                "wall_ms": 0.199,
+                "client_cpu_ms": 0.141,
+                "result_rows": 0
+              },
+              {
+                "wall_ms": 0.214,
+                "client_cpu_ms": 0.157,
+                "result_rows": 0
+              },
+              {
+                "wall_ms": 1.198,
+                "client_cpu_ms": 1.124,
+                "result_rows": 0
+              },
+              {
+                "wall_ms": 0.56,
+                "client_cpu_ms": 0.485,
+                "result_rows": 0
+              },
+              {
+                "wall_ms": 0.242,
+                "client_cpu_ms": 0.164,
+                "result_rows": 0
+              },
+              {
+                "wall_ms": 0.27,
+                "client_cpu_ms": 0.176,
+                "result_rows": 0
+              },
+              {
+                "wall_ms": 0.261,
+                "client_cpu_ms": 0.155,
+                "result_rows": 0
+              },
+              {
+                "wall_ms": 0.254,
+                "client_cpu_ms": 0.174,
+                "result_rows": 0
+              },
+              {
+                "wall_ms": 0.295,
+                "client_cpu_ms": 0.227,
+                "result_rows": 0
+              },
+              {
+                "wall_ms": 0.242,
+                "client_cpu_ms": 0.163,
+                "result_rows": 0
+              },
+              {
+                "wall_ms": 0.258,
+                "client_cpu_ms": 0.183,
+                "result_rows": 0
+              },
+              {
+                "wall_ms": 0.238,
+                "client_cpu_ms": 0.16,
+                "result_rows": 0
+              },
+              {
+                "wall_ms": 0.228,
+                "client_cpu_ms": 0.153,
+                "result_rows": 0
+              },
+              {
+                "wall_ms": 0.234,
+                "client_cpu_ms": 0.15,
+                "result_rows": 0
+              },
+              {
+                "wall_ms": 0.227,
+                "client_cpu_ms": 0.173,
+                "result_rows": 0
+              },
+              {
+                "wall_ms": 0.199,
+                "client_cpu_ms": 0.146,
+                "result_rows": 0
+              },
+              {
+                "wall_ms": 0.187,
+                "client_cpu_ms": 0.132,
+                "result_rows": 0
+              },
+              {
+                "wall_ms": 0.188,
+                "client_cpu_ms": 0.13,
+                "result_rows": 0
+              },
+              {
+                "wall_ms": 0.224,
+                "client_cpu_ms": 0.165,
+                "result_rows": 0
+              },
+              {
+                "wall_ms": 0.245,
+                "client_cpu_ms": 0.169,
+                "result_rows": 0
+              },
+              {
+                "wall_ms": 0.22,
+                "client_cpu_ms": 0.164,
+                "result_rows": 0
+              },
+              {
+                "wall_ms": 0.286,
+                "client_cpu_ms": 0.204,
+                "result_rows": 0
+              },
+              {
+                "wall_ms": 0.205,
+                "client_cpu_ms": 0.143,
+                "result_rows": 0
+              },
+              {
+                "wall_ms": 0.226,
+                "client_cpu_ms": 0.169,
+                "result_rows": 0
+              },
+              {
+                "wall_ms": 0.285,
+                "client_cpu_ms": 0.208,
+                "result_rows": 0
+              },
+              {
+                "wall_ms": 0.259,
+                "client_cpu_ms": 0.195,
+                "result_rows": 0
+              },
+              {
+                "wall_ms": 0.241,
+                "client_cpu_ms": 0.167,
+                "result_rows": 0
+              },
+              {
+                "wall_ms": 0.245,
+                "client_cpu_ms": 0.166,
+                "result_rows": 0
+              },
+              {
+                "wall_ms": 0.236,
+                "client_cpu_ms": 0.158,
+                "result_rows": 0
+              },
+              {
+                "wall_ms": 0.253,
+                "client_cpu_ms": 0.184,
+                "result_rows": 0
+              },
+              {
+                "wall_ms": 0.198,
+                "client_cpu_ms": 0.14,
+                "result_rows": 0
+              },
+              {
+                "wall_ms": 0.201,
+                "client_cpu_ms": 0.149,
+                "result_rows": 0
+              },
+              {
+                "wall_ms": 0.219,
+                "client_cpu_ms": 0.145,
+                "result_rows": 0
+              },
+              {
+                "wall_ms": 0.231,
+                "client_cpu_ms": 0.17,
+                "result_rows": 0
+              },
+              {
+                "wall_ms": 0.192,
+                "client_cpu_ms": 0.13,
+                "result_rows": 0
+              },
+              {
+                "wall_ms": 0.206,
+                "client_cpu_ms": 0.153,
+                "result_rows": 0
+              },
+              {
+                "wall_ms": 0.191,
+                "client_cpu_ms": 0.133,
+                "result_rows": 0
+              }
+            ]
+          },
+          "equal_to_independent_row_reference": true,
+          "plan": [
+            {
+              "Plan": {
+                "Node Type": "Aggregate",
+                "Strategy": "Sorted",
+                "Partial Mode": "Simple",
+                "Parallel Aware": false,
+                "Async Capable": false,
+                "Startup Cost": 8.61,
+                "Total Cost": 8.62,
+                "Plan Rows": 1,
+                "Plan Width": 45,
+                "Actual Startup Time": 0.017,
+                "Actual Total Time": 0.018,
+                "Actual Rows": 0,
+                "Actual Loops": 1,
+                "Group Key": [
+                  "session_id"
+                ],
+                "Shared Hit Blocks": 2,
+                "Shared Read Blocks": 0,
+                "Shared Dirtied Blocks": 0,
+                "Shared Written Blocks": 0,
+                "Local Hit Blocks": 0,
+                "Local Read Blocks": 0,
+                "Local Dirtied Blocks": 0,
+                "Local Written Blocks": 0,
+                "Temp Read Blocks": 0,
+                "Temp Written Blocks": 0,
+                "Plans": [
+                  {
+                    "Node Type": "Sort",
+                    "Parent Relationship": "Outer",
+                    "Parallel Aware": false,
+                    "Async Capable": false,
+                    "Startup Cost": 8.61,
+                    "Total Cost": 8.61,
+                    "Plan Rows": 1,
+                    "Plan Width": 45,
+                    "Actual Startup Time": 0.017,
+                    "Actual Total Time": 0.017,
+                    "Actual Rows": 0,
+                    "Actual Loops": 1,
+                    "Sort Key": [
+                      "session_id"
+                    ],
+                    "Sort Method": "quicksort",
+                    "Sort Space Used": 25,
+                    "Sort Space Type": "Memory",
+                    "Shared Hit Blocks": 2,
+                    "Shared Read Blocks": 0,
+                    "Shared Dirtied Blocks": 0,
+                    "Shared Written Blocks": 0,
+                    "Local Hit Blocks": 0,
+                    "Local Read Blocks": 0,
+                    "Local Dirtied Blocks": 0,
+                    "Local Written Blocks": 0,
+                    "Temp Read Blocks": 0,
+                    "Temp Written Blocks": 0,
+                    "Plans": [
+                      {
+                        "Node Type": "Index Scan",
+                        "Parent Relationship": "Outer",
+                        "Parallel Aware": false,
+                        "Async Capable": false,
+                        "Scan Direction": "Forward",
+                        "Index Name": "idx_messages_scheduled_pending",
+                        "Relation Name": "messages",
+                        "Alias": "messages",
+                        "Startup Cost": 0.57,
+                        "Total Cost": 8.6,
+                        "Plan Rows": 1,
+                        "Plan Width": 45,
+                        "Actual Startup Time": 0.007,
+                        "Actual Total Time": 0.007,
+                        "Actual Rows": 0,
+                        "Actual Loops": 1,
+                        "Index Cond": "(scheduled_at > '1792724115631'::bigint)",
+                        "Rows Removed by Index Recheck": 0,
+                        "Filter": "((local_id IS NOT NULL) AND (delivery_state = 'queued'::text) AND (session_id = ANY ('{<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>,<session-id>}'::text[])))",
+                        "Rows Removed by Filter": 0,
+                        "Shared Hit Blocks": 2,
+                        "Shared Read Blocks": 0,
+                        "Shared Dirtied Blocks": 0,
+                        "Shared Written Blocks": 0,
+                        "Local Hit Blocks": 0,
+                        "Local Read Blocks": 0,
+                        "Local Dirtied Blocks": 0,
+                        "Local Written Blocks": 0,
+                        "Temp Read Blocks": 0,
+                        "Temp Written Blocks": 0
+                      }
+                    ]
+                  }
+                ]
+              },
+              "Planning": {
+                "Shared Hit Blocks": 1,
+                "Shared Read Blocks": 0,
+                "Shared Dirtied Blocks": 0,
+                "Shared Written Blocks": 0,
+                "Local Hit Blocks": 0,
+                "Local Read Blocks": 0,
+                "Local Dirtied Blocks": 0,
+                "Local Written Blocks": 0,
+                "Temp Read Blocks": 0,
+                "Temp Written Blocks": 0
+              },
+              "Planning Time": 0.525,
+              "Triggers": [],
+              "Execution Time": 0.033
+            }
+          ],
+          "plan_timing": "EXPLAIN ANALYZE after the three baseline-compatible wall samples"
+        }
+      ],
+      "database_stats": {
+        "numbackends": 9,
+        "xact_commit": 170741,
+        "xact_rollback": 194,
+        "blks_read": 576899,
+        "blks_hit": 8658807,
+        "tup_inserted": 833233
+      },
+      "ended_utc": "2026-10-23T02:55:15.700Z"
+    },
+    "http": {
+      "base": "http://127.0.0.1:3006",
+      "timeout_seconds": 20,
+      "concurrency": 1,
+      "samples_per_endpoint": 5,
+      "connections": "new urllib connection per request, full response read",
+      "background_traffic": "Existing live clients and other host services remained active.",
+      "samples": [
+        {
+          "sample_index": 1,
+          "path": "/api/sessions",
+          "started_utc": "2026-10-23T02:55:15+00:00",
+          "headers_ms": 3.319,
+          "status": 200,
+          "response_bytes": 138663,
+          "sessions": 178,
+          "total_ms": 5.325
+        },
+        {
+          "sample_index": 1,
+          "path": "/health",
+          "started_utc": "2026-10-23T02:55:15+00:00",
+          "headers_ms": 0.937,
+          "status": 200,
+          "response_bytes": 93,
+          "total_ms": 1.015
+        },
+        {
+          "sample_index": 2,
+          "path": "/api/sessions",
+          "started_utc": "2026-10-23T02:55:15+00:00",
+          "headers_ms": 2.613,
+          "status": 200,
+          "response_bytes": 138663,
+          "sessions": 178,
+          "total_ms": 4.447
+        },
+        {
+          "sample_index": 2,
+          "path": "/health",
+          "started_utc": "2026-10-23T02:55:15+00:00",
+          "headers_ms": 0.781,
+          "status": 200,
+          "response_bytes": 93,
+          "total_ms": 0.855
+        },
+        {
+          "sample_index": 3,
+          "path": "/api/sessions",
+          "started_utc": "2026-10-23T02:55:15+00:00",
+          "headers_ms": 2.721,
+          "status": 200,
+          "response_bytes": 138663,
+          "sessions": 178,
+          "total_ms": 4.453
+        },
+        {
+          "sample_index": 3,
+          "path": "/health",
+          "started_utc": "2026-10-23T02:55:15+00:00",
+          "headers_ms": 0.84,
+          "status": 200,
+          "response_bytes": 93,
+          "total_ms": 0.917
+        },
+        {
+          "sample_index": 4,
+          "path": "/api/sessions",
+          "started_utc": "2026-10-23T02:55:15+00:00",
+          "headers_ms": 2.811,
+          "status": 200,
+          "response_bytes": 138663,
+          "sessions": 178,
+          "total_ms": 4.555
+        },
+        {
+          "sample_index": 4,
+          "path": "/health",
+          "started_utc": "2026-10-23T02:55:15+00:00",
+          "headers_ms": 0.89,
+          "status": 200,
+          "response_bytes": 93,
+          "total_ms": 0.968
+        },
+        {
+          "sample_index": 5,
+          "path": "/api/sessions",
+          "started_utc": "2026-10-23T02:55:15+00:00",
+          "headers_ms": 2.846,
+          "status": 200,
+          "response_bytes": 138663,
+          "sessions": 178,
+          "total_ms": 5.475
+        },
+        {
+          "sample_index": 5,
+          "path": "/health",
+          "started_utc": "2026-10-23T02:55:15+00:00",
+          "headers_ms": 0.903,
+          "status": 200,
+          "response_bytes": 93,
+          "total_ms": 0.973
+        }
+      ],
+      "summary": [
+        {
+          "path": "/api/sessions",
+          "attempts": 5,
+          "successful": 5,
+          "min_ms": 4.447,
+          "median_ms": 4.555,
+          "p95_ms": 5.475,
+          "max_ms": 5.475
+        },
+        {
+          "path": "/health",
+          "attempts": 5,
+          "successful": 5,
+          "min_ms": 0.855,
+          "median_ms": 0.968,
+          "p95_ms": 1.015,
+          "max_ms": 1.015
+        }
+      ]
+    },
+    "extended_http": {
+      "base": "http://127.0.0.1:3006",
+      "concurrency": 1,
+      "rounds": 100,
+      "target_rounds_per_second": 5,
+      "paths_per_round": [
+        "/api/sessions",
+        "/health"
+      ],
+      "timeout_seconds": 20,
+      "connections": "new urllib connection per request, full response read",
+      "duration_seconds": 20.0012,
+      "quantile": "nearest-rank p95; median uses the mean of two middle samples",
+      "samples": [
+        {
+          "sample_index": 1,
+          "path": "/api/sessions",
+          "started_utc": "2026-10-23T02:55:15+00:00",
+          "headers_ms": 3.048,
+          "status": 200,
+          "response_bytes": 138663,
+          "sessions": 178,
+          "total_ms": 4.849
+        },
+        {
+          "sample_index": 1,
+          "path": "/health",
+          "started_utc": "2026-10-23T02:55:15+00:00",
+          "headers_ms": 0.928,
+          "status": 200,
+          "response_bytes": 93,
+          "total_ms": 1.003
+        },
+        {
+          "sample_index": 2,
+          "path": "/api/sessions",
+          "started_utc": "2026-10-23T02:55:15+00:00",
+          "headers_ms": 3.412,
+          "status": 200,
+          "response_bytes": 138663,
+          "sessions": 178,
+          "total_ms": 5.256
+        },
+        {
+          "sample_index": 2,
+          "path": "/health",
+          "started_utc": "2026-10-23T02:55:15+00:00",
+          "headers_ms": 0.941,
+          "status": 200,
+          "response_bytes": 93,
+          "total_ms": 1.015
+        },
+        {
+          "sample_index": 3,
+          "path": "/api/sessions",
+          "started_utc": "2026-10-23T02:55:16+00:00",
+          "headers_ms": 3.432,
+          "status": 200,
+          "response_bytes": 138663,
+          "sessions": 178,
+          "total_ms": 5.266
+        },
+        {
+          "sample_index": 3,
+          "path": "/health",
+          "started_utc": "2026-10-23T02:55:16+00:00",
+          "headers_ms": 0.833,
+          "status": 200,
+          "response_bytes": 93,
+          "total_ms": 0.908
+        },
+        {
+          "sample_index": 4,
+          "path": "/api/sessions",
+          "started_utc": "2026-10-23T02:55:16+00:00",
+          "headers_ms": 4.112,
+          "status": 200,
+          "response_bytes": 138663,
+          "sessions": 178,
+          "total_ms": 6.005
+        },
+        {
+          "sample_index": 4,
+          "path": "/health",
+          "started_utc": "2026-10-23T02:55:16+00:00",
+          "headers_ms": 0.879,
+          "status": 200,
+          "response_bytes": 93,
+          "total_ms": 0.957
+        },
+        {
+          "sample_index": 5,
+          "path": "/api/sessions",
+          "started_utc": "2026-10-23T02:55:16+00:00",
+          "headers_ms": 3.632,
+          "status": 200,
+          "response_bytes": 138663,
+          "sessions": 178,
+          "total_ms": 5.516
+        },
+        {
+          "sample_index": 5,
+          "path": "/health",
+          "started_utc": "2026-10-23T02:55:16+00:00",
+          "headers_ms": 0.947,
+          "status": 200,
+          "response_bytes": 93,
+          "total_ms": 1.021
+        },
+        {
+          "sample_index": 6,
+          "path": "/api/sessions",
+          "started_utc": "2026-10-23T02:55:16+00:00",
+          "headers_ms": 3.783,
+          "status": 200,
+          "response_bytes": 138663,
+          "sessions": 178,
+          "total_ms": 5.687
+        },
+        {
+          "sample_index": 6,
+          "path": "/health",
+          "started_utc": "2026-10-23T02:55:16+00:00",
+          "headers_ms": 0.917,
+          "status": 200,
+          "response_bytes": 93,
+          "total_ms": 0.987
+        },
+        {
+          "sample_index": 7,
+          "path": "/api/sessions",
+          "started_utc": "2026-10-23T02:55:16+00:00",
+          "headers_ms": 3.425,
+          "status": 200,
+          "response_bytes": 138663,
+          "sessions": 178,
+          "total_ms": 5.27
+        },
+        {
+          "sample_index": 7,
+          "path": "/health",
+          "started_utc": "2026-10-23T02:55:16+00:00",
+          "headers_ms": 0.899,
+          "status": 200,
+          "response_bytes": 93,
+          "total_ms": 0.969
+        },
+        {
+          "sample_index": 8,
+          "path": "/api/sessions",
+          "started_utc": "2026-10-23T02:55:17+00:00",
+          "headers_ms": 3.53,
+          "status": 200,
+          "response_bytes": 138663,
+          "sessions": 178,
+          "total_ms": 5.398
+        },
+        {
+          "sample_index": 8,
+          "path": "/health",
+          "started_utc": "2026-10-23T02:55:17+00:00",
+          "headers_ms": 0.803,
+          "status": 200,
+          "response_bytes": 93,
+          "total_ms": 0.875
+        },
+        {
+          "sample_index": 9,
+          "path": "/api/sessions",
+          "started_utc": "2026-10-23T02:55:17+00:00",
+          "headers_ms": 3.633,
+          "status": 200,
+          "response_bytes": 138663,
+          "sessions": 178,
+          "total_ms": 5.517
+        },
+        {
+          "sample_index": 9,
+          "path": "/health",
+          "started_utc": "2026-10-23T02:55:17+00:00",
+          "headers_ms": 0.854,
+          "status": 200,
+          "response_bytes": 93,
+          "total_ms": 0.927
+        },
+        {
+          "sample_index": 10,
+          "path": "/api/sessions",
+          "started_utc": "2026-10-23T02:55:17+00:00",
+          "headers_ms": 3.689,
+          "status": 200,
+          "response_bytes": 138663,
+          "sessions": 178,
+          "total_ms": 5.579
+        },
+        {
+          "sample_index": 10,
+          "path": "/health",
+          "started_utc": "2026-10-23T02:55:17+00:00",
+          "headers_ms": 0.89,
+          "status": 200,
+          "response_bytes": 93,
+          "total_ms": 0.99
+        },
+        {
+          "sample_index": 11,
+          "path": "/api/sessions",
+          "started_utc": "2026-10-23T02:55:17+00:00",
+          "headers_ms": 3.34,
+          "status": 200,
+          "response_bytes": 138663,
+          "sessions": 178,
+          "total_ms": 5.229
+        },
+        {
+          "sample_index": 11,
+          "path": "/health",
+          "started_utc": "2026-10-23T02:55:17+00:00",
+          "headers_ms": 0.865,
+          "status": 200,
+          "response_bytes": 93,
+          "total_ms": 0.952
+        },
+        {
+          "sample_index": 12,
+          "path": "/api/sessions",
+          "started_utc": "2026-10-23T02:55:17+00:00",
+          "headers_ms": 3.424,
+          "status": 200,
+          "response_bytes": 138663,
+          "sessions": 178,
+          "total_ms": 5.292
+        },
+        {
+          "sample_index": 12,
+          "path": "/health",
+          "started_utc": "2026-10-23T02:55:17+00:00",
+          "headers_ms": 0.824,
+          "status": 200,
+          "response_bytes": 93,
+          "total_ms": 0.905
+        },
+        {
+          "sample_index": 13,
+          "path": "/api/sessions",
+          "started_utc": "2026-10-23T02:55:18+00:00",
+          "headers_ms": 3.386,
+          "status": 200,
+          "response_bytes": 138663,
+          "sessions": 178,
+          "total_ms": 5.248
+        },
+        {
+          "sample_index": 13,
+          "path": "/health",
+          "started_utc": "2026-10-23T02:55:18+00:00",
+          "headers_ms": 0.836,
+          "status": 200,
+          "response_bytes": 93,
+          "total_ms": 0.92
+        },
+        {
+          "sample_index": 14,
+          "path": "/api/sessions",
+          "started_utc": "2026-10-23T02:55:18+00:00",
+          "headers_ms": 4.079,
+          "status": 200,
+          "response_bytes": 138663,
+          "sessions": 178,
+          "total_ms": 5.963
+        },
+        {
+          "sample_index": 14,
+          "path": "/health",
+          "started_utc": "2026-10-23T02:55:18+00:00",
+          "headers_ms": 0.851,
+          "status": 200,
+          "response_bytes": 93,
+          "total_ms": 0.924
+        },
+        {
+          "sample_index": 15,
+          "path": "/api/sessions",
+          "started_utc": "2026-10-23T02:55:18+00:00",
+          "headers_ms": 3.512,
+          "status": 200,
+          "response_bytes": 138663,
+          "sessions": 178,
+          "total_ms": 5.416
+        },
+        {
+          "sample_index": 15,
+          "path": "/health",
+          "started_utc": "2026-10-23T02:55:18+00:00",
+          "headers_ms": 0.91,
+          "status": 200,
+          "response_bytes": 93,
+          "total_ms": 0.987
+        },
+        {
+          "sample_index": 16,
+          "path": "/api/sessions",
+          "started_utc": "2026-10-23T02:55:18+00:00",
+          "headers_ms": 3.445,
+          "status": 200,
+          "response_bytes": 138663,
+          "sessions": 178,
+          "total_ms": 5.372
+        },
+        {
+          "sample_index": 16,
+          "path": "/health",
+          "started_utc": "2026-10-23T02:55:18+00:00",
+          "headers_ms": 0.847,
+          "status": 200,
+          "response_bytes": 93,
+          "total_ms": 0.919
+        },
+        {
+          "sample_index": 17,
+          "path": "/api/sessions",
+          "started_utc": "2026-10-23T02:55:18+00:00",
+          "headers_ms": 3.275,
+          "status": 200,
+          "response_bytes": 138663,
+          "sessions": 178,
+          "total_ms": 5.124
+        },
+        {
+          "sample_index": 17,
+          "path": "/health",
+          "started_utc": "2026-10-23T02:55:18+00:00",
+          "headers_ms": 0.933,
+          "status": 200,
+          "response_bytes": 93,
+          "total_ms": 1.008
+        },
+        {
+          "sample_index": 18,
+          "path": "/api/sessions",
+          "started_utc": "2026-10-23T02:55:19+00:00",
+          "headers_ms": 3.476,
+          "status": 200,
+          "response_bytes": 138663,
+          "sessions": 178,
+          "total_ms": 5.406
+        },
+        {
+          "sample_index": 18,
+          "path": "/health",
+          "started_utc": "2026-10-23T02:55:19+00:00",
+          "headers_ms": 0.85,
+          "status": 200,
+          "response_bytes": 93,
+          "total_ms": 0.934
+        },
+        {
+          "sample_index": 19,
+          "path": "/api/sessions",
+          "started_utc": "2026-10-23T02:55:19+00:00",
+          "headers_ms": 3.375,
+          "status": 200,
+          "response_bytes": 138663,
+          "sessions": 178,
+          "total_ms": 5.267
+        },
+        {
+          "sample_index": 19,
+          "path": "/health",
+          "started_utc": "2026-10-23T02:55:19+00:00",
+          "headers_ms": 0.948,
+          "status": 200,
+          "response_bytes": 93,
+          "total_ms": 1.027
+        },
+        {
+          "sample_index": 20,
+          "path": "/api/sessions",
+          "started_utc": "2026-10-23T02:55:19+00:00",
+          "headers_ms": 3.608,
+          "status": 200,
+          "response_bytes": 138663,
+          "sessions": 178,
+          "total_ms": 5.52
+        },
+        {
+          "sample_index": 20,
+          "path": "/health",
+          "started_utc": "2026-10-23T02:55:19+00:00",
+          "headers_ms": 0.932,
+          "status": 200,
+          "response_bytes": 93,
+          "total_ms": 1.006
+        },
+        {
+          "sample_index": 21,
+          "path": "/api/sessions",
+          "started_utc": "2026-10-23T02:55:19+00:00",
+          "headers_ms": 3.487,
+          "status": 200,
+          "response_bytes": 138663,
+          "sessions": 178,
+          "total_ms": 5.383
+        },
+        {
+          "sample_index": 21,
+          "path": "/health",
+          "started_utc": "2026-10-23T02:55:19+00:00",
+          "headers_ms": 0.876,
+          "status": 200,
+          "response_bytes": 93,
+          "total_ms": 0.95
+        },
+        {
+          "sample_index": 22,
+          "path": "/api/sessions",
+          "started_utc": "2026-10-23T02:55:19+00:00",
+          "headers_ms": 3.613,
+          "status": 200,
+          "response_bytes": 138663,
+          "sessions": 178,
+          "total_ms": 5.49
+        },
+        {
+          "sample_index": 22,
+          "path": "/health",
+          "started_utc": "2026-10-23T02:55:19+00:00",
+          "headers_ms": 0.918,
+          "status": 200,
+          "response_bytes": 93,
+          "total_ms": 0.985
+        },
+        {
+          "sample_index": 23,
+          "path": "/api/sessions",
+          "started_utc": "2026-10-23T02:55:20+00:00",
+          "headers_ms": 3.444,
+          "status": 200,
+          "response_bytes": 138663,
+          "sessions": 178,
+          "total_ms": 5.275
+        },
+        {
+          "sample_index": 23,
+          "path": "/health",
+          "started_utc": "2026-10-23T02:55:20+00:00",
+          "headers_ms": 0.943,
+          "status": 200,
+          "response_bytes": 93,
+          "total_ms": 1.016
+        },
+        {
+          "sample_index": 24,
+          "path": "/api/sessions",
+          "started_utc": "2026-10-23T02:55:20+00:00",
+          "headers_ms": 4.142,
+          "status": 200,
+          "response_bytes": 138663,
+          "sessions": 178,
+          "total_ms": 6.063
+        },
+        {
+          "sample_index": 24,
+          "path": "/health",
+          "started_utc": "2026-10-23T02:55:20+00:00",
+          "headers_ms": 0.884,
+          "status": 200,
+          "response_bytes": 93,
+          "total_ms": 0.962
+        },
+        {
+          "sample_index": 25,
+          "path": "/api/sessions",
+          "started_utc": "2026-10-23T02:55:20+00:00",
+          "headers_ms": 3.725,
+          "status": 200,
+          "response_bytes": 138663,
+          "sessions": 178,
+          "total_ms": 5.697
+        },
+        {
+          "sample_index": 25,
+          "path": "/health",
+          "started_utc": "2026-10-23T02:55:20+00:00",
+          "headers_ms": 0.918,
+          "status": 200,
+          "response_bytes": 93,
+          "total_ms": 0.996
+        },
+        {
+          "sample_index": 26,
+          "path": "/api/sessions",
+          "started_utc": "2026-10-23T02:55:20+00:00",
+          "headers_ms": 3.605,
+          "status": 200,
+          "response_bytes": 138663,
+          "sessions": 178,
+          "total_ms": 5.548
+        },
+        {
+          "sample_index": 26,
+          "path": "/health",
+          "started_utc": "2026-10-23T02:55:20+00:00",
+          "headers_ms": 0.883,
+          "status": 200,
+          "response_bytes": 93,
+          "total_ms": 0.981
+        },
+        {
+          "sample_index": 27,
+          "path": "/api/sessions",
+          "started_utc": "2026-10-23T02:55:20+00:00",
+          "headers_ms": 3.472,
+          "status": 200,
+          "response_bytes": 138663,
+          "sessions": 178,
+          "total_ms": 5.415
+        },
+        {
+          "sample_index": 27,
+          "path": "/health",
+          "started_utc": "2026-10-23T02:55:20+00:00",
+          "headers_ms": 0.994,
+          "status": 200,
+          "response_bytes": 93,
+          "total_ms": 1.079
+        },
+        {
+          "sample_index": 28,
+          "path": "/api/sessions",
+          "started_utc": "2026-10-23T02:55:21+00:00",
+          "headers_ms": 3.401,
+          "status": 200,
+          "response_bytes": 138663,
+          "sessions": 178,
+          "total_ms": 5.245
+        },
+        {
+          "sample_index": 28,
+          "path": "/health",
+          "started_utc": "2026-10-23T02:55:21+00:00",
+          "headers_ms": 0.761,
+          "status": 200,
+          "response_bytes": 93,
+          "total_ms": 0.832
+        },
+        {
+          "sample_index": 29,
+          "path": "/api/sessions",
+          "started_utc": "2026-10-23T02:55:21+00:00",
+          "headers_ms": 3.408,
+          "status": 200,
+          "response_bytes": 138663,
+          "sessions": 178,
+          "total_ms": 5.298
+        },
+        {
+          "sample_index": 29,
+          "path": "/health",
+          "started_utc": "2026-10-23T02:55:21+00:00",
+          "headers_ms": 0.918,
+          "status": 200,
+          "response_bytes": 93,
+          "total_ms": 0.995
+        },
+        {
+          "sample_index": 30,
+          "path": "/api/sessions",
+          "started_utc": "2026-10-23T02:55:21+00:00",
+          "headers_ms": 3.374,
+          "status": 200,
+          "response_bytes": 138663,
+          "sessions": 178,
+          "total_ms": 5.256
+        },
+        {
+          "sample_index": 30,
+          "path": "/health",
+          "started_utc": "2026-10-23T02:55:21+00:00",
+          "headers_ms": 1.032,
+          "status": 200,
+          "response_bytes": 93,
+          "total_ms": 1.119
+        },
+        {
+          "sample_index": 31,
+          "path": "/api/sessions",
+          "started_utc": "2026-10-23T02:55:21+00:00",
+          "headers_ms": 3.342,
+          "status": 200,
+          "response_bytes": 138663,
+          "sessions": 178,
+          "total_ms": 5.231
+        },
+        {
+          "sample_index": 31,
+          "path": "/health",
+          "started_utc": "2026-10-23T02:55:21+00:00",
+          "headers_ms": 0.985,
+          "status": 200,
+          "response_bytes": 93,
+          "total_ms": 1.074
+        },
+        {
+          "sample_index": 32,
+          "path": "/api/sessions",
+          "started_utc": "2026-10-23T02:55:21+00:00",
+          "headers_ms": 3.476,
+          "status": 200,
+          "response_bytes": 138663,
+          "sessions": 178,
+          "total_ms": 5.4
+        },
+        {
+          "sample_index": 32,
+          "path": "/health",
+          "started_utc": "2026-10-23T02:55:21+00:00",
+          "headers_ms": 0.917,
+          "status": 200,
+          "response_bytes": 93,
+          "total_ms": 0.998
+        },
+        {
+          "sample_index": 33,
+          "path": "/api/sessions",
+          "started_utc": "2026-10-23T02:55:22+00:00",
+          "headers_ms": 3.311,
+          "status": 200,
+          "response_bytes": 138663,
+          "sessions": 178,
+          "total_ms": 5.157
+        },
+        {
+          "sample_index": 33,
+          "path": "/health",
+          "started_utc": "2026-10-23T02:55:22+00:00",
+          "headers_ms": 0.87,
+          "status": 200,
+          "response_bytes": 93,
+          "total_ms": 0.947
+        },
+        {
+          "sample_index": 34,
+          "path": "/api/sessions",
+          "started_utc": "2026-10-23T02:55:22+00:00",
+          "headers_ms": 3.973,
+          "status": 200,
+          "response_bytes": 138663,
+          "sessions": 178,
+          "total_ms": 5.867
+        },
+        {
+          "sample_index": 34,
+          "path": "/health",
+          "started_utc": "2026-10-23T02:55:22+00:00",
+          "headers_ms": 0.815,
+          "status": 200,
+          "response_bytes": 93,
+          "total_ms": 0.895
+        },
+        {
+          "sample_index": 35,
+          "path": "/api/sessions",
+          "started_utc": "2026-10-23T02:55:22+00:00",
+          "headers_ms": 3.62,
+          "status": 200,
+          "response_bytes": 138663,
+          "sessions": 178,
+          "total_ms": 5.521
+        },
+        {
+          "sample_index": 35,
+          "path": "/health",
+          "started_utc": "2026-10-23T02:55:22+00:00",
+          "headers_ms": 0.947,
+          "status": 200,
+          "response_bytes": 93,
+          "total_ms": 1.04
+        },
+        {
+          "sample_index": 36,
+          "path": "/api/sessions",
+          "started_utc": "2026-10-23T02:55:22+00:00",
+          "headers_ms": 3.475,
+          "status": 200,
+          "response_bytes": 138663,
+          "sessions": 178,
+          "total_ms": 5.417
+        },
+        {
+          "sample_index": 36,
+          "path": "/health",
+          "started_utc": "2026-10-23T02:55:22+00:00",
+          "headers_ms": 0.92,
+          "status": 200,
+          "response_bytes": 93,
+          "total_ms": 1.003
+        },
+        {
+          "sample_index": 37,
+          "path": "/api/sessions",
+          "started_utc": "2026-10-23T02:55:22+00:00",
+          "headers_ms": 3.217,
+          "status": 200,
+          "response_bytes": 138663,
+          "sessions": 178,
+          "total_ms": 5.078
+        },
+        {
+          "sample_index": 37,
+          "path": "/health",
+          "started_utc": "2026-10-23T02:55:22+00:00",
+          "headers_ms": 0.928,
+          "status": 200,
+          "response_bytes": 93,
+          "total_ms": 1.007
+        },
+        {
+          "sample_index": 38,
+          "path": "/api/sessions",
+          "started_utc": "2026-10-23T02:55:23+00:00",
+          "headers_ms": 3.353,
+          "status": 200,
+          "response_bytes": 138663,
+          "sessions": 178,
+          "total_ms": 5.213
+        },
+        {
+          "sample_index": 38,
+          "path": "/health",
+          "started_utc": "2026-10-23T02:55:23+00:00",
+          "headers_ms": 0.886,
+          "status": 200,
+          "response_bytes": 93,
+          "total_ms": 0.967
+        },
+        {
+          "sample_index": 39,
+          "path": "/api/sessions",
+          "started_utc": "2026-10-23T02:55:23+00:00",
+          "headers_ms": 3.274,
+          "status": 200,
+          "response_bytes": 138663,
+          "sessions": 178,
+          "total_ms": 5.173
+        },
+        {
+          "sample_index": 39,
+          "path": "/health",
+          "started_utc": "2026-10-23T02:55:23+00:00",
+          "headers_ms": 0.958,
+          "status": 200,
+          "response_bytes": 93,
+          "total_ms": 1.036
+        },
+        {
+          "sample_index": 40,
+          "path": "/api/sessions",
+          "started_utc": "2026-10-23T02:55:23+00:00",
+          "headers_ms": 3.525,
+          "status": 200,
+          "response_bytes": 138663,
+          "sessions": 178,
+          "total_ms": 5.45
+        },
+        {
+          "sample_index": 40,
+          "path": "/health",
+          "started_utc": "2026-10-23T02:55:23+00:00",
+          "headers_ms": 0.959,
+          "status": 200,
+          "response_bytes": 93,
+          "total_ms": 1.034
+        },
+        {
+          "sample_index": 41,
+          "path": "/api/sessions",
+          "started_utc": "2026-10-23T02:55:23+00:00",
+          "headers_ms": 3.482,
+          "status": 200,
+          "response_bytes": 138663,
+          "sessions": 178,
+          "total_ms": 5.419
+        },
+        {
+          "sample_index": 41,
+          "path": "/health",
+          "started_utc": "2026-10-23T02:55:23+00:00",
+          "headers_ms": 0.87,
+          "status": 200,
+          "response_bytes": 93,
+          "total_ms": 0.953
+        },
+        {
+          "sample_index": 42,
+          "path": "/api/sessions",
+          "started_utc": "2026-10-23T02:55:23+00:00",
+          "headers_ms": 3.368,
+          "status": 200,
+          "response_bytes": 138663,
+          "sessions": 178,
+          "total_ms": 5.246
+        },
+        {
+          "sample_index": 42,
+          "path": "/health",
+          "started_utc": "2026-10-23T02:55:23+00:00",
+          "headers_ms": 0.842,
+          "status": 200,
+          "response_bytes": 93,
+          "total_ms": 0.917
+        },
+        {
+          "sample_index": 43,
+          "path": "/api/sessions",
+          "started_utc": "2026-10-23T02:55:24+00:00",
+          "headers_ms": 3.309,
+          "status": 200,
+          "response_bytes": 138663,
+          "sessions": 178,
+          "total_ms": 7.467
+        },
+        {
+          "sample_index": 43,
+          "path": "/health",
+          "started_utc": "2026-10-23T02:55:24+00:00",
+          "headers_ms": 1.279,
+          "status": 200,
+          "response_bytes": 93,
+          "total_ms": 1.361
+        },
+        {
+          "sample_index": 44,
+          "path": "/api/sessions",
+          "started_utc": "2026-10-23T02:55:24+00:00",
+          "headers_ms": 3.861,
+          "status": 200,
+          "response_bytes": 138663,
+          "sessions": 178,
+          "total_ms": 5.801
+        },
+        {
+          "sample_index": 44,
+          "path": "/health",
+          "started_utc": "2026-10-23T02:55:24+00:00",
+          "headers_ms": 0.84,
+          "status": 200,
+          "response_bytes": 93,
+          "total_ms": 0.912
+        },
+        {
+          "sample_index": 45,
+          "path": "/api/sessions",
+          "started_utc": "2026-10-23T02:55:24+00:00",
+          "headers_ms": 3.525,
+          "status": 200,
+          "response_bytes": 138663,
+          "sessions": 178,
+          "total_ms": 5.489
+        },
+        {
+          "sample_index": 45,
+          "path": "/health",
+          "started_utc": "2026-10-23T02:55:24+00:00",
+          "headers_ms": 0.951,
+          "status": 200,
+          "response_bytes": 93,
+          "total_ms": 1.038
+        },
+        {
+          "sample_index": 46,
+          "path": "/api/sessions",
+          "started_utc": "2026-10-23T02:55:24+00:00",
+          "headers_ms": 3.351,
+          "status": 200,
+          "response_bytes": 138663,
+          "sessions": 178,
+          "total_ms": 5.242
+        },
+        {
+          "sample_index": 46,
+          "path": "/health",
+          "started_utc": "2026-10-23T02:55:24+00:00",
+          "headers_ms": 0.925,
+          "status": 200,
+          "response_bytes": 93,
+          "total_ms": 1.002
+        },
+        {
+          "sample_index": 47,
+          "path": "/api/sessions",
+          "started_utc": "2026-10-23T02:55:24+00:00",
+          "headers_ms": 3.221,
+          "status": 200,
+          "response_bytes": 138663,
+          "sessions": 178,
+          "total_ms": 5.074
+        },
+        {
+          "sample_index": 47,
+          "path": "/health",
+          "started_utc": "2026-10-23T02:55:24+00:00",
+          "headers_ms": 0.91,
+          "status": 200,
+          "response_bytes": 93,
+          "total_ms": 0.988
+        },
+        {
+          "sample_index": 48,
+          "path": "/api/sessions",
+          "started_utc": "2026-10-23T02:55:25+00:00",
+          "headers_ms": 3.196,
+          "status": 200,
+          "response_bytes": 138663,
+          "sessions": 178,
+          "total_ms": 5.077
+        },
+        {
+          "sample_index": 48,
+          "path": "/health",
+          "started_utc": "2026-10-23T02:55:25+00:00",
+          "headers_ms": 0.889,
+          "status": 200,
+          "response_bytes": 93,
+          "total_ms": 0.977
+        },
+        {
+          "sample_index": 49,
+          "path": "/api/sessions",
+          "started_utc": "2026-10-23T02:55:25+00:00",
+          "headers_ms": 4.28,
+          "status": 200,
+          "response_bytes": 138663,
+          "sessions": 178,
+          "total_ms": 6.225
+        },
+        {
+          "sample_index": 49,
+          "path": "/health",
+          "started_utc": "2026-10-23T02:55:25+00:00",
+          "headers_ms": 1.04,
+          "status": 200,
+          "response_bytes": 93,
+          "total_ms": 1.122
+        },
+        {
+          "sample_index": 50,
+          "path": "/api/sessions",
+          "started_utc": "2026-10-23T02:55:25+00:00",
+          "headers_ms": 3.516,
+          "status": 200,
+          "response_bytes": 138663,
+          "sessions": 178,
+          "total_ms": 5.459
+        },
+        {
+          "sample_index": 50,
+          "path": "/health",
+          "started_utc": "2026-10-23T02:55:25+00:00",
+          "headers_ms": 0.959,
+          "status": 200,
+          "response_bytes": 93,
+          "total_ms": 1.036
+        },
+        {
+          "sample_index": 51,
+          "path": "/api/sessions",
+          "started_utc": "2026-10-23T02:55:25+00:00",
+          "headers_ms": 3.435,
+          "status": 200,
+          "response_bytes": 138663,
+          "sessions": 178,
+          "total_ms": 5.361
+        },
+        {
+          "sample_index": 51,
+          "path": "/health",
+          "started_utc": "2026-10-23T02:55:25+00:00",
+          "headers_ms": 0.884,
+          "status": 200,
+          "response_bytes": 93,
+          "total_ms": 0.961
+        },
+        {
+          "sample_index": 52,
+          "path": "/api/sessions",
+          "started_utc": "2026-10-23T02:55:25+00:00",
+          "headers_ms": 3.406,
+          "status": 200,
+          "response_bytes": 138663,
+          "sessions": 178,
+          "total_ms": 5.354
+        },
+        {
+          "sample_index": 52,
+          "path": "/health",
+          "started_utc": "2026-10-23T02:55:25+00:00",
+          "headers_ms": 0.851,
+          "status": 200,
+          "response_bytes": 93,
+          "total_ms": 0.924
+        },
+        {
+          "sample_index": 53,
+          "path": "/api/sessions",
+          "started_utc": "2026-10-23T02:55:26+00:00",
+          "headers_ms": 3.425,
+          "status": 200,
+          "response_bytes": 138663,
+          "sessions": 178,
+          "total_ms": 5.256
+        },
+        {
+          "sample_index": 53,
+          "path": "/health",
+          "started_utc": "2026-10-23T02:55:26+00:00",
+          "headers_ms": 0.812,
+          "status": 200,
+          "response_bytes": 93,
+          "total_ms": 0.884
+        },
+        {
+          "sample_index": 54,
+          "path": "/api/sessions",
+          "started_utc": "2026-10-23T02:55:26+00:00",
+          "headers_ms": 3.951,
+          "status": 200,
+          "response_bytes": 138663,
+          "sessions": 178,
+          "total_ms": 5.868
+        },
+        {
+          "sample_index": 54,
+          "path": "/health",
+          "started_utc": "2026-10-23T02:55:26+00:00",
+          "headers_ms": 0.862,
+          "status": 200,
+          "response_bytes": 93,
+          "total_ms": 0.936
+        },
+        {
+          "sample_index": 55,
+          "path": "/api/sessions",
+          "started_utc": "2026-10-23T02:55:26+00:00",
+          "headers_ms": 3.532,
+          "status": 200,
+          "response_bytes": 138663,
+          "sessions": 178,
+          "total_ms": 5.474
+        },
+        {
+          "sample_index": 55,
+          "path": "/health",
+          "started_utc": "2026-10-23T02:55:26+00:00",
+          "headers_ms": 1.039,
+          "status": 200,
+          "response_bytes": 93,
+          "total_ms": 1.134
+        },
+        {
+          "sample_index": 56,
+          "path": "/api/sessions",
+          "started_utc": "2026-10-23T02:55:26+00:00",
+          "headers_ms": 3.481,
+          "status": 200,
+          "response_bytes": 138663,
+          "sessions": 178,
+          "total_ms": 5.389
+        },
+        {
+          "sample_index": 56,
+          "path": "/health",
+          "started_utc": "2026-10-23T02:55:26+00:00",
+          "headers_ms": 0.835,
+          "status": 200,
+          "response_bytes": 93,
+          "total_ms": 0.9
+        },
+        {
+          "sample_index": 57,
+          "path": "/api/sessions",
+          "started_utc": "2026-10-23T02:55:26+00:00",
+          "headers_ms": 3.611,
+          "status": 200,
+          "response_bytes": 138663,
+          "sessions": 178,
+          "total_ms": 5.496
+        },
+        {
+          "sample_index": 57,
+          "path": "/health",
+          "started_utc": "2026-10-23T02:55:26+00:00",
+          "headers_ms": 0.86,
+          "status": 200,
+          "response_bytes": 93,
+          "total_ms": 0.937
+        },
+        {
+          "sample_index": 58,
+          "path": "/api/sessions",
+          "started_utc": "2026-10-23T02:55:27+00:00",
+          "headers_ms": 3.396,
+          "status": 200,
+          "response_bytes": 138663,
+          "sessions": 178,
+          "total_ms": 5.365
+        },
+        {
+          "sample_index": 58,
+          "path": "/health",
+          "started_utc": "2026-10-23T02:55:27+00:00",
+          "headers_ms": 1.004,
+          "status": 200,
+          "response_bytes": 93,
+          "total_ms": 1.094
+        },
+        {
+          "sample_index": 59,
+          "path": "/api/sessions",
+          "started_utc": "2026-10-23T02:55:27+00:00",
+          "headers_ms": 4.037,
+          "status": 200,
+          "response_bytes": 138663,
+          "sessions": 178,
+          "total_ms": 6.146
+        },
+        {
+          "sample_index": 59,
+          "path": "/health",
+          "started_utc": "2026-10-23T02:55:27+00:00",
+          "headers_ms": 0.788,
+          "status": 200,
+          "response_bytes": 93,
+          "total_ms": 0.858
+        },
+        {
+          "sample_index": 60,
+          "path": "/api/sessions",
+          "started_utc": "2026-10-23T02:55:27+00:00",
+          "headers_ms": 3.357,
+          "status": 200,
+          "response_bytes": 138663,
+          "sessions": 178,
+          "total_ms": 5.243
+        },
+        {
+          "sample_index": 60,
+          "path": "/health",
+          "started_utc": "2026-10-23T02:55:27+00:00",
+          "headers_ms": 0.82,
+          "status": 200,
+          "response_bytes": 93,
+          "total_ms": 0.9
+        },
+        {
+          "sample_index": 61,
+          "path": "/api/sessions",
+          "started_utc": "2026-10-23T02:55:27+00:00",
+          "headers_ms": 3.438,
+          "status": 200,
+          "response_bytes": 138663,
+          "sessions": 178,
+          "total_ms": 5.369
+        },
+        {
+          "sample_index": 61,
+          "path": "/health",
+          "started_utc": "2026-10-23T02:55:27+00:00",
+          "headers_ms": 0.875,
+          "status": 200,
+          "response_bytes": 93,
+          "total_ms": 0.949
+        },
+        {
+          "sample_index": 62,
+          "path": "/api/sessions",
+          "started_utc": "2026-10-23T02:55:27+00:00",
+          "headers_ms": 3.275,
+          "status": 200,
+          "response_bytes": 138663,
+          "sessions": 178,
+          "total_ms": 5.158
+        },
+        {
+          "sample_index": 62,
+          "path": "/health",
+          "started_utc": "2026-10-23T02:55:27+00:00",
+          "headers_ms": 0.825,
+          "status": 200,
+          "response_bytes": 93,
+          "total_ms": 0.898
+        },
+        {
+          "sample_index": 63,
+          "path": "/api/sessions",
+          "started_utc": "2026-10-23T02:55:28+00:00",
+          "headers_ms": 3.547,
+          "status": 200,
+          "response_bytes": 138663,
+          "sessions": 178,
+          "total_ms": 5.499
+        },
+        {
+          "sample_index": 63,
+          "path": "/health",
+          "started_utc": "2026-10-23T02:55:28+00:00",
+          "headers_ms": 0.975,
+          "status": 200,
+          "response_bytes": 93,
+          "total_ms": 1.066
+        },
+        {
+          "sample_index": 64,
+          "path": "/api/sessions",
+          "started_utc": "2026-10-23T02:55:28+00:00",
+          "headers_ms": 4.026,
+          "status": 200,
+          "response_bytes": 138663,
+          "sessions": 178,
+          "total_ms": 5.951
+        },
+        {
+          "sample_index": 64,
+          "path": "/health",
+          "started_utc": "2026-10-23T02:55:28+00:00",
+          "headers_ms": 0.831,
+          "status": 200,
+          "response_bytes": 93,
+          "total_ms": 0.909
+        },
+        {
+          "sample_index": 65,
+          "path": "/api/sessions",
+          "started_utc": "2026-10-23T02:55:28+00:00",
+          "headers_ms": 3.515,
+          "status": 200,
+          "response_bytes": 138663,
+          "sessions": 178,
+          "total_ms": 5.444
+        },
+        {
+          "sample_index": 65,
+          "path": "/health",
+          "started_utc": "2026-10-23T02:55:28+00:00",
+          "headers_ms": 0.874,
+          "status": 200,
+          "response_bytes": 93,
+          "total_ms": 0.956
+        },
+        {
+          "sample_index": 66,
+          "path": "/api/sessions",
+          "started_utc": "2026-10-23T02:55:28+00:00",
+          "headers_ms": 3.443,
+          "status": 200,
+          "response_bytes": 138663,
+          "sessions": 178,
+          "total_ms": 5.355
+        },
+        {
+          "sample_index": 66,
+          "path": "/health",
+          "started_utc": "2026-10-23T02:55:28+00:00",
+          "headers_ms": 0.832,
+          "status": 200,
+          "response_bytes": 93,
+          "total_ms": 0.909
+        },
+        {
+          "sample_index": 67,
+          "path": "/api/sessions",
+          "started_utc": "2026-10-23T02:55:28+00:00",
+          "headers_ms": 3.5,
+          "status": 200,
+          "response_bytes": 138663,
+          "sessions": 178,
+          "total_ms": 5.43
+        },
+        {
+          "sample_index": 67,
+          "path": "/health",
+          "started_utc": "2026-10-23T02:55:28+00:00",
+          "headers_ms": 0.826,
+          "status": 200,
+          "response_bytes": 93,
+          "total_ms": 0.899
+        },
+        {
+          "sample_index": 68,
+          "path": "/api/sessions",
+          "started_utc": "2026-10-23T02:55:29+00:00",
+          "headers_ms": 3.486,
+          "status": 200,
+          "response_bytes": 138663,
+          "sessions": 178,
+          "total_ms": 5.421
+        },
+        {
+          "sample_index": 68,
+          "path": "/health",
+          "started_utc": "2026-10-23T02:55:29+00:00",
+          "headers_ms": 0.827,
+          "status": 200,
+          "response_bytes": 93,
+          "total_ms": 0.895
+        },
+        {
+          "sample_index": 69,
+          "path": "/api/sessions",
+          "started_utc": "2026-10-23T02:55:29+00:00",
+          "headers_ms": 4.153,
+          "status": 200,
+          "response_bytes": 138663,
+          "sessions": 178,
+          "total_ms": 6.279
+        },
+        {
+          "sample_index": 69,
+          "path": "/health",
+          "started_utc": "2026-10-23T02:55:29+00:00",
+          "headers_ms": 0.836,
+          "status": 200,
+          "response_bytes": 93,
+          "total_ms": 0.908
+        },
+        {
+          "sample_index": 70,
+          "path": "/api/sessions",
+          "started_utc": "2026-10-23T02:55:29+00:00",
+          "headers_ms": 3.366,
+          "status": 200,
+          "response_bytes": 138663,
+          "sessions": 178,
+          "total_ms": 5.235
+        },
+        {
+          "sample_index": 70,
+          "path": "/health",
+          "started_utc": "2026-10-23T02:55:29+00:00",
+          "headers_ms": 0.929,
+          "status": 200,
+          "response_bytes": 93,
+          "total_ms": 1.003
+        },
+        {
+          "sample_index": 71,
+          "path": "/api/sessions",
+          "started_utc": "2026-10-23T02:55:29+00:00",
+          "headers_ms": 3.316,
+          "status": 200,
+          "response_bytes": 138663,
+          "sessions": 178,
+          "total_ms": 5.194
+        },
+        {
+          "sample_index": 71,
+          "path": "/health",
+          "started_utc": "2026-10-23T02:55:29+00:00",
+          "headers_ms": 0.894,
+          "status": 200,
+          "response_bytes": 93,
+          "total_ms": 0.972
+        },
+        {
+          "sample_index": 72,
+          "path": "/api/sessions",
+          "started_utc": "2026-10-23T02:55:29+00:00",
+          "headers_ms": 3.383,
+          "status": 200,
+          "response_bytes": 138663,
+          "sessions": 178,
+          "total_ms": 5.275
+        },
+        {
+          "sample_index": 72,
+          "path": "/health",
+          "started_utc": "2026-10-23T02:55:29+00:00",
+          "headers_ms": 0.813,
+          "status": 200,
+          "response_bytes": 93,
+          "total_ms": 0.889
+        },
+        {
+          "sample_index": 73,
+          "path": "/api/sessions",
+          "started_utc": "2026-10-23T02:55:30+00:00",
+          "headers_ms": 3.536,
+          "status": 200,
+          "response_bytes": 138663,
+          "sessions": 178,
+          "total_ms": 5.434
+        },
+        {
+          "sample_index": 73,
+          "path": "/health",
+          "started_utc": "2026-10-23T02:55:30+00:00",
+          "headers_ms": 0.85,
+          "status": 200,
+          "response_bytes": 93,
+          "total_ms": 0.923
+        },
+        {
+          "sample_index": 74,
+          "path": "/api/sessions",
+          "started_utc": "2026-10-23T02:55:30+00:00",
+          "headers_ms": 4.052,
+          "status": 200,
+          "response_bytes": 138663,
+          "sessions": 178,
+          "total_ms": 5.99
+        },
+        {
+          "sample_index": 74,
+          "path": "/health",
+          "started_utc": "2026-10-23T02:55:30+00:00",
+          "headers_ms": 0.829,
+          "status": 200,
+          "response_bytes": 93,
+          "total_ms": 0.908
+        },
+        {
+          "sample_index": 75,
+          "path": "/api/sessions",
+          "started_utc": "2026-10-23T02:55:30+00:00",
+          "headers_ms": 3.412,
+          "status": 200,
+          "response_bytes": 138663,
+          "sessions": 178,
+          "total_ms": 5.353
+        },
+        {
+          "sample_index": 75,
+          "path": "/health",
+          "started_utc": "2026-10-23T02:55:30+00:00",
+          "headers_ms": 0.91,
+          "status": 200,
+          "response_bytes": 93,
+          "total_ms": 0.991
+        },
+        {
+          "sample_index": 76,
+          "path": "/api/sessions",
+          "started_utc": "2026-10-23T02:55:30+00:00",
+          "headers_ms": 3.448,
+          "status": 200,
+          "response_bytes": 138663,
+          "sessions": 178,
+          "total_ms": 5.371
+        },
+        {
+          "sample_index": 76,
+          "path": "/health",
+          "started_utc": "2026-10-23T02:55:30+00:00",
+          "headers_ms": 0.877,
+          "status": 200,
+          "response_bytes": 93,
+          "total_ms": 0.956
+        },
+        {
+          "sample_index": 77,
+          "path": "/api/sessions",
+          "started_utc": "2026-10-23T02:55:30+00:00",
+          "headers_ms": 3.497,
+          "status": 200,
+          "response_bytes": 138663,
+          "sessions": 178,
+          "total_ms": 5.707
+        },
+        {
+          "sample_index": 77,
+          "path": "/health",
+          "started_utc": "2026-10-23T02:55:30+00:00",
+          "headers_ms": 0.984,
+          "status": 200,
+          "response_bytes": 93,
+          "total_ms": 1.062
+        },
+        {
+          "sample_index": 78,
+          "path": "/api/sessions",
+          "started_utc": "2026-10-23T02:55:31+00:00",
+          "headers_ms": 3.793,
+          "status": 200,
+          "response_bytes": 138663,
+          "sessions": 178,
+          "total_ms": 5.747
+        },
+        {
+          "sample_index": 78,
+          "path": "/health",
+          "started_utc": "2026-10-23T02:55:31+00:00",
+          "headers_ms": 0.928,
+          "status": 200,
+          "response_bytes": 93,
+          "total_ms": 1.009
+        },
+        {
+          "sample_index": 79,
+          "path": "/api/sessions",
+          "started_utc": "2026-10-23T02:55:31+00:00",
+          "headers_ms": 4.007,
+          "status": 200,
+          "response_bytes": 138663,
+          "sessions": 178,
+          "total_ms": 6.052
+        },
+        {
+          "sample_index": 79,
+          "path": "/health",
+          "started_utc": "2026-10-23T02:55:31+00:00",
+          "headers_ms": 0.837,
+          "status": 200,
+          "response_bytes": 93,
+          "total_ms": 0.913
+        },
+        {
+          "sample_index": 80,
+          "path": "/api/sessions",
+          "started_utc": "2026-10-23T02:55:31+00:00",
+          "headers_ms": 3.302,
+          "status": 200,
+          "response_bytes": 138663,
+          "sessions": 178,
+          "total_ms": 5.202
+        },
+        {
+          "sample_index": 80,
+          "path": "/health",
+          "started_utc": "2026-10-23T02:55:31+00:00",
+          "headers_ms": 0.936,
+          "status": 200,
+          "response_bytes": 93,
+          "total_ms": 1.019
+        },
+        {
+          "sample_index": 81,
+          "path": "/api/sessions",
+          "started_utc": "2026-10-23T02:55:31+00:00",
+          "headers_ms": 3.44,
+          "status": 200,
+          "response_bytes": 138663,
+          "sessions": 178,
+          "total_ms": 5.368
+        },
+        {
+          "sample_index": 81,
+          "path": "/health",
+          "started_utc": "2026-10-23T02:55:31+00:00",
+          "headers_ms": 1.158,
+          "status": 200,
+          "response_bytes": 93,
+          "total_ms": 1.266
+        },
+        {
+          "sample_index": 82,
+          "path": "/api/sessions",
+          "started_utc": "2026-10-23T02:55:31+00:00",
+          "headers_ms": 3.43,
+          "status": 200,
+          "response_bytes": 138663,
+          "sessions": 178,
+          "total_ms": 5.384
+        },
+        {
+          "sample_index": 82,
+          "path": "/health",
+          "started_utc": "2026-10-23T02:55:31+00:00",
+          "headers_ms": 0.882,
+          "status": 200,
+          "response_bytes": 93,
+          "total_ms": 0.959
+        },
+        {
+          "sample_index": 83,
+          "path": "/api/sessions",
+          "started_utc": "2026-10-23T02:55:32+00:00",
+          "headers_ms": 3.658,
+          "status": 200,
+          "response_bytes": 138663,
+          "sessions": 178,
+          "total_ms": 5.943
+        },
+        {
+          "sample_index": 83,
+          "path": "/health",
+          "started_utc": "2026-10-23T02:55:32+00:00",
+          "headers_ms": 0.872,
+          "status": 200,
+          "response_bytes": 93,
+          "total_ms": 0.956
+        },
+        {
+          "sample_index": 84,
+          "path": "/api/sessions",
+          "started_utc": "2026-10-23T02:55:32+00:00",
+          "headers_ms": 4.019,
+          "status": 200,
+          "response_bytes": 138663,
+          "sessions": 178,
+          "total_ms": 5.966
+        },
+        {
+          "sample_index": 84,
+          "path": "/health",
+          "started_utc": "2026-10-23T02:55:32+00:00",
+          "headers_ms": 0.943,
+          "status": 200,
+          "response_bytes": 93,
+          "total_ms": 1.025
+        },
+        {
+          "sample_index": 85,
+          "path": "/api/sessions",
+          "started_utc": "2026-10-23T02:55:32+00:00",
+          "headers_ms": 3.34,
+          "status": 200,
+          "response_bytes": 138663,
+          "sessions": 178,
+          "total_ms": 5.249
+        },
+        {
+          "sample_index": 85,
+          "path": "/health",
+          "started_utc": "2026-10-23T02:55:32+00:00",
+          "headers_ms": 0.909,
+          "status": 200,
+          "response_bytes": 93,
+          "total_ms": 0.991
+        },
+        {
+          "sample_index": 86,
+          "path": "/api/sessions",
+          "started_utc": "2026-10-23T02:55:32+00:00",
+          "headers_ms": 3.373,
+          "status": 200,
+          "response_bytes": 138663,
+          "sessions": 178,
+          "total_ms": 5.269
+        },
+        {
+          "sample_index": 86,
+          "path": "/health",
+          "started_utc": "2026-10-23T02:55:32+00:00",
+          "headers_ms": 0.821,
+          "status": 200,
+          "response_bytes": 93,
+          "total_ms": 0.89
+        },
+        {
+          "sample_index": 87,
+          "path": "/api/sessions",
+          "started_utc": "2026-10-23T02:55:32+00:00",
+          "headers_ms": 3.319,
+          "status": 200,
+          "response_bytes": 138663,
+          "sessions": 178,
+          "total_ms": 5.229
+        },
+        {
+          "sample_index": 87,
+          "path": "/health",
+          "started_utc": "2026-10-23T02:55:32+00:00",
+          "headers_ms": 0.901,
+          "status": 200,
+          "response_bytes": 93,
+          "total_ms": 0.976
+        },
+        {
+          "sample_index": 88,
+          "path": "/api/sessions",
+          "started_utc": "2026-10-23T02:55:33+00:00",
+          "headers_ms": 3.494,
+          "status": 200,
+          "response_bytes": 138663,
+          "sessions": 178,
+          "total_ms": 5.535
+        },
+        {
+          "sample_index": 88,
+          "path": "/health",
+          "started_utc": "2026-10-23T02:55:33+00:00",
+          "headers_ms": 0.829,
+          "status": 200,
+          "response_bytes": 93,
+          "total_ms": 0.902
+        },
+        {
+          "sample_index": 89,
+          "path": "/api/sessions",
+          "started_utc": "2026-10-23T02:55:33+00:00",
+          "headers_ms": 4.113,
+          "status": 200,
+          "response_bytes": 138663,
+          "sessions": 178,
+          "total_ms": 6.209
+        },
+        {
+          "sample_index": 89,
+          "path": "/health",
+          "started_utc": "2026-10-23T02:55:33+00:00",
+          "headers_ms": 0.857,
+          "status": 200,
+          "response_bytes": 93,
+          "total_ms": 0.932
+        },
+        {
+          "sample_index": 90,
+          "path": "/api/sessions",
+          "started_utc": "2026-10-23T02:55:33+00:00",
+          "headers_ms": 3.266,
+          "status": 200,
+          "response_bytes": 138663,
+          "sessions": 178,
+          "total_ms": 5.183
+        },
+        {
+          "sample_index": 90,
+          "path": "/health",
+          "started_utc": "2026-10-23T02:55:33+00:00",
+          "headers_ms": 0.999,
+          "status": 200,
+          "response_bytes": 93,
+          "total_ms": 1.084
+        },
+        {
+          "sample_index": 91,
+          "path": "/api/sessions",
+          "started_utc": "2026-10-23T02:55:33+00:00",
+          "headers_ms": 3.347,
+          "status": 200,
+          "response_bytes": 138663,
+          "sessions": 178,
+          "total_ms": 5.226
+        },
+        {
+          "sample_index": 91,
+          "path": "/health",
+          "started_utc": "2026-10-23T02:55:33+00:00",
+          "headers_ms": 0.885,
+          "status": 200,
+          "response_bytes": 93,
+          "total_ms": 0.965
+        },
+        {
+          "sample_index": 92,
+          "path": "/api/sessions",
+          "started_utc": "2026-10-23T02:55:33+00:00",
+          "headers_ms": 3.439,
+          "status": 200,
+          "response_bytes": 138663,
+          "sessions": 178,
+          "total_ms": 5.393
+        },
+        {
+          "sample_index": 92,
+          "path": "/health",
+          "started_utc": "2026-10-23T02:55:33+00:00",
+          "headers_ms": 0.909,
+          "status": 200,
+          "response_bytes": 93,
+          "total_ms": 0.986
+        },
+        {
+          "sample_index": 93,
+          "path": "/api/sessions",
+          "started_utc": "2026-10-23T02:55:34+00:00",
+          "headers_ms": 3.545,
+          "status": 200,
+          "response_bytes": 138663,
+          "sessions": 178,
+          "total_ms": 5.66
+        },
+        {
+          "sample_index": 93,
+          "path": "/health",
+          "started_utc": "2026-10-23T02:55:34+00:00",
+          "headers_ms": 0.85,
+          "status": 200,
+          "response_bytes": 93,
+          "total_ms": 0.937
+        },
+        {
+          "sample_index": 94,
+          "path": "/api/sessions",
+          "started_utc": "2026-10-23T02:55:34+00:00",
+          "headers_ms": 4.155,
+          "status": 200,
+          "response_bytes": 138663,
+          "sessions": 178,
+          "total_ms": 6.098
+        },
+        {
+          "sample_index": 94,
+          "path": "/health",
+          "started_utc": "2026-10-23T02:55:34+00:00",
+          "headers_ms": 0.973,
+          "status": 200,
+          "response_bytes": 93,
+          "total_ms": 1.059
+        },
+        {
+          "sample_index": 95,
+          "path": "/api/sessions",
+          "started_utc": "2026-10-23T02:55:34+00:00",
+          "headers_ms": 3.682,
+          "status": 200,
+          "response_bytes": 138663,
+          "sessions": 178,
+          "total_ms": 5.621
+        },
+        {
+          "sample_index": 95,
+          "path": "/health",
+          "started_utc": "2026-10-23T02:55:34+00:00",
+          "headers_ms": 0.872,
+          "status": 200,
+          "response_bytes": 93,
+          "total_ms": 0.969
+        },
+        {
+          "sample_index": 96,
+          "path": "/api/sessions",
+          "started_utc": "2026-10-23T02:55:34+00:00",
+          "headers_ms": 3.4,
+          "status": 200,
+          "response_bytes": 138663,
+          "sessions": 178,
+          "total_ms": 5.286
+        },
+        {
+          "sample_index": 96,
+          "path": "/health",
+          "started_utc": "2026-10-23T02:55:34+00:00",
+          "headers_ms": 0.816,
+          "status": 200,
+          "response_bytes": 93,
+          "total_ms": 0.886
+        },
+        {
+          "sample_index": 97,
+          "path": "/api/sessions",
+          "started_utc": "2026-10-23T02:55:34+00:00",
+          "headers_ms": 3.275,
+          "status": 200,
+          "response_bytes": 138663,
+          "sessions": 178,
+          "total_ms": 9.39
+        },
+        {
+          "sample_index": 97,
+          "path": "/health",
+          "started_utc": "2026-10-23T02:55:34+00:00",
+          "headers_ms": 0.943,
+          "status": 200,
+          "response_bytes": 93,
+          "total_ms": 1.015
+        },
+        {
+          "sample_index": 98,
+          "path": "/api/sessions",
+          "started_utc": "2026-10-23T02:55:35+00:00",
+          "headers_ms": 3.498,
+          "status": 200,
+          "response_bytes": 138663,
+          "sessions": 178,
+          "total_ms": 5.638
+        },
+        {
+          "sample_index": 98,
+          "path": "/health",
+          "started_utc": "2026-10-23T02:55:35+00:00",
+          "headers_ms": 0.788,
+          "status": 200,
+          "response_bytes": 93,
+          "total_ms": 0.858
+        },
+        {
+          "sample_index": 99,
+          "path": "/api/sessions",
+          "started_utc": "2026-10-23T02:55:35+00:00",
+          "headers_ms": 4.083,
+          "status": 200,
+          "response_bytes": 138663,
+          "sessions": 178,
+          "total_ms": 6.208
+        },
+        {
+          "sample_index": 99,
+          "path": "/health",
+          "started_utc": "2026-10-23T02:55:35+00:00",
+          "headers_ms": 0.879,
+          "status": 200,
+          "response_bytes": 93,
+          "total_ms": 0.956
+        },
+        {
+          "sample_index": 100,
+          "path": "/api/sessions",
+          "started_utc": "2026-10-23T02:55:35+00:00",
+          "headers_ms": 3.586,
+          "status": 200,
+          "response_bytes": 138663,
+          "sessions": 178,
+          "total_ms": 5.737
+        },
+        {
+          "sample_index": 100,
+          "path": "/health",
+          "started_utc": "2026-10-23T02:55:35+00:00",
+          "headers_ms": 0.956,
+          "status": 200,
+          "response_bytes": 93,
+          "total_ms": 1.032
+        }
+      ],
+      "summary": [
+        {
+          "path": "/api/sessions",
+          "attempts": 100,
+          "successful": 100,
+          "min_ms": 4.849,
+          "median_ms": 5.4030000000000005,
+          "p95_ms": 6.208,
+          "max_ms": 9.39
+        },
+        {
+          "path": "/health",
+          "attempts": 100,
+          "successful": 100,
+          "min_ms": 0.832,
+          "median_ms": 0.968,
+          "p95_ms": 1.094,
+          "max_ms": 1.361
+        }
+      ],
+      "resources": {
+        "duration_seconds": 20.0012,
+        "main_thread_cpu_percent_one_core": 2.95,
+        "main_thread_user_cpu_percent_one_core": 2.05,
+        "main_thread_system_cpu_percent_one_core": 0.9,
+        "process_cpu_percent_one_core": 4.3,
+        "host_idle_percent": 90.967,
+        "host_iowait_percent": 0.135,
+        "rss_kib_before": 479400,
+        "rss_kib_after": 478244,
+        "threads_before": 13,
+        "threads_after": 12,
+        "process_io_delta": {
+          "rchar": 3354,
+          "wchar": 14675,
+          "syscr": 86,
+          "syscw": 826,
+          "read_bytes": 0,
+          "write_bytes": 0,
+          "cancelled_write_bytes": 0
+        },
+        "containers": {
+          "hapi-hub": {
+            "cpu_percent_one_core": 4.794,
+            "before": {
+              "cpu_stat": {
+                "usage_usec": 232933222,
+                "user_usec": 159329182,
+                "system_usec": 73604039,
+                "nice_usec": 0,
+                "core_sched.force_idle_usec": 0,
+                "nr_periods": 0,
+                "nr_throttled": 0,
+                "throttled_usec": 0,
+                "nr_bursts": 0,
+                "burst_usec": 0
+              },
+              "memory_current_bytes": 1360568320,
+              "memory_stat": {
+                "anon": 443691008,
+                "file": 893726720,
+                "kernel": 21704704,
+                "shmem": 0,
+                "inactive_file": 891338752,
+                "active_file": 2387968,
+                "file_mapped": 249856
+              },
+              "io_stat": "8:16 rbytes=12648448 wbytes=2026184704 rios=2102 wios=8320 dbytes=0 dios=0"
+            },
+            "after": {
+              "cpu_stat": {
+                "usage_usec": 233892077,
+                "user_usec": 159971039,
+                "system_usec": 73921038,
+                "nice_usec": 0,
+                "core_sched.force_idle_usec": 0,
+                "nr_periods": 0,
+                "nr_throttled": 0,
+                "throttled_usec": 0,
+                "nr_bursts": 0,
+                "burst_usec": 0
+              },
+              "memory_current_bytes": 1359360000,
+              "memory_stat": {
+                "anon": 442503168,
+                "file": 893726720,
+                "kernel": 21671936,
+                "shmem": 0,
+                "inactive_file": 891338752,
+                "active_file": 2387968,
+                "file_mapped": 249856
+              },
+              "io_stat": "8:16 rbytes=12648448 wbytes=2026184704 rios=2102 wios=8320 dbytes=0 dios=0"
+            }
+          },
+          "hapi-postgres": {
+            "cpu_percent_one_core": 1.729,
+            "before": {
+              "cpu_stat": {
+                "usage_usec": 173954549,
+                "user_usec": 109085846,
+                "system_usec": 64868703,
+                "nice_usec": 0,
+                "core_sched.force_idle_usec": 0,
+                "nr_periods": 0,
+                "nr_throttled": 0,
+                "throttled_usec": 0,
+                "nr_bursts": 0,
+                "burst_usec": 0
+              },
+              "memory_current_bytes": 2519670784,
+              "memory_stat": {
+                "anon": 1069293568,
+                "file": 1417310208,
+                "kernel": 31309824,
+                "shmem": 147202048,
+                "inactive_file": 1112932352,
+                "active_file": 157151232,
+                "file_mapped": 182272000
+              },
+              "io_stat": "8:16 rbytes=179662848 wbytes=7798882304 rios=2945 wios=79099 dbytes=0 dios=0"
+            },
+            "after": {
+              "cpu_stat": {
+                "usage_usec": 174300441,
+                "user_usec": 109271228,
+                "system_usec": 65029212,
+                "nice_usec": 0,
+                "core_sched.force_idle_usec": 0,
+                "nr_periods": 0,
+                "nr_throttled": 0,
+                "throttled_usec": 0,
+                "nr_bursts": 0,
+                "burst_usec": 0
+              },
+              "memory_current_bytes": 2519547904,
+              "memory_stat": {
+                "anon": 1069322240,
+                "file": 1417408512,
+                "kernel": 31326208,
+                "shmem": 147202048,
+                "inactive_file": 1113055232,
+                "active_file": 157151232,
+                "file_mapped": 182272000
+              },
+              "io_stat": "8:16 rbytes=179744768 wbytes=7799169024 rios=2954 wios=79119 dbytes=0 dios=0"
+            }
+          }
+        }
+      }
+    },
+    "docker_stats_after_active": [
+      {
+        "BlockIO": "12.6MB / 2.03GB",
+        "CPUPerc": "2.14%",
+        "Container": "hapi-hub",
+        "ID": "4e757c2a5951",
+        "MemPerc": "0.69%",
+        "MemUsage": "445.8MiB / 62.66GiB",
+        "Name": "hapi-hub",
+        "NetIO": "1.92GB / 1.03GB",
+        "PIDs": "13"
+      },
+      {
+        "BlockIO": "180MB / 7.8GB",
+        "CPUPerc": "0.33%",
+        "Container": "hapi-postgres",
+        "ID": "27d60547585b",
+        "MemPerc": "2.09%",
+        "MemUsage": "1.309GiB / 62.66GiB",
+        "Name": "hapi-postgres",
+        "NetIO": "1.78GB / 3.23GB",
+        "PIDs": "14"
+      }
+    ],
+    "legacy_sql_recheck": {
+      "image": "local/hapi-hub:backup-20261023T021306Z",
+      "image_id": "sha256:5f3500f40485af6b24ad8f99422272ef5651820a0c0fe5d9df55e1c6ba2710ab",
+      "source": "unchanged pre-cutover SQLite source, mounted read-only",
+      "network": "none",
+      "results": {
+        "started_utc": "2026-10-23T02:55:38.270Z",
+        "bun": "1.4.0",
+        "sqlite": "3.53.2",
+        "schema": 26,
+        "page_count": 259029,
+        "page_size": 4096,
+        "table_counts": {
+          "sessions": 178,
+          "machines": 1,
+          "messages": 515405,
+          "message_epochs": 10,
+          "users": 0,
+          "push_subscriptions": 3,
+          "fcm_devices": 0,
+          "session_scratchlist": 0,
+          "usage_events": 124574,
+          "usage_scan_state": 177,
+          "events": 0,
+          "event_links": 0
+        },
+        "namespace_session_ids": 178,
+        "query_now_ms": 1792724139189,
+        "pending_scheduled_rows": 0,
+        "queries": [
+          {
+            "name": "scheduled_count",
+            "sql_template": "SELECT session_id, COUNT(*) AS value FROM messages WHERE session_id IN (<session ID placeholders>) AND invoked_at IS NULL AND local_id IS NOT NULL AND scheduled_at IS NOT NULL AND scheduled_at > ? AND delivery_state = 'queued' GROUP BY session_id",
+            "original": {
+              "plan": [
+                "SEARCH messages USING INDEX idx_messages_local_id (session_id=? AND local_id>?)"
+              ],
+              "samples": [
+                {
+                  "wall_ms": 23915.41,
+                  "cpu_ms": 1889.365,
+                  "result_rows": 0
+                },
+                {
+                  "wall_ms": 2872.321,
+                  "cpu_ms": 690.758,
+                  "result_rows": 0
+                },
+                {
+                  "wall_ms": 552.474,
+                  "cpu_ms": 552.44,
+                  "result_rows": 0
+                }
+              ]
+            },
+            "scheduled_index": {
+              "plan": [
+                "SEARCH messages USING INDEX idx_messages_scheduled_pending (scheduled_at>?)",
+                "USE TEMP B-TREE FOR GROUP BY"
+              ],
+              "samples": [
+                {
+                  "wall_ms": 1.007,
+                  "cpu_ms": 0.4,
+                  "result_rows": 0
+                },
+                {
+                  "wall_ms": 0.137,
+                  "cpu_ms": 0.136,
+                  "result_rows": 0
+                },
+                {
+                  "wall_ms": 0.123,
+                  "cpu_ms": 0.12,
+                  "result_rows": 0
+                }
+              ]
+            },
+            "equal_results": true
+          },
+          {
+            "name": "scheduled_min",
+            "sql_template": "SELECT session_id, MIN(scheduled_at) AS value FROM messages WHERE session_id IN (<session ID placeholders>) AND invoked_at IS NULL AND local_id IS NOT NULL AND scheduled_at IS NOT NULL AND scheduled_at > ? AND delivery_state = 'queued' GROUP BY session_id",
+            "original": {
+              "plan": [
+                "SEARCH messages USING INDEX idx_messages_local_id (session_id=? AND local_id>?)"
+              ],
+              "samples": [
+                {
+                  "wall_ms": 564.604,
+                  "cpu_ms": 564.599,
+                  "result_rows": 0
+                },
+                {
+                  "wall_ms": 559.835,
+                  "cpu_ms": 559.797,
+                  "result_rows": 0
+                },
+                {
+                  "wall_ms": 564.188,
+                  "cpu_ms": 564.135,
+                  "result_rows": 0
+                }
+              ]
+            },
+            "scheduled_index": {
+              "plan": [
+                "SEARCH messages USING INDEX idx_messages_scheduled_pending (scheduled_at>?)",
+                "USE TEMP B-TREE FOR GROUP BY"
+              ],
+              "samples": [
+                {
+                  "wall_ms": 0.16,
+                  "cpu_ms": 0.156,
+                  "result_rows": 0
+                },
+                {
+                  "wall_ms": 0.127,
+                  "cpu_ms": 0.124,
+                  "result_rows": 0
+                },
+                {
+                  "wall_ms": 2.094,
+                  "cpu_ms": 2.09,
+                  "result_rows": 0
+                }
+              ]
+            },
+            "equal_results": true
+          }
+        ],
+        "ended_utc": "2026-10-23T02:56:08.234Z"
+      }
+    },
+    "recent_logs": {
+      "requested_window_seconds": 180,
+      "tail_limit": 5000,
+      "first_completed_request_utc": "2026-10-23T02:53:09.000915140Z",
+      "last_completed_request_utc": "2026-10-23T02:56:05.190981546Z",
+      "includes_probe_requests": true,
+      "duration_resolution": "whole ms or whole seconds",
+      "routes": [
+        {
+          "route": "GET /api/sessions",
+          "count": 118,
+          "avg_ms": 2.508,
+          "max_ms": 3
+        },
+        {
+          "route": "GET /health",
+          "count": 141,
+          "avg_ms": 0.085,
+          "max_ms": 1
+        },
+        {
+          "route": "GET /api/hub-settings",
+          "count": 4,
+          "avg_ms": 0.75,
+          "max_ms": 1
+        },
+        {
+          "route": "POST /api/visibility",
+          "count": 2,
+          "avg_ms": 0.5,
+          "max_ms": 1
+        },
+        {
+          "route": "POST /api/auth",
+          "count": 1,
+          "avg_ms": 1.0,
+          "max_ms": 1
+        }
+      ]
+    },
+    "source": {
+      "commit": "3883e84b22588ee4875d484e1f686e41a0185c32",
+      "tracked_worktree_diff_sha256": "511e31011be1b4927cb1cc416d441544165e6d42c3f288138fcccf13f5168824"
+    },
+    "ended_utc": "2026-10-23T02:56:08+00:00"
+  },
+  "computed": {
+    "http": [
+      {
+        "path": "/api/sessions",
+        "baseline": {
+          "path": "/api/sessions",
+          "attempts": 5,
+          "successful": 5,
+          "min_ms": 1067.846,
+          "median_ms": 1071.312,
+          "max_ms": 1078.637
+        },
+        "current": {
+          "path": "/api/sessions",
+          "attempts": 5,
+          "successful": 5,
+          "min_ms": 4.447,
+          "median_ms": 4.555,
+          "p95_ms": 5.475,
+          "max_ms": 5.475
+        },
+        "median_speedup_ratio": 235.194731064764,
+        "median_reduction_percent": 99.57482040712696
+      },
+      {
+        "path": "/health",
+        "baseline": {
+          "path": "/health",
+          "attempts": 5,
+          "successful": 5,
+          "min_ms": 1.43,
+          "median_ms": 5.72,
+          "max_ms": 8.371
+        },
+        "current": {
+          "path": "/health",
+          "attempts": 5,
+          "successful": 5,
+          "min_ms": 0.855,
+          "median_ms": 0.968,
+          "p95_ms": 1.015,
+          "max_ms": 1.015
+        },
+        "median_speedup_ratio": 5.909090909090909,
+        "median_reduction_percent": 83.07692307692307
+      }
+    ],
+    "sql": [
+      {
+        "name": "scheduled_count",
+        "baseline_original": {
+          "samples": 3,
+          "min_ms": 529.81,
+          "median_ms": 530.186,
+          "p95_ms": 531.482,
+          "max_ms": 531.482
+        },
+        "baseline_scheduled_index": {
+          "samples": 3,
+          "min_ms": 0.123,
+          "median_ms": 0.124,
+          "p95_ms": 0.199,
+          "max_ms": 0.199
+        },
+        "current": {
+          "samples": 3,
+          "min_ms": 0.921,
+          "median_ms": 1.554,
+          "p95_ms": 3.695,
+          "max_ms": 3.695
+        },
+        "current_extended": {
+          "samples": 50,
+          "min_ms": 0.195,
+          "median_ms": 0.2405,
+          "p95_ms": 0.872,
+          "max_ms": 1.905
+        },
+        "median_speedup_ratio": 341.1750321750322,
+        "postgres_execution_ms": 0.037,
+        "postgres_planning_ms": 0.547
+      },
+      {
+        "name": "scheduled_min",
+        "baseline_original": {
+          "samples": 3,
+          "min_ms": 525.501,
+          "median_ms": 526.592,
+          "p95_ms": 528.712,
+          "max_ms": 528.712
+        },
+        "baseline_scheduled_index": {
+          "samples": 3,
+          "min_ms": 0.142,
+          "median_ms": 0.168,
+          "p95_ms": 0.345,
+          "max_ms": 0.345
+        },
+        "current": {
+          "samples": 3,
+          "min_ms": 0.802,
+          "median_ms": 0.899,
+          "p95_ms": 1.346,
+          "max_ms": 1.346
+        },
+        "current_extended": {
+          "samples": 50,
+          "min_ms": 0.187,
+          "median_ms": 0.237,
+          "p95_ms": 0.295,
+          "max_ms": 1.198
+        },
+        "median_speedup_ratio": 585.7530589543937,
+        "postgres_execution_ms": 0.033,
+        "postgres_planning_ms": 0.525
+      }
+    ],
+    "memory": {
+      "baseline_hub_rss_mib": 883.3515625,
+      "current_hub_rss_mib": 467.1484375,
+      "hub_rss_reduction_percent": 47.116362575064784,
+      "baseline_docker_memory_mib_approx": 886.5,
+      "current_hub_docker_memory_mib_approx": 444.4,
+      "current_postgres_docker_memory_mib_approx": 1341.44,
+      "current_total_docker_memory_mib_approx": 1785.8400000000001,
+      "total_docker_memory_increase_percent_approx": 101.44839255499156,
+      "display_value_precision": "Docker human-readable values; converted sums are approximate"
+    },
+    "dataset": {
+      "baseline": {
+        "sessions": 177,
+        "machines": 1,
+        "messages": 510420,
+        "message_epochs": 10,
+        "users": 0,
+        "push_subscriptions": 3,
+        "fcm_devices": 0,
+        "session_scratchlist": 0,
+        "usage_events": 124574,
+        "usage_scan_state": 177,
+        "events": 0,
+        "event_links": 0
+      },
+      "current": {
+        "sessions": 178,
+        "machines": 1,
+        "messages": 515459,
+        "message_epochs": 10,
+        "users": 0,
+        "push_subscriptions": 3,
+        "fcm_devices": 0,
+        "session_scratchlist": 0,
+        "usage_events": 124574,
+        "usage_scan_state": 177,
+        "events": 0,
+        "event_links": 0
+      },
+      "messages_added": 5039,
+      "messages_growth_percent": 0.9872262058696759
+    },
+    "active_combined_container_cpu_percent_one_core": 6.523
+  },
+  "verification": {
+    "all_http_requests_successful": true,
+    "postgres_queries_match_independent_reference": true,
+    "legacy_original_and_hinted_queries_match": true,
+    "frozen_sqlite_files_unchanged": {
+      "hapi.db": true,
+      "hapi.db-wal": true
+    },
+    "sampled_container_instances_unchanged": true
+  }
+}

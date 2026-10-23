@@ -9,7 +9,7 @@ Telegram bot + HTTP API + realtime updates for hapi hub.
 - Server-Sent Events stream for live updates in web and native clients.
 - Socket.IO channel for CLI connections.
 - Serves the web app from `web/dist` or embedded assets in the single binary; network-relay mode uses the separately hosted official web app.
-- Persists state in SQLite via `bun:sqlite`.
+- Persists state in SQLite via `bun:sqlite` or PostgreSQL via Bun SQL.
 
 ## Configuration
 
@@ -45,7 +45,8 @@ Dictation and voice-assistant provider keys can also be added from **Settings �
 - `HAPI_LISTEN_PORT` - HTTP port (default: 3006).
 - `CORS_ORIGINS` - Comma-separated origins, or `*`.
 - `HAPI_HOME` - Data directory (default: ~/.hapi).
-- `DB_PATH` - SQLite database path (default: HAPI_HOME/hapi.db).
+- `DB_PATH` - SQLite source/database path (default: HAPI_HOME/hapi.db). An explicitly configured missing file fails startup.
+- `DATABASE_URL` - PostgreSQL connection URL (environment only). When set, startup imports an existing SQLite source before serving requests; subsequent starts retain PostgreSQL writes. See the [deployment guide](../docs/guide/postgresql-deployment.md).
 - `TELEGRAM_NOTIFICATION` - Enable/disable Telegram notifications (default: true).
 - `HAPI_RELAY_API` - Relay API domain (default: relay.hapi.run).
 - `HAPI_RELAY_AUTH` - Explicit relay auth key. By default the hub obtains and persists an individually revocable key from the relay. A persisted key rejected with HTTP 403 is discarded and reissued once; an explicitly configured environment key must be updated manually.
@@ -147,7 +148,7 @@ for request/response shapes and error semantics, and `src/web/routes/` for all e
 
 ### Storage (`src/web/routes/storage.ts`)
 
-- `GET /api/storage/sqlite` - SQLite database/WAL/SHM sizes for the owner namespace.
+- `GET /api/storage/sqlite` - SQLite database/WAL/SHM sizes for the owner namespace; returns 409 with the PostgreSQL backend.
 
 ### Git/Files (`src/web/routes/git.ts`)
 
@@ -268,7 +269,7 @@ Keep-alives prove a socket, not an agent. A session can therefore heartbeat for 
 
 ## Storage
 
-See `src/store/index.ts` for SQLite persistence:
+See `src/store/index.ts` and `src/store/database.ts` for asynchronous SQLite/PostgreSQL persistence:
 
 - Sessions with metadata and agent state.
 - Messages with pagination support.
@@ -281,7 +282,14 @@ Message content is stored via `src/store/contentCodec.ts`: oversized strings
 inside agent messages (giant tool output) are head+tail truncated at ingest,
 and payloads ≥256 chars are zstd-compressed (TEXT = plaintext JSON, BLOB =
 zstd). User prompts are never truncated — queued rows are delivered to the CLI
-verbatim.
+verbatim. PostgreSQL stores message bytes in `bytea` with a generated encoding
+column; the adapter restores the same decoding behavior.
+
+`src/store/openStore.ts` validates and imports historical SQLite using the
+existing upgrade ladder on an independent copy. Import metadata and all 12
+business tables commit atomically. `scripts/export-postgres-to-sqlite.ts` exports
+a consistent schema-26 SQLite file, including writes after cutover. Deployment,
+permissions, reports and rollback commands are in the [deployment guide](../docs/guide/postgresql-deployment.md).
 
 Maintenance scripts (run with the hub stopped before swapping files):
 
@@ -297,7 +305,7 @@ Maintenance scripts (run with the hub stopped before swapping files):
 - `src/socket/handlers/cli/` - Modular CLI handlers.
 - `src/telegram/` - Telegram bot.
 - `src/sync/` - Core session/message logic.
-- `src/store/` - SQLite persistence.
+- `src/store/` - SQLite/PostgreSQL persistence and startup migration.
 - `src/sse/` - Server-Sent Events.
 - `src/config/` - Configuration loading and generation.
 - `src/notifications/` - Push and Telegram notifications.

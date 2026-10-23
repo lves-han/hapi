@@ -250,7 +250,7 @@ Source: `hub/src/web/routes/usage.ts`, `hub/src/web/routes/storage.ts`. Both `40
 | Method & path | Request | Response |
 |---|---|---|
 | `GET /api/usage/summary` | Query: `range=7d\|30d\|all` (default 7d), `timeZone` (IANA, validated) | `UsageSummaryResponse` `{range, totals, daily[], byAgent[], byModel[], updatedAt}` |
-| `GET /api/storage/sqlite` | — | `{path, databaseBytes, walBytes, shmBytes, totalBytes}` |
+| `GET /api/storage/sqlite` | — | `{path, databaseBytes, walBytes, shmBytes, totalBytes}` on SQLite; `409 {error}` on PostgreSQL |
 
 ### Devices (Android / iOS push)
 

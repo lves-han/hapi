@@ -6,7 +6,7 @@ Run official Claude Code / Codex / Cursor Agent / Grok Build / OpenCode / Kimi /
 
 ## Fork development plan
 
-This fork plans PostgreSQL storage, automatic migration of historical HAPI SQLite databases during deployment, and scheduled-message query optimization. See the [PostgreSQL and historical SQLite migration plan](docs/guide/postgresql-migration-plan.md) for compatibility requirements, implementation stages, and release acceptance criteria. Status: planned; runtime behavior currently follows upstream.
+This fork supports PostgreSQL storage and automatic migration of historical HAPI SQLite databases (legacy/schema 1–26). Set `DATABASE_URL` and retain the original `HAPI_HOME`; startup imports and verifies the old database before serving requests. SQLite remains available when the URL is unset. See the [deployment and rollback guide](docs/guide/postgresql-deployment.md), [migration plan](docs/guide/postgresql-migration-plan.md), and [local validation results](docs/performance/postgresql-validation-2026-10-22.md).
 
 ## Features
 

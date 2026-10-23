@@ -115,7 +115,7 @@ export class FcmService {
     async sendToNamespace(namespace: string, payload: FcmSendPayload): Promise<FcmSendResult> {
         // The registry also holds iOS rows (APNs tokens + E2E push keys);
         // those go through IosPushService, never through FCM.
-        const devices = this.store.fcm.getDevicesByNamespace(namespace, ['phone', 'wear'])
+        const devices = (await this.store.fcm.getDevicesByNamespace(namespace, ['phone', 'wear']))
         if (devices.length === 0) {
             return { sent: 0, failed: 0, invalidTokens: [] }
         }
@@ -152,7 +152,7 @@ export class FcmService {
             failed += 1
             if (result === 'invalid') {
                 invalidTokens.push(device.token)
-                this.store.fcm.removeDeviceByToken(namespace, device.token)
+                await this.store.fcm.removeDeviceByToken(namespace, device.token)
             }
         }))
 

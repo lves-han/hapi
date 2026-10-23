@@ -6,7 +6,7 @@ import { SyncEngine } from './syncEngine'
 describe('SyncEngine restartMachineRunner', () => {
     it('refuses Restart on unsupervised hosts (stop would leave runner offline)', async () => {
         const store = new Store(':memory:')
-        const engine = new SyncEngine(
+        const engine = await SyncEngine.create(
             store,
             {} as never,
             new RpcRegistry(),
@@ -17,13 +17,13 @@ describe('SyncEngine restartMachineRunner', () => {
             const stopRunner = mock(async () => undefined)
             ;(engine as any).rpcGateway.stopRunner = stopRunner
 
-            engine.getOrCreateMachine(
+            await engine.getOrCreateMachine(
                 'manual-runner',
                 { host: 'laptop', platform: 'linux', happyCliVersion: '0.20.0' },
                 null,
                 'default'
             )
-            engine.handleMachineAlive({ machineId: 'manual-runner', time: Date.now() })
+            await engine.handleMachineAlive({ machineId: 'manual-runner', time: Date.now() })
 
             const result = await engine.restartMachineRunner('manual-runner', 'default')
             expect(result.type).toBe('error')
@@ -32,13 +32,13 @@ describe('SyncEngine restartMachineRunner', () => {
             }
             expect(stopRunner).not.toHaveBeenCalled()
         } finally {
-            engine.stop()
+            await engine.stop()
         }
     })
 
     it('stop-runners for a supervised online machine (banner escape hatch)', async () => {
         const store = new Store(':memory:')
-        const engine = new SyncEngine(
+        const engine = await SyncEngine.create(
             store,
             {} as never,
             new RpcRegistry(),
@@ -49,7 +49,7 @@ describe('SyncEngine restartMachineRunner', () => {
             const stopRunner = mock(async () => undefined)
             ;(engine as any).rpcGateway.stopRunner = stopRunner
 
-            engine.getOrCreateMachine(
+            await engine.getOrCreateMachine(
                 'supervised-runner',
                 {
                     host: 'proxmox',
@@ -60,7 +60,7 @@ describe('SyncEngine restartMachineRunner', () => {
                 null,
                 'default'
             )
-            engine.handleMachineAlive({ machineId: 'supervised-runner', time: Date.now() })
+            await engine.handleMachineAlive({ machineId: 'supervised-runner', time: Date.now() })
 
             const result = await engine.restartMachineRunner('supervised-runner', 'default')
             expect(result).toEqual({
@@ -69,7 +69,7 @@ describe('SyncEngine restartMachineRunner', () => {
             })
             expect(stopRunner).toHaveBeenCalledWith('supervised-runner')
         } finally {
-            engine.stop()
+            await engine.stop()
         }
     })
 })

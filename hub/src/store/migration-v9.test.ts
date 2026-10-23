@@ -16,7 +16,7 @@ describe('Store V8→V9 migration: scheduled_at column', () => {
         expect(cols).toContain('scheduled_at')
     })
 
-    it('V8 DB migrates to V9 via Store: scheduled_at added, existing rows have NULL scheduled_at', () => {
+    it('V8 DB migrates to V9 via Store: scheduled_at added, existing rows have NULL scheduled_at', async () => {
         const dir = mkdtempSync(join(tmpdir(), 'hapi-migration-v9-test-'))
         const dbPath = join(dir, 'test.db')
         let store: Store | undefined
@@ -41,19 +41,19 @@ describe('Store V8→V9 migration: scheduled_at column', () => {
             expect(cols).toContain('scheduled_at')
 
             // Existing rows should have scheduled_at = NULL
-            const msgs = store.messages.getMessages('s1')
+            const msgs = (await store.messages.getMessages('s1'))
             expect(msgs).toHaveLength(2)
             const m1 = msgs.find(m => m.id === 'm1')!
             const m2 = msgs.find(m => m.id === 'm2')!
             expect(m1.scheduledAt).toBeNull()
             expect(m2.scheduledAt).toBeNull()
         } finally {
-            store?.close()
+            await store?.close()
             rmSync(dir, { recursive: true, force: true })
         }
     })
 
-    it('V7 DB migrates to V9 (multi-hop: V7→V8→V9)', () => {
+    it('V7 DB migrates to V9 (multi-hop: V7→V8→V9)', async () => {
         const dir = mkdtempSync(join(tmpdir(), 'hapi-migration-v7-to-v9-'))
         const dbPath = join(dir, 'test.db')
         let store: Store | undefined
@@ -70,12 +70,12 @@ describe('Store V8→V9 migration: scheduled_at column', () => {
             expect(cols).toContain('invoked_at')
             expect(cols).toContain('scheduled_at')
         } finally {
-            store?.close()
+            await store?.close()
             rmSync(dir, { recursive: true, force: true })
         }
     })
 
-    it('V6 DB migrates to V9 (multi-hop)', () => {
+    it('V6 DB migrates to V9 (multi-hop)', async () => {
         const dir = mkdtempSync(join(tmpdir(), 'hapi-migration-v6-to-v9-'))
         const dbPath = join(dir, 'test.db')
         let store: Store | undefined
@@ -93,12 +93,12 @@ describe('Store V8→V9 migration: scheduled_at column', () => {
             const sessionCols = getSessionColumns(store)
             expect(sessionCols).toContain('model_reasoning_effort')
         } finally {
-            store?.close()
+            await store?.close()
             rmSync(dir, { recursive: true, force: true })
         }
     })
 
-    it('V9 DB reopen is idempotent: schema unchanged', () => {
+    it('V9 DB reopen is idempotent: schema unchanged', async () => {
         const dir = mkdtempSync(join(tmpdir(), 'hapi-migration-v9-idempotent-'))
         const dbPath = join(dir, 'test.db')
         let store1: Store | undefined
@@ -113,13 +113,13 @@ describe('Store V8→V9 migration: scheduled_at column', () => {
             const cols2 = getMessageColumns(store2)
             expect(cols2).toEqual(cols1)
         } finally {
-            store2?.close()
-            store1?.close()
+            await store2?.close()
+            await store1?.close()
             rmSync(dir, { recursive: true, force: true })
         }
     })
 
-    it('migrateFromV8ToV9 PRAGMA guard: scheduled_at column appears exactly once', () => {
+    it('migrateFromV8ToV9 PRAGMA guard: scheduled_at column appears exactly once', async () => {
         const dir = mkdtempSync(join(tmpdir(), 'hapi-migration-v9-guard-'))
         const dbPath = join(dir, 'test.db')
         let store: Store | undefined
@@ -136,7 +136,7 @@ describe('Store V8→V9 migration: scheduled_at column', () => {
             const count = cols.filter(c => c === 'scheduled_at').length
             expect(count).toBe(1)
         } finally {
-            store?.close()
+            await store?.close()
             rmSync(dir, { recursive: true, force: true })
         }
     })
@@ -150,7 +150,7 @@ describe('Store V8→V9 migration: scheduled_at column', () => {
         expect(rows).toHaveLength(1)
     })
 
-    it('idx_messages_scheduled_pending index exists after V8→V9 migration', () => {
+    it.each([0, 8])('scheduled aggregates work after upgrading schema %i', async (version) => {
         const dir = mkdtempSync(join(tmpdir(), 'hapi-index-v8-v9-'))
         const dbPath = join(dir, 'test.db')
         let store: Store | undefined
@@ -159,7 +159,7 @@ describe('Store V8→V9 migration: scheduled_at column', () => {
             db.exec('PRAGMA journal_mode = WAL')
             db.exec('PRAGMA foreign_keys = ON')
             createV8Schema(db)
-            db.exec('PRAGMA user_version = 8')
+            db.exec(`PRAGMA user_version = ${version}`)
             db.close()
 
             store = new Store(dbPath)
@@ -168,116 +168,124 @@ describe('Store V8→V9 migration: scheduled_at column', () => {
                 "SELECT name FROM sqlite_master WHERE type='index' AND name='idx_messages_scheduled_pending'"
             ).all() as Array<{ name: string }>
             expect(rows).toHaveLength(1)
+
+            const session = (await store.sessions.getOrCreateSession('migrated-scheduled', {}, null, 'default'))
+            await store.messages.addMessage(session.id, 'future', 'local-future', 2_000)
+            await store.messages.addMessage(session.id, 'due', 'local-due', 1_000)
+            expect((await store.messages.countFutureScheduledBySessionIds([session.id], 1_000)))
+                .toEqual(new Map([[session.id, 1]]))
+            expect((await store.messages.minFutureScheduledAtBySessionIds([session.id], 1_000)))
+                .toEqual(new Map([[session.id, 2_000]]))
         } finally {
-            store?.close()
+            await store?.close()
             rmSync(dir, { recursive: true, force: true })
         }
     })
 })
 
 describe('Store V9: scheduled_at store operations', () => {
-    it('addMessage with scheduledAt stores the value', () => {
+    it('addMessage with scheduledAt stores the value', async () => {
         const store = new Store(':memory:')
-        const session = store.sessions.getOrCreateSession('test', { path: '/tmp' }, null, 'default')
+        const session = (await store.sessions.getOrCreateSession('test', { path: '/tmp' }, null, 'default'))
         const futureMs = Date.now() + 60_000
-        const msg = store.messages.addMessage(session.id, 'hello', 'local-1', futureMs)
+        const msg = (await store.messages.addMessage(session.id, 'hello', 'local-1', futureMs))
         expect(msg.scheduledAt).toBe(futureMs)
     })
 
-    it('addMessage without scheduledAt has scheduledAt = null', () => {
+    it('addMessage without scheduledAt has scheduledAt = null', async () => {
         const store = new Store(':memory:')
-        const session = store.sessions.getOrCreateSession('test', { path: '/tmp' }, null, 'default')
-        const msg = store.messages.addMessage(session.id, 'hello', 'local-1')
+        const session = (await store.sessions.getOrCreateSession('test', { path: '/tmp' }, null, 'default'))
+        const msg = (await store.messages.addMessage(session.id, 'hello', 'local-1'))
         expect(msg.scheduledAt).toBeNull()
     })
 
-    it('getMatureScheduledMessages returns messages with scheduled_at <= now', () => {
+    it('getMatureScheduledMessages returns messages with scheduled_at <= now', async () => {
         const store = new Store(':memory:')
-        const session = store.sessions.getOrCreateSession('test', { path: '/tmp' }, null, 'default')
+        const session = (await store.sessions.getOrCreateSession('test', { path: '/tmp' }, null, 'default'))
         const now = Date.now()
         const past = now - 1000
         const future = now + 60_000
 
         // Mature: scheduled_at in the past
-        const mature = store.messages.addMessage(session.id, 'mature', 'local-mature', past)
+        const mature = (await store.messages.addMessage(session.id, 'mature', 'local-mature', past))
         // Future: not yet mature
-        store.messages.addMessage(session.id, 'future', 'local-future', future)
+        await store.messages.addMessage(session.id, 'future', 'local-future', future)
         // No scheduledAt: not scheduled
-        store.messages.addMessage(session.id, 'plain', 'local-plain')
+        await store.messages.addMessage(session.id, 'plain', 'local-plain')
 
-        const results = store.messages.getMatureScheduledMessages(now)
+        const results = (await store.messages.getMatureScheduledMessages(now))
         expect(results.map(m => m.id)).toContain(mature.id)
         expect(results).toHaveLength(1)
     })
 
-    it('getMatureScheduledMessages excludes already-invoked messages', () => {
+    it('getMatureScheduledMessages excludes already-invoked messages', async () => {
         const store = new Store(':memory:')
-        const session = store.sessions.getOrCreateSession('test', { path: '/tmp' }, null, 'default')
+        const session = (await store.sessions.getOrCreateSession('test', { path: '/tmp' }, null, 'default'))
         const now = Date.now()
         const past = now - 1000
 
-        const msg = store.messages.addMessage(session.id, 'mature', 'local-m', past)
+        const msg = (await store.messages.addMessage(session.id, 'mature', 'local-m', past))
         // Simulate CLI ack
-        store.messages.markMessagesInvoked(session.id, ['local-m'], now)
+        await store.messages.markMessagesInvoked(session.id, ['local-m'], now)
 
-        const results = store.messages.getMatureScheduledMessages(now)
+        const results = (await store.messages.getMatureScheduledMessages(now))
         expect(results.find(m => m.id === msg.id)).toBeUndefined()
     })
 
-    it('getMatureScheduledMessages returns in scheduled_at ASC order', () => {
+    it('getMatureScheduledMessages returns in scheduled_at ASC order', async () => {
         const store = new Store(':memory:')
-        const session = store.sessions.getOrCreateSession('test', { path: '/tmp' }, null, 'default')
+        const session = (await store.sessions.getOrCreateSession('test', { path: '/tmp' }, null, 'default'))
         const now = Date.now()
 
-        const msg2 = store.messages.addMessage(session.id, 'second', 'local-2', now - 500)
-        const msg1 = store.messages.addMessage(session.id, 'first', 'local-1', now - 1000)
+        const msg2 = (await store.messages.addMessage(session.id, 'second', 'local-2', now - 500))
+        const msg1 = (await store.messages.addMessage(session.id, 'first', 'local-1', now - 1000))
 
-        const results = store.messages.getMatureScheduledMessages(now)
+        const results = (await store.messages.getMatureScheduledMessages(now))
         expect(results.map(m => m.id)).toEqual([msg1.id, msg2.id])
     })
 
-    it('getImmediateQueuedLocalMessages: returns only immediate queued, excludes mature AND future scheduled (HAPI Bot R4)', () => {
+    it('getImmediateQueuedLocalMessages: returns only immediate queued, excludes mature AND future scheduled (HAPI Bot R4)', async () => {
         const store = new Store(':memory:')
-        const session = store.sessions.getOrCreateSession('test', { path: '/tmp' }, null, 'default')
+        const session = (await store.sessions.getOrCreateSession('test', { path: '/tmp' }, null, 'default'))
         const now = Date.now()
 
         // Immediate queued (no scheduledAt) — included
-        const immediate = store.messages.addMessage(session.id, 'immediate', 'local-imm')
+        const immediate = (await store.messages.addMessage(session.id, 'immediate', 'local-imm'))
         // Mature scheduled — must be excluded so the mature-scan path can deliver it
         // with the no-stamp + re-emit-until-ack contract.
-        store.messages.addMessage(session.id, 'mature', 'local-mature', now - 1000)
+        await store.messages.addMessage(session.id, 'mature', 'local-mature', now - 1000)
         // Future scheduled — must be excluded
-        store.messages.addMessage(session.id, 'future', 'local-future', now + 60_000)
+        await store.messages.addMessage(session.id, 'future', 'local-future', now + 60_000)
 
-        const results = store.messages.getImmediateQueuedLocalMessages(session.id)
+        const results = (await store.messages.getImmediateQueuedLocalMessages(session.id))
         const ids = results.map(m => m.id)
         expect(ids).toEqual([immediate.id])
     })
 
-    it('getImmediateQueuedLocalMessages excludes already-invoked messages', () => {
+    it('getImmediateQueuedLocalMessages excludes already-invoked messages', async () => {
         const store = new Store(':memory:')
-        const session = store.sessions.getOrCreateSession('test', { path: '/tmp' }, null, 'default')
+        const session = (await store.sessions.getOrCreateSession('test', { path: '/tmp' }, null, 'default'))
         const now = Date.now()
 
-        const msg = store.messages.addMessage(session.id, 'q', 'local-q')
-        store.messages.markMessagesInvoked(session.id, ['local-q'], now)
+        const msg = (await store.messages.addMessage(session.id, 'q', 'local-q'))
+        await store.messages.markMessagesInvoked(session.id, ['local-q'], now)
 
-        const results = store.messages.getImmediateQueuedLocalMessages(session.id)
+        const results = (await store.messages.getImmediateQueuedLocalMessages(session.id))
         expect(results.find(m => m.id === msg.id)).toBeUndefined()
     })
 
-    it('getUninvokedLocalMessages still includes future scheduled (for Web bar display)', () => {
+    it('getUninvokedLocalMessages still includes future scheduled (for Web bar display)', async () => {
         const store = new Store(':memory:')
-        const session = store.sessions.getOrCreateSession('test', { path: '/tmp' }, null, 'default')
+        const session = (await store.sessions.getOrCreateSession('test', { path: '/tmp' }, null, 'default'))
         const future = Date.now() + 60_000
 
-        const scheduled = store.messages.addMessage(session.id, 'future', 'local-f', future)
+        const scheduled = (await store.messages.addMessage(session.id, 'future', 'local-f', future))
 
-        const results = store.messages.getUninvokedLocalMessages(session.id)
+        const results = (await store.messages.getUninvokedLocalMessages(session.id))
         expect(results.map(m => m.id)).toContain(scheduled.id)
     })
 
-    it('legacy DB (user_version=0 with V8-shape tables): step ladder backfills scheduled_at', () => {
+    it('legacy DB (user_version=0 with V8-shape tables): step ladder backfills scheduled_at', async () => {
         const dir = mkdtempSync(join(tmpdir(), 'hapi-legacy-v0-v9-'))
         const dbPath = join(dir, 'test.db')
         let store: Store | undefined
@@ -297,7 +305,7 @@ describe('Store V9: scheduled_at store operations', () => {
             const cols = getMessageColumns(store)
             expect(cols).toContain('scheduled_at')
         } finally {
-            store?.close()
+            await store?.close()
             rmSync(dir, { recursive: true, force: true })
         }
     })

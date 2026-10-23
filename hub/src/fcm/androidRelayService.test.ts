@@ -17,12 +17,12 @@ describe('Android relay fan-out', () => {
         const keyA = Buffer.alloc(32, 1)
         const keyB = Buffer.alloc(32, 2)
         for (const [token, key] of [['token-A', keyA], ['token-B', keyB]] as const) {
-            store.fcm.upsertDevice('ns', { token, deviceId: token, platform: 'phone', pushKey: key.toString('base64') })
+            await store.fcm.upsertDevice('ns', { token, deviceId: token, platform: 'phone', pushKey: key.toString('base64') })
         }
-        store.fcm.upsertDevice('ns', { token: 'old', deviceId: 'old', platform: 'phone' })
-        store.fcm.upsertDevice('ns', { token: 'watch', deviceId: 'watch', platform: 'wear' })
-        store.fcm.upsertDevice('ns', { token: 'ios', deviceId: 'ios', platform: 'ios', pushKey: keyA.toString('base64') })
-        store.fcm.upsertDevice('other', { token: 'other', deviceId: 'other', platform: 'phone', pushKey: keyA.toString('base64') })
+        await store.fcm.upsertDevice('ns', { token: 'old', deviceId: 'old', platform: 'phone' })
+        await store.fcm.upsertDevice('ns', { token: 'watch', deviceId: 'watch', platform: 'wear' })
+        await store.fcm.upsertDevice('ns', { token: 'ios', deviceId: 'ios', platform: 'ios', pushKey: keyA.toString('base64') })
+        await store.fcm.upsertDevice('other', { token: 'other', deviceId: 'other', platform: 'phone', pushKey: keyA.toString('base64') })
         const requests: EncryptedPushRequest[] = []
         const service = new AndroidRelayService({ async send(request) { requests.push(request); return 'sent' } }, store)
         expect(await service.sendToNamespace('ns', payload)).toEqual({ sent: 2, failed: 1, invalidTokens: [] })
@@ -32,14 +32,14 @@ describe('Android relay fan-out', () => {
             expect(() => decryptEnvelope(request.token === 'token-A' ? keyB : keyA, request.envelope)).toThrow()
             expect(request.collapseId).toBeUndefined()
         }
-        expect(store.fcm.getDevicesByNamespace('ns')).toHaveLength(5)
-        store.close()
+        expect((await store.fcm.getDevicesByNamespace('ns'))).toHaveLength(5)
+        await store.close()
     })
 
     it('prunes only confirmed dead tokens, preserving failed sends and corrupt keys', async () => {
         const store = new Store(':memory:')
         for (const token of ['dead', 'network', 'corrupt']) {
-            store.fcm.upsertDevice('ns', { token, deviceId: token, platform: 'phone',
+            await store.fcm.upsertDevice('ns', { token, deviceId: token, platform: 'phone',
                 pushKey: token === 'corrupt' ? 'bad' : Buffer.alloc(32).toString('base64') })
         }
         const service = new AndroidRelayService({ async send(request) {
@@ -47,8 +47,8 @@ describe('Android relay fan-out', () => {
             return 'invalid'
         } }, store)
         expect(await service.sendToNamespace('ns', payload)).toEqual({ sent: 0, failed: 3, invalidTokens: ['dead'] })
-        expect(store.fcm.getDevicesByNamespace('ns').map(d => d.token).sort()).toEqual(['corrupt', 'network'])
-        store.close()
+        expect((await store.fcm.getDevicesByNamespace('ns')).map(d => d.token).sort()).toEqual(['corrupt', 'network'])
+        await store.close()
     })
 
     it('fits large summaries and Unicode content without truncating action identifiers', () => {

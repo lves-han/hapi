@@ -46,7 +46,7 @@ export function createWorkGraphRoutes(store: Store): Hono<WebAppEnv> {
         }
 
         try {
-            const result = store.workGraph.insertEvent(namespace, parsed.data)
+            const result = (await store.workGraph.insertEvent(namespace, parsed.data))
             return c.json({
                 event: result.event,
                 inserted: result.inserted
@@ -62,7 +62,7 @@ export function createWorkGraphRoutes(store: Store): Hono<WebAppEnv> {
         }
     })
 
-    app.get('/work-graph/events', (c) => {
+    app.get('/work-graph/events', async (c) => {
         const namespace = c.get('namespace')
         const relatedSessionId = c.req.query('related_session_id')
         if (!relatedSessionId) {
@@ -74,15 +74,15 @@ export function createWorkGraphRoutes(store: Store): Hono<WebAppEnv> {
         if (limit !== undefined && (!Number.isInteger(limit) || limit < 1)) {
             return c.json({ error: 'Invalid limit' }, 400)
         }
-        const events = store.workGraph.listByRelatedSession(namespace, relatedSessionId, { limit })
+        const events = (await store.workGraph.listByRelatedSession(namespace, relatedSessionId, { limit }))
         c.header('Cache-Control', 'no-store')
         return c.json({ events })
     })
 
-    app.get('/work-graph/events/:eventId', (c) => {
+    app.get('/work-graph/events/:eventId', async (c) => {
         const namespace = c.get('namespace')
         const eventId = c.req.param('eventId')
-        const event = store.workGraph.getEvent(eventId, namespace)
+        const event = (await store.workGraph.getEvent(eventId, namespace))
         if (!event) {
             return c.json({ error: 'Event not found' }, 404)
         }
@@ -99,7 +99,7 @@ export function createWorkGraphRoutes(store: Store): Hono<WebAppEnv> {
 
         const namespace = c.get('namespace')
         try {
-            const link = store.workGraph.insertLink(namespace, parsed.data)
+            const link = (await store.workGraph.insertLink(namespace, parsed.data))
             return c.json({ link }, 201)
         } catch (error) {
             if (error instanceof WorkGraphNotFoundError) {
@@ -109,14 +109,14 @@ export function createWorkGraphRoutes(store: Store): Hono<WebAppEnv> {
         }
     })
 
-    app.get('/work-graph/events/:eventId/links', (c) => {
+    app.get('/work-graph/events/:eventId/links', async (c) => {
         const namespace = c.get('namespace')
         const eventId = c.req.param('eventId')
-        const event = store.workGraph.getEvent(eventId, namespace)
+        const event = (await store.workGraph.getEvent(eventId, namespace))
         if (!event) {
             return c.json({ error: 'Event not found' }, 404)
         }
-        const links = store.workGraph.listLinksForEvent(namespace, eventId)
+        const links = (await store.workGraph.listLinksForEvent(namespace, eventId))
         c.header('Cache-Control', 'no-store')
         return c.json({ links })
     })

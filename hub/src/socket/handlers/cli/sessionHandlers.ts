@@ -1,3 +1,4 @@
+import { orderedHandler } from './orderedHandler'
 import type { ClientToServerEvents } from '@hapi/protocol'
 import { z } from 'zod'
 import { randomUUID } from 'node:crypto'
@@ -39,7 +40,7 @@ type SessionReadyPayload = {
     time: number
 }
 
-type ResolveSessionAccess = (sessionId: string, opts?: { fresh?: boolean }) => AccessResult<StoredSession>
+type ResolveSessionAccess = (sessionId: string, opts?: { fresh?: boolean }) => AccessResult<StoredSession> | Promise<AccessResult<StoredSession>>
 
 type EmitAccessError = (scope: 'session' | 'machine', id: string, reason: AccessErrorReason) => void
 
@@ -87,25 +88,25 @@ export type SessionHandlersDeps = {
     store: Store
     resolveSessionAccess: ResolveSessionAccess
     emitAccessError: EmitAccessError
-    onSessionAlive?: (payload: SessionAlivePayload) => void
-    onSessionReady?: (payload: SessionReadyPayload) => void
-    onSessionEnd?: (payload: SessionEndPayload) => void
-    onWebappEvent?: (event: SyncEvent) => void
-    onBackgroundTaskDelta?: (sessionId: string, delta: { started: number; completed: number }) => void
-    onSessionActivity?: (sessionId: string, updatedAt: number) => void
+    onSessionAlive?: (payload: SessionAlivePayload) => unknown
+    onSessionReady?: (payload: SessionReadyPayload) => unknown
+    onSessionEnd?: (payload: SessionEndPayload) => unknown
+    onWebappEvent?: (event: SyncEvent) => unknown
+    onBackgroundTaskDelta?: (sessionId: string, delta: { started: number; completed: number }) => unknown
+    onSessionActivity?: (sessionId: string, updatedAt: number) => unknown
     /** tiann/hapi#1820: any message is agent progress, either direction. */
-    onAgentProgress?: (sessionId: string, at: number) => void
+    onAgentProgress?: (sessionId: string, at: number) => unknown
     /** Delegates session-end immediate-queue sweep to the MessageService layer. */
-    onSweepImmediateQueued?: (sessionId: string, now: number) => void
+    onSweepImmediateQueued?: (sessionId: string, now: number) => unknown
     /** Drops the queued-thinking grace so synchronous CLI handlers (e.g. slash
      *  commands) don't leave the spinner stuck for the full grace window. */
-    onMessagesConsumed?: (sessionId: string) => void
+    onMessagesConsumed?: (sessionId: string) => unknown
 }
 
 export function registerSessionHandlers(socket: CliSocketWithData, deps: SessionHandlersDeps): void {
     const { store, resolveSessionAccess, emitAccessError, onSessionAlive, onSessionReady, onSessionEnd, onWebappEvent, onBackgroundTaskDelta, onSessionActivity, onAgentProgress, onSweepImmediateQueued, onMessagesConsumed } = deps
 
-    socket.on('native-queue-message', data => {
+    socket.on('native-queue-message', orderedHandler(socket, 'native-queue-message', async data => {
         const parsed = z.object({ sid: z.string(), localId: z.string().min(1), text: z.string().nullable() }).safeParse(data)
         if (!parsed.success) return
         const { sid, localId, text } = parsed.data
@@ -114,22 +115,22 @@ export function registerSessionHandlers(socket: CliSocketWithData, deps: Session
         // writes (e.g. a merge copying capabilities onto this session) — a
         // memo snapshot could silently drop or wrongly accept the entry.
         // Queued input is human-paced, not a stream hot path.
-        const access = resolveSessionAccess(sid, { fresh: true })
+        const access = (await resolveSessionAccess(sid, { fresh: true }))
         if (!access.ok) { emitAccessError('session', sid, access.reason); return }
         const metadata = access.value.metadata as Metadata | null
         if (!metadata?.capabilities?.concurrentClients) return
         if (text === null) {
-            const prior = store.messages.lookupQueuedMessage(sid, localId)
-            if ('resolvedId' in prior && store.messages.deleteQueuedMessageById(sid, localId)) {
-                onWebappEvent?.({ type: 'message-cancelled', sessionId: sid, messageId: prior.resolvedId, localId })
+            const prior = (await store.messages.lookupQueuedMessage(sid, localId))
+            if ('resolvedId' in prior && (await store.messages.deleteQueuedMessageById(sid, localId))) {
+                await onWebappEvent?.({ type: 'message-cancelled', sessionId: sid, messageId: prior.resolvedId, localId })
             }
         } else {
-            const message = store.messages.syncNativeQueuedMessage(sid, localId, text)
-            onWebappEvent?.({ type: 'message-received', sessionId: sid, message })
+            const message = (await store.messages.syncNativeQueuedMessage(sid, localId, text))
+            await onWebappEvent?.({ type: 'message-received', sessionId: sid, message })
         }
-    })
+    }))
 
-    socket.on('message', (data: unknown) => {
+    socket.on('message', orderedHandler(socket, 'message', async (data: unknown) => {
         const parsed = messageSchema.safeParse(data)
         if (!parsed.success) {
             return
@@ -148,7 +149,7 @@ export function registerSessionHandlers(socket: CliSocketWithData, deps: Session
             })()
             : raw
 
-        const sessionAccess = resolveSessionAccess(sid)
+        const sessionAccess = (await resolveSessionAccess(sid))
         if (!sessionAccess.ok) {
             emitAccessError('session', sid, sessionAccess.reason)
             return
@@ -159,7 +160,7 @@ export function registerSessionHandlers(socket: CliSocketWithData, deps: Session
             return
         }
 
-        const msg = store.messages.addMessage(sid, content, localId, undefined, createdAt)
+        const msg = (await store.messages.addMessage(sid, content, localId, undefined, createdAt))
 
         // A reasoning stream arrives as a series of growing snapshots under one
         // stable id, so a stream should cost one row rather than one per
@@ -170,24 +171,24 @@ export function registerSessionHandlers(socket: CliSocketWithData, deps: Session
         // also sweeps up its own leftovers.
         const reasoningStreamId = getReasoningStreamId(content)
         if (reasoningStreamId) {
-            store.messages.deleteLiveReasoningSnapshots(sid, reasoningStreamId, msg.id)
+            await store.messages.deleteLiveReasoningSnapshots(sid, reasoningStreamId, msg.id)
         }
 
         // tiann/hapi#1820: every stored message proves the agent is doing
         // something, so it refreshes the keepalive-idle clock. Only human
         // turns additionally bump `updatedAt` (list ordering).
-        onAgentProgress?.(sid, msg.createdAt)
+        await onAgentProgress?.(sid, msg.createdAt)
 
         if (shouldRecordSessionActivity(content)) {
-            onSessionActivity?.(sid, msg.createdAt)
+            await onSessionActivity?.(sid, msg.createdAt)
         }
 
         const todos = extractTodoWriteTodosFromMessageContent(content)
         if (todos) {
-            const updated = store.sessions.setSessionTodos(sid, todos, msg.createdAt, session.namespace)
+            const updated = (await store.sessions.setSessionTodos(sid, todos, msg.createdAt, session.namespace))
             if (updated) {
-                const stored = store.sessions.getSession(sid)
-                onWebappEvent?.({
+                const stored = (await store.sessions.getSession(sid))
+                await onWebappEvent?.({
                     type: 'session-updated',
                     sessionId: sid,
                     data: {
@@ -203,16 +204,16 @@ export function registerSessionHandlers(socket: CliSocketWithData, deps: Session
 
         const teamDelta = extractTeamStateFromMessageContent(content)
         if (teamDelta) {
-            const existingSession = store.sessions.getSession(sid)
+            const existingSession = (await store.sessions.getSession(sid))
             const existingTeamState = existingSession?.teamState as import('@hapi/protocol/types').TeamState | null | undefined
             const newTeamState = applyTeamStateDelta(existingTeamState ?? null, teamDelta)
-            const updated = store.sessions.setSessionTeamState(sid, newTeamState, msg.createdAt, session.namespace)
+            const updated = (await store.sessions.setSessionTeamState(sid, newTeamState, msg.createdAt, session.namespace))
             if (updated) {
-                const stored = store.sessions.getSession(sid)
+                const stored = (await store.sessions.getSession(sid))
                 // Versioned clear: value null = TeamDelete. Consumers gate on
                 // version (store team_state_updated_at) so dual SSE cannot
                 // resurrect a deleted team from a lagged older event.
-                onWebappEvent?.({
+                await onWebappEvent?.({
                     type: 'session-updated',
                     sessionId: sid,
                     data: {
@@ -228,7 +229,7 @@ export function registerSessionHandlers(socket: CliSocketWithData, deps: Session
 
         const bgDelta = extractBackgroundTaskDelta(content)
         if (bgDelta) {
-            onBackgroundTaskDelta?.(sid, bgDelta)
+            await onBackgroundTaskDelta?.(sid, bgDelta)
         }
 
         const update = {
@@ -249,7 +250,7 @@ export function registerSessionHandlers(socket: CliSocketWithData, deps: Session
         }
         socket.to(`session:${sid}`).emit('update', update)
 
-        onWebappEvent?.({
+        await onWebappEvent?.({
             type: 'message-received',
             sessionId: sid,
             message: {
@@ -261,9 +262,9 @@ export function registerSessionHandlers(socket: CliSocketWithData, deps: Session
                 invokedAt: msg.invokedAt
             }
         })
-    })
+    }))
 
-    const handleUpdateMetadata: UpdateMetadataHandler = (data, cb) => {
+    const handleUpdateMetadata: UpdateMetadataHandler = async (data, cb) => {
         const parsed = updateMetadataSchema.safeParse(data)
         if (!parsed.success) {
             cb({ result: 'error' })
@@ -275,18 +276,18 @@ export function registerSessionHandlers(socket: CliSocketWithData, deps: Session
         // sessionAccess.value.metadata, so the base must be the live row.
         // A memo-stale base would drop a concurrently-set hub-owned key or
         // resurrect a concurrently-cleared one in this very write.
-        const sessionAccess = resolveSessionAccess(sid, { fresh: true })
+        const sessionAccess = (await resolveSessionAccess(sid, { fresh: true }))
         if (!sessionAccess.ok) {
             cb({ result: 'error', reason: sessionAccess.reason })
             return
         }
 
-        const result = store.sessions.updateSessionMetadata(
+        const result = (await store.sessions.updateSessionMetadata(
             sid,
             preserveHubOwnedMetadata(metadata, sessionAccess.value.metadata),
             expectedVersion,
             sessionAccess.value.namespace
-        )
+        ))
         if (result.result === 'success') {
             cb({ result: 'success', version: result.version, metadata: result.value })
         } else if (result.result === 'version-mismatch') {
@@ -296,7 +297,7 @@ export function registerSessionHandlers(socket: CliSocketWithData, deps: Session
         }
 
         if (result.result === 'success') {
-            const stored = store.sessions.getSession(sid)
+            const stored = (await store.sessions.getSession(sid))
             const update = {
                 id: randomUUID(),
                 seq: Date.now(),
@@ -315,7 +316,7 @@ export function registerSessionHandlers(socket: CliSocketWithData, deps: Session
                 }
             }
             socket.to(`session:${sid}`).emit('update', update)
-            onWebappEvent?.({
+            await onWebappEvent?.({
                 type: 'session-updated',
                 sessionId: sid,
                 // The unknown-cast here mirrors the schema's MetadataSchema.nullable()
@@ -331,9 +332,9 @@ export function registerSessionHandlers(socket: CliSocketWithData, deps: Session
         }
     }
 
-    socket.on('update-metadata', handleUpdateMetadata)
+    socket.on('update-metadata', orderedHandler(socket, 'update-metadata', handleUpdateMetadata))
 
-    const handleUpdateState: UpdateStateHandler = (data, cb) => {
+    const handleUpdateState: UpdateStateHandler = async (data, cb) => {
         const parsed = updateStateSchema.safeParse(data)
         if (!parsed.success) {
             cb({ result: 'error' })
@@ -341,18 +342,18 @@ export function registerSessionHandlers(socket: CliSocketWithData, deps: Session
         }
 
         const { sid, agentState, expectedVersion } = parsed.data
-        const sessionAccess = resolveSessionAccess(sid)
+        const sessionAccess = (await resolveSessionAccess(sid))
         if (!sessionAccess.ok) {
             cb({ result: 'error', reason: sessionAccess.reason })
             return
         }
 
-        const result = store.sessions.updateSessionAgentState(
+        const result = (await store.sessions.updateSessionAgentState(
             sid,
             agentState,
             expectedVersion,
             sessionAccess.value.namespace
-        )
+        ))
         if (result.result === 'success') {
             cb({ result: 'success', version: result.version, agentState: result.value })
         } else if (result.result === 'version-mismatch') {
@@ -362,7 +363,7 @@ export function registerSessionHandlers(socket: CliSocketWithData, deps: Session
         }
 
         if (result.result === 'success') {
-            const stored = store.sessions.getSession(sid)
+            const stored = (await store.sessions.getSession(sid))
             const update = {
                 id: randomUUID(),
                 seq: Date.now(),
@@ -375,7 +376,7 @@ export function registerSessionHandlers(socket: CliSocketWithData, deps: Session
                 }
             }
             socket.to(`session:${sid}`).emit('update', update)
-            onWebappEvent?.({
+            await onWebappEvent?.({
                 type: 'session-updated',
                 sessionId: sid,
                 data: {
@@ -386,33 +387,33 @@ export function registerSessionHandlers(socket: CliSocketWithData, deps: Session
         }
     }
 
-    socket.on('update-state', handleUpdateState)
+    socket.on('update-state', orderedHandler(socket, 'update-state', handleUpdateState))
 
-    socket.on('session-alive', (data: SessionAlivePayload) => {
+    socket.on('session-alive', orderedHandler(socket, 'session-alive', async (data: SessionAlivePayload) => {
         if (!data || typeof data.sid !== 'string' || typeof data.time !== 'number') {
             return
         }
-        const sessionAccess = resolveSessionAccess(data.sid)
+        const sessionAccess = (await resolveSessionAccess(data.sid))
         if (!sessionAccess.ok) {
             emitAccessError('session', data.sid, sessionAccess.reason)
             return
         }
-        onSessionAlive?.(data)
-    })
+        await onSessionAlive?.(data)
+    }))
 
-    socket.on('session-ready', (data: SessionReadyPayload) => {
+    socket.on('session-ready', orderedHandler(socket, 'session-ready', async (data: SessionReadyPayload) => {
         if (!data || typeof data.sid !== 'string' || typeof data.time !== 'number') {
             return
         }
-        const sessionAccess = resolveSessionAccess(data.sid)
+        const sessionAccess = (await resolveSessionAccess(data.sid))
         if (!sessionAccess.ok) {
             emitAccessError('session', data.sid, sessionAccess.reason)
             return
         }
-        onSessionReady?.(data)
-    })
+        await onSessionReady?.(data)
+    }))
 
-    socket.on('messages-consumed', (data: { sid: string; localIds: string[]; clearQueuedThinkingGrace?: boolean; steered?: boolean }) => {
+    socket.on('messages-consumed', orderedHandler(socket, 'messages-consumed', async (data: { sid: string; localIds: string[]; clearQueuedThinkingGrace?: boolean; steered?: boolean }) => {
         if (!data || typeof data.sid !== 'string' || !Array.isArray(data.localIds)) {
             return
         }
@@ -420,7 +421,7 @@ export function registerSessionHandlers(socket: CliSocketWithData, deps: Session
         if (localIds.length === 0) {
             return
         }
-        const sessionAccess = resolveSessionAccess(data.sid)
+        const sessionAccess = (await resolveSessionAccess(data.sid))
         if (!sessionAccess.ok) {
             emitAccessError('session', data.sid, sessionAccess.reason)
             return
@@ -428,19 +429,19 @@ export function registerSessionHandlers(socket: CliSocketWithData, deps: Session
         const invokedAt = Date.now()
         let sessionUpdatedAt: number
         try {
-            sessionUpdatedAt = store.recordMessagesConsumed(
+            sessionUpdatedAt = (await store.recordMessagesConsumed(
                 data.sid,
                 localIds,
                 invokedAt,
                 sessionAccess.value.namespace
-            )
+            ))
         } catch (err) {
             console.error('recordMessagesConsumed failed', err)
             return
         }
 
         try {
-            onSessionActivity?.(data.sid, sessionUpdatedAt)
+            await onSessionActivity?.(data.sid, sessionUpdatedAt)
         } catch (err) {
             console.error('onSessionActivity failed', err)
         }
@@ -451,36 +452,36 @@ export function registerSessionHandlers(socket: CliSocketWithData, deps: Session
         // need the grace so the spinner doesn't flicker between the queue
         // shift and `backend.prompt` start.
         if (data.clearQueuedThinkingGrace === true) {
-            onMessagesConsumed?.(data.sid)
+            await onMessagesConsumed?.(data.sid)
         }
         // Emit only after the DB transaction succeeds. This is an ACK-level
         // batch contract, so preserve its original timestamp even when IDs are
         // heterogeneous, replayed, or unknown. `steered` is a live-only signal
         // (never persisted) that marks mid-turn delivery for the web badge.
-        onWebappEvent?.({ type: 'messages-consumed', sessionId: data.sid, localIds, invokedAt, ...(data.steered === true ? { steered: true } : {}) })
-    })
+        await onWebappEvent?.({ type: 'messages-consumed', sessionId: data.sid, localIds, invokedAt, ...(data.steered === true ? { steered: true } : {}) })
+    }))
 
-    socket.on('messages-indeterminate', (data: { sid: string; localIds: string[] }) => {
+    socket.on('messages-indeterminate', orderedHandler(socket, 'messages-indeterminate', async (data: { sid: string; localIds: string[] }) => {
         if (!data || typeof data.sid !== 'string' || !Array.isArray(data.localIds)) {
             return
         }
         const localIds = data.localIds.filter((id): id is string => typeof id === 'string')
         if (localIds.length === 0) return
-        const sessionAccess = resolveSessionAccess(data.sid)
+        const sessionAccess = (await resolveSessionAccess(data.sid))
         if (!sessionAccess.ok) {
             emitAccessError('session', data.sid, sessionAccess.reason)
             return
         }
         try {
-            store.recordMessagesIndeterminate(data.sid, localIds, sessionAccess.value.namespace)
+            await store.recordMessagesIndeterminate(data.sid, localIds, sessionAccess.value.namespace)
         } catch (err) {
             console.error('recordMessagesIndeterminate failed', err)
             return
         }
-        onWebappEvent?.({ type: 'messages-indeterminate', sessionId: data.sid, localIds })
-    })
+        await onWebappEvent?.({ type: 'messages-indeterminate', sessionId: data.sid, localIds })
+    }))
 
-    socket.on('messages-steer-state', (
+    socket.on('messages-steer-state', orderedHandler(socket, 'messages-steer-state', async (
         data: { sid: string; localIds: string[]; state: 'queued' | 'dispatching' },
         ack?: (response: { ok: boolean }) => void
     ) => {
@@ -495,30 +496,30 @@ export function registerSessionHandlers(socket: CliSocketWithData, deps: Session
             reply({ ok: false })
             return
         }
-        const sessionAccess = resolveSessionAccess(data.sid)
+        const sessionAccess = (await resolveSessionAccess(data.sid))
         if (!sessionAccess.ok) {
             emitAccessError('session', data.sid, sessionAccess.reason)
             reply({ ok: false })
             return
         }
         try {
-            const ok = store.recordSteerDeliveryState(
+            const ok = (await store.recordSteerDeliveryState(
                 data.sid,
                 localIds,
                 data.state,
                 sessionAccess.value.namespace
-            )
+            ))
             reply({ ok })
             if (ok && data.state === 'queued') {
-                onWebappEvent?.({ type: 'messages-requeued', sessionId: data.sid, localIds })
+                await onWebappEvent?.({ type: 'messages-requeued', sessionId: data.sid, localIds })
             }
         } catch (err) {
             console.error('recordSteerDeliveryState failed', err)
             reply({ ok: false })
         }
-    })
+    }))
 
-    socket.on('session-end', (data: SessionEndPayload) => {
+    socket.on('session-end', orderedHandler(socket, 'session-end', async (data: SessionEndPayload) => {
         if (!data || typeof data.sid !== 'string' || typeof data.time !== 'number') {
             return
         }
@@ -526,7 +527,7 @@ export function registerSessionHandlers(socket: CliSocketWithData, deps: Session
         // whether the queue ledger is swept, and capabilities can change via
         // metadata writes. Session end fires once per session — not a hot
         // path — so read the live row rather than a memo snapshot.
-        const sessionAccess = resolveSessionAccess(data.sid, { fresh: true })
+        const sessionAccess = (await resolveSessionAccess(data.sid, { fresh: true }))
         if (!sessionAccess.ok) {
             emitAccessError('session', data.sid, sessionAccess.reason)
             return
@@ -550,12 +551,12 @@ export function registerSessionHandlers(socket: CliSocketWithData, deps: Session
         const sharedCodex = (sessionAccess.value.metadata as Metadata | null)?.capabilities?.concurrentClients
         if (data.reason !== 'cleared' && !sharedCodex) {
             try {
-                onSweepImmediateQueued?.(data.sid, Date.now())
+                await onSweepImmediateQueued?.(data.sid, Date.now())
             } catch (err) {
                 console.error('session-end sweep failed', err)
             }
         }
 
-        onSessionEnd?.(data)
-    })
+        await onSessionEnd?.(data)
+    }))
 }

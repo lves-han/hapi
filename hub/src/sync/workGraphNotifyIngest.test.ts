@@ -52,7 +52,7 @@ function notifyFooter(summary: string): string {
     })}`
 }
 
-function ingestNotify(
+async function ingestNotify(
     store: Store,
     sessionId: string,
     namespace: string,
@@ -60,7 +60,7 @@ function ingestNotify(
     messageId: string,
     ts: number = Date.now()
 ) {
-    return ingestNotifySummaryFromMessage({
+    return (await ingestNotifySummaryFromMessage({
         store,
         namespace,
         sessionId,
@@ -68,7 +68,7 @@ function ingestNotify(
         content,
         ts,
         ownerUserId: 1
-    })
+    }))
 }
 
 describe('mapNotifyStatusToWorkAdStatus', () => {
@@ -145,14 +145,14 @@ describe('buildWorkAdFromNotify field mapping', () => {
 })
 
 describe('ingestNotifySummaryFromMessage', () => {
-    it('inserts a work_ad ledger row from a well-formed footer', () => {
+    it('inserts a work_ad ledger row from a well-formed footer', async () => {
         const store = new Store(':memory:')
-        const session = store.sessions.getOrCreateSession('sess-ingest', {}, null, 'alpha')
+        const session = (await store.sessions.getOrCreateSession('sess-ingest', {}, null, 'alpha'))
         const content = assistantOutput(
             'All good.\n\nAGENT_NOTIFY_SUMMARY {"version":1,"status":"done","action":"ship it","summary":"Tests green","agent":"worker","project":"hapi"}'
         )
 
-        const result = ingestNotifySummaryFromMessage({
+        const result = (await ingestNotifySummaryFromMessage({
             store,
             namespace: session.namespace,
             sessionId: session.id,
@@ -161,7 +161,7 @@ describe('ingestNotifySummaryFromMessage', () => {
             ts: Date.now(),
             ownerUserId: 7,
             flavor: 'claude'
-        })
+        }))
 
         expect(result?.inserted).toBe(true)
         expect(result?.event.eventType).toBe('work_ad')
@@ -174,14 +174,14 @@ describe('ingestNotifySummaryFromMessage', () => {
             action: 'ship it'
         })
 
-        const listed = store.workGraph.listByRelatedSession('alpha', session.id)
+        const listed = (await store.workGraph.listByRelatedSession('alpha', session.id))
         expect(listed).toHaveLength(1)
         expect(listed[0]!.id).toBe(result!.event.id)
     })
 
-    it('is idempotent for the same message', () => {
+    it('is idempotent for the same message', async () => {
         const store = new Store(':memory:')
-        const session = store.sessions.getOrCreateSession('sess-idem', {}, null, 'default')
+        const session = (await store.sessions.getOrCreateSession('sess-idem', {}, null, 'default'))
         const content = assistantOutput(
             'AGENT_NOTIFY_SUMMARY {"status":"blocked","summary":"Waiting on review"}'
         )
@@ -195,23 +195,23 @@ describe('ingestNotifySummaryFromMessage', () => {
             ownerUserId: 1
         }
 
-        const first = ingestNotifySummaryFromMessage(input)
-        const second = ingestNotifySummaryFromMessage(input)
+        const first = (await ingestNotifySummaryFromMessage(input))
+        const second = (await ingestNotifySummaryFromMessage(input))
 
         expect(first?.inserted).toBe(true)
         expect(second?.inserted).toBe(false)
         expect(second?.event.id).toBe(first?.event.id)
-        expect(store.workGraph.listByRelatedSession('default', session.id)).toHaveLength(1)
+        expect((await store.workGraph.listByRelatedSession('default', session.id))).toHaveLength(1)
     })
 
-    it('isolates ledger rows by namespace', () => {
+    it('isolates ledger rows by namespace', async () => {
         const store = new Store(':memory:')
-        const alpha = store.sessions.getOrCreateSession('sess-ns', {}, null, 'alpha')
+        const alpha = (await store.sessions.getOrCreateSession('sess-ns', {}, null, 'alpha'))
         const content = assistantOutput(
             'AGENT_NOTIFY_SUMMARY {"status":"failed","summary":"Boom"}'
         )
 
-        const result = ingestNotifySummaryFromMessage({
+        const result = (await ingestNotifySummaryFromMessage({
             store,
             namespace: 'alpha',
             sessionId: alpha.id,
@@ -219,18 +219,18 @@ describe('ingestNotifySummaryFromMessage', () => {
             content,
             ts: Date.now(),
             ownerUserId: 1
-        })
+        }))
 
         expect(result?.inserted).toBe(true)
-        expect(store.workGraph.listByRelatedSession('beta', alpha.id)).toHaveLength(0)
-        expect(store.workGraph.getEvent(result!.event.id, 'beta')).toBeNull()
-        expect(store.workGraph.listByRelatedSession('alpha', alpha.id)).toHaveLength(1)
+        expect((await store.workGraph.listByRelatedSession('beta', alpha.id))).toHaveLength(0)
+        expect((await store.workGraph.getEvent(result!.event.id, 'beta'))).toBeNull()
+        expect((await store.workGraph.listByRelatedSession('alpha', alpha.id))).toHaveLength(1)
     })
 
-    it('ignores messages without a well-formed notify footer', () => {
+    it('ignores messages without a well-formed notify footer', async () => {
         const store = new Store(':memory:')
-        const session = store.sessions.getOrCreateSession('sess-none', {}, null, 'default')
-        const result = ingestNotifySummaryFromMessage({
+        const session = (await store.sessions.getOrCreateSession('sess-none', {}, null, 'default'))
+        const result = (await ingestNotifySummaryFromMessage({
             store,
             namespace: 'default',
             sessionId: session.id,
@@ -238,17 +238,17 @@ describe('ingestNotifySummaryFromMessage', () => {
             content: assistantOutput('Just prose, no footer.'),
             ts: Date.now(),
             ownerUserId: 1
-        })
+        }))
         expect(result).toBeNull()
-        expect(store.workGraph.listByRelatedSession('default', session.id)).toHaveLength(0)
+        expect((await store.workGraph.listByRelatedSession('default', session.id))).toHaveLength(0)
     })
 
-    it('does not require a chat display setting — capture always runs when well-formed', () => {
+    it('does not require a chat display setting — capture always runs when well-formed', async () => {
         // Kill criterion: display-off does not block capture. This path has no
         // display gate at all; presence of a footer is sufficient.
         const store = new Store(':memory:')
-        const session = store.sessions.getOrCreateSession('sess-capture', {}, null, 'default')
-        const result = ingestNotifySummaryFromMessage({
+        const session = (await store.sessions.getOrCreateSession('sess-capture', {}, null, 'default'))
+        const result = (await ingestNotifySummaryFromMessage({
             store,
             namespace: 'default',
             sessionId: session.id,
@@ -258,16 +258,16 @@ describe('ingestNotifySummaryFromMessage', () => {
             ),
             ts: Date.now(),
             ownerUserId: 1
-        })
+        }))
         expect(result?.inserted).toBe(true)
         expect(result?.event.payloadJson).toMatchObject({ status: 'needs_decision' })
     })
 
-    it('persists the message timestamp and default expires_at (M2/M3)', () => {
+    it('persists the message timestamp and default expires_at (M2/M3)', async () => {
         const store = new Store(':memory:')
-        const session = store.sessions.getOrCreateSession('sess-ts', {}, null, 'default')
+        const session = (await store.sessions.getOrCreateSession('sess-ts', {}, null, 'default'))
         const messageTs = 1_650_000_000_000
-        const result = ingestNotifySummaryFromMessage({
+        const result = (await ingestNotifySummaryFromMessage({
             store,
             namespace: 'default',
             sessionId: session.id,
@@ -277,17 +277,17 @@ describe('ingestNotifySummaryFromMessage', () => {
             ),
             ts: messageTs,
             ownerUserId: 1
-        })
+        }))
 
         expect(result?.inserted).toBe(true)
         expect(result?.event.ts).toBe(messageTs)
         expect(result?.event.expiresAt).toBe(messageTs + WORK_AD_DEFAULT_TTL_MS)
     })
 
-    it('keeps work_ad rows after session delete (append-only audit, M1)', () => {
+    it('keeps work_ad rows after session delete (append-only audit, M1)', async () => {
         const store = new Store(':memory:')
-        const session = store.sessions.getOrCreateSession('sess-survive', {}, null, 'default')
-        const result = ingestNotifySummaryFromMessage({
+        const session = (await store.sessions.getOrCreateSession('sess-survive', {}, null, 'default'))
+        const result = (await ingestNotifySummaryFromMessage({
             store,
             namespace: 'default',
             sessionId: session.id,
@@ -297,23 +297,23 @@ describe('ingestNotifySummaryFromMessage', () => {
             ),
             ts: Date.now(),
             ownerUserId: 1
-        })
+        }))
         expect(result?.inserted).toBe(true)
 
-        expect(store.sessions.deleteSession(session.id, 'default')).toBe(true)
-        expect(store.sessions.getSession(session.id)).toBeNull()
+        expect((await store.sessions.deleteSession(session.id, 'default'))).toBe(true)
+        expect((await store.sessions.getSession(session.id))).toBeNull()
 
-        const listed = store.workGraph.listByRelatedSession('default', session.id)
+        const listed = (await store.workGraph.listByRelatedSession('default', session.id))
         expect(listed).toHaveLength(1)
         expect(listed[0]!.summary).toBe('Survives delete')
         expect(listed[0]!.id).toBe(result!.event.id)
     })
 
-    it('clamps oversized footer summary to WORK_GRAPH_MAX_SUMMARY (S4)', () => {
+    it('clamps oversized footer summary to WORK_GRAPH_MAX_SUMMARY (S4)', async () => {
         const store = new Store(':memory:')
-        const session = store.sessions.getOrCreateSession('sess-bound', {}, null, 'default')
+        const session = (await store.sessions.getOrCreateSession('sess-bound', {}, null, 'default'))
         const oversized = 'x'.repeat(WORK_GRAPH_MAX_SUMMARY + 1)
-        const result = ingestNotifySummaryFromMessage({
+        const result = (await ingestNotifySummaryFromMessage({
             store,
             namespace: 'default',
             sessionId: session.id,
@@ -323,20 +323,20 @@ describe('ingestNotifySummaryFromMessage', () => {
             ),
             ts: Date.now(),
             ownerUserId: 1
-        })
+        }))
 
         expect(result?.inserted).toBe(true)
         expect(result?.event.summary?.length).toBe(WORK_GRAPH_MAX_SUMMARY)
-        expect(store.workGraph.listByRelatedSession('default', session.id)).toHaveLength(1)
+        expect((await store.workGraph.listByRelatedSession('default', session.id))).toHaveLength(1)
     })
 
-    it('elevates max-clamped footer fields without duplicating into payload (bot Minor)', () => {
+    it('elevates max-clamped footer fields without duplicating into payload (bot Minor)', async () => {
         const store = new Store(':memory:')
-        const session = store.sessions.getOrCreateSession('sess-budget', {}, null, 'default')
+        const session = (await store.sessions.getOrCreateSession('sess-budget', {}, null, 'default'))
         // Three near-max strings previously lived twice (flat + notify_summary)
         // and blew the 32 KiB payload cap → silent null. Flat-only must insert.
         const fat = 'a'.repeat(6_000)
-        const result = ingestNotifySummaryFromMessage({
+        const result = (await ingestNotifySummaryFromMessage({
             store,
             namespace: 'default',
             sessionId: session.id,
@@ -352,21 +352,21 @@ describe('ingestNotifySummaryFromMessage', () => {
             ),
             ts: Date.now(),
             ownerUserId: 1
-        })
+        }))
 
         expect(result?.inserted).toBe(true)
         const payload = result?.event.payloadJson as Record<string, unknown>
         expect(payload).not.toHaveProperty('notify_summary')
         expect(payload?.action).toBe(fat)
-        expect(store.workGraph.listByRelatedSession('default', session.id)).toHaveLength(1)
+        expect((await store.workGraph.listByRelatedSession('default', session.id))).toHaveLength(1)
     })
 
-    it('clamps CJK footer fields by UTF-8 bytes so elevation still inserts', () => {
+    it('clamps CJK footer fields by UTF-8 bytes so elevation still inserts', async () => {
         const store = new Store(':memory:')
-        const session = store.sessions.getOrCreateSession('sess-cjk', {}, null, 'default')
+        const session = (await store.sessions.getOrCreateSession('sess-cjk', {}, null, 'default'))
         // 6k CJK × 3 ≈ 54 KiB UTF-8 if unclamped; must not silent-drop.
         const fatCjk = '\u4e2d'.repeat(6_000)
-        const result = ingestNotifySummaryFromMessage({
+        const result = (await ingestNotifySummaryFromMessage({
             store,
             namespace: 'default',
             sessionId: session.id,
@@ -382,20 +382,20 @@ describe('ingestNotifySummaryFromMessage', () => {
             ),
             ts: Date.now(),
             ownerUserId: 1
-        })
+        }))
 
         expect(result?.inserted).toBe(true)
         const action = (result?.event.payloadJson as { action?: string })?.action ?? ''
         expect(new TextEncoder().encode(action).byteLength).toBeLessThanOrEqual(WORK_GRAPH_MAX_STRING)
-        expect(store.workGraph.listByRelatedSession('default', session.id)).toHaveLength(1)
+        expect((await store.workGraph.listByRelatedSession('default', session.id))).toHaveLength(1)
     })
 
-    it('clamps JSON-escapable ASCII so elevation still inserts', () => {
+    it('clamps JSON-escapable ASCII so elevation still inserts', async () => {
         const store = new Store(':memory:')
-        const session = store.sessions.getOrCreateSession('sess-esc', {}, null, 'default')
+        const session = (await store.sessions.getOrCreateSession('sess-esc', {}, null, 'default'))
         // Raw UTF-8 clamp would keep 8192 backslashes; JSON.stringify doubles them.
         const fatEsc = '\\'.repeat(8_192)
-        const result = ingestNotifySummaryFromMessage({
+        const result = (await ingestNotifySummaryFromMessage({
             store,
             namespace: 'default',
             sessionId: session.id,
@@ -411,24 +411,24 @@ describe('ingestNotifySummaryFromMessage', () => {
             ),
             ts: Date.now(),
             ownerUserId: 1
-        })
+        }))
 
         expect(result?.inserted).toBe(true)
         const action = (result?.event.payloadJson as { action?: string })?.action ?? ''
         const escaped = JSON.stringify(action).slice(1, -1)
         expect(new TextEncoder().encode(escaped).byteLength).toBeLessThanOrEqual(WORK_GRAPH_MAX_STRING)
-        expect(store.workGraph.listByRelatedSession('default', session.id)).toHaveLength(1)
+        expect((await store.workGraph.listByRelatedSession('default', session.id))).toHaveLength(1)
     })
 })
 
 describe('ingestNotifySummaryFromMessage cause stamping', () => {
-    it('happy path: first unconsumed inbound is the cause; previous work_ad is related', () => {
+    it('happy path: first unconsumed inbound is the cause; previous work_ad is related', async () => {
         const store = new Store(':memory:')
-        const session = store.sessions.getOrCreateSession('sess-cause-happy', {}, null, 'default')
+        const session = (await store.sessions.getOrCreateSession('sess-cause-happy', {}, null, 'default'))
 
-        const firstUser = store.messages.addMessage(session.id, userInbound('do the first thing'))
-        const firstAssistant = store.messages.addMessage(session.id, assistantOutput(notifyFooter('Turn one')))
-        const first = ingestNotify(store, session.id, 'default', firstAssistant.content, firstAssistant.id)
+        const firstUser = (await store.messages.addMessage(session.id, userInbound('do the first thing')))
+        const firstAssistant = (await store.messages.addMessage(session.id, assistantOutput(notifyFooter('Turn one'))))
+        const first = (await ingestNotify(store, session.id, 'default', firstAssistant.content, firstAssistant.id))
 
         expect(first?.inserted).toBe(true)
         expect(first?.event.relatedEventId).toBeNull()
@@ -441,9 +441,9 @@ describe('ingestNotifySummaryFromMessage cause stamping', () => {
             causeCursorMessageId: firstUser.id
         })
 
-        const secondUser = store.messages.addMessage(session.id, userInbound('do the second thing', 'cli'))
-        const secondAssistant = store.messages.addMessage(session.id, assistantOutput(notifyFooter('Turn two')))
-        const second = ingestNotify(store, session.id, 'default', secondAssistant.content, secondAssistant.id)
+        const secondUser = (await store.messages.addMessage(session.id, userInbound('do the second thing', 'cli')))
+        const secondAssistant = (await store.messages.addMessage(session.id, assistantOutput(notifyFooter('Turn two'))))
+        const second = (await ingestNotify(store, session.id, 'default', secondAssistant.content, secondAssistant.id))
 
         expect(second?.inserted).toBe(true)
         expect(second?.event.relatedEventId).toBe(first!.event.id)
@@ -454,7 +454,7 @@ describe('ingestNotifySummaryFromMessage cause stamping', () => {
             causeKind: 'cli'
         })
 
-        const links = store.workGraph.listLinksForEvent('default', second!.event.id)
+        const links = (await store.workGraph.listLinksForEvent('default', second!.event.id))
         expect(links).toEqual(expect.arrayContaining([
             expect.objectContaining({
                 fromEventId: second!.event.id,
@@ -464,20 +464,20 @@ describe('ingestNotifySummaryFromMessage cause stamping', () => {
         ]))
     })
 
-    it('queued inbound: cause is the unconsumed inbound, not the nearest user before the assistant', () => {
+    it('queued inbound: cause is the unconsumed inbound, not the nearest user before the assistant', async () => {
         const store = new Store(':memory:')
-        const session = store.sessions.getOrCreateSession('sess-cause-queued', {}, null, 'default')
+        const session = (await store.sessions.getOrCreateSession('sess-cause-queued', {}, null, 'default'))
 
-        const causing = store.messages.addMessage(session.id, userInbound('start the long turn'))
-        store.messages.addMessage(session.id, agentToolRow())
-        const queued = store.messages.addMessage(
+        const causing = (await store.messages.addMessage(session.id, userInbound('start the long turn')))
+        await store.messages.addMessage(session.id, agentToolRow())
+        const queued = (await store.messages.addMessage(
             session.id,
             userInbound('queued while in flight'),
             'queued-while-in-flight'
-        )
-        const assistant = store.messages.addMessage(session.id, assistantOutput(notifyFooter('Finished long turn')))
+        ))
+        const assistant = (await store.messages.addMessage(session.id, assistantOutput(notifyFooter('Finished long turn'))))
 
-        const first = ingestNotify(store, session.id, 'default', assistant.content, assistant.id)
+        const first = (await ingestNotify(store, session.id, 'default', assistant.content, assistant.id))
         expect(first?.event.payloadJson).toMatchObject({
             causeMessageId: causing.id,
             causeText: 'start the long turn'
@@ -485,12 +485,12 @@ describe('ingestNotifySummaryFromMessage cause stamping', () => {
         expect((first?.event.payloadJson as { causeMessageId?: string })?.causeMessageId)
             .not.toBe(queued.id)
 
-        store.messages.markMessagesInvoked(session.id, ['queued-while-in-flight'], Date.now())
-        const secondAssistant = store.messages.addMessage(
+        await store.messages.markMessagesInvoked(session.id, ['queued-while-in-flight'], Date.now())
+        const secondAssistant = (await store.messages.addMessage(
             session.id,
             assistantOutput(notifyFooter('Queued turn'))
-        )
-        const second = ingestNotify(store, session.id, 'default', secondAssistant.content, secondAssistant.id)
+        ))
+        const second = (await ingestNotify(store, session.id, 'default', secondAssistant.content, secondAssistant.id))
         expect(second?.event.payloadJson).toMatchObject({
             causeMessageId: queued.id,
             causeText: 'queued while in flight'
@@ -498,19 +498,19 @@ describe('ingestNotifySummaryFromMessage cause stamping', () => {
         expect(second?.event.relatedEventId).toBe(first!.event.id)
     })
 
-    it('sticky cause: two summaries with no new inbound reuse the previous cause', () => {
+    it('sticky cause: two summaries with no new inbound reuse the previous cause', async () => {
         const store = new Store(':memory:')
-        const session = store.sessions.getOrCreateSession('sess-cause-sticky', {}, null, 'default')
+        const session = (await store.sessions.getOrCreateSession('sess-cause-sticky', {}, null, 'default'))
 
-        const user = store.messages.addMessage(session.id, userInbound('keep going'))
-        const firstAssistant = store.messages.addMessage(session.id, assistantOutput(notifyFooter('First summary')))
-        const first = ingestNotify(store, session.id, 'default', firstAssistant.content, firstAssistant.id)
+        const user = (await store.messages.addMessage(session.id, userInbound('keep going')))
+        const firstAssistant = (await store.messages.addMessage(session.id, assistantOutput(notifyFooter('First summary'))))
+        const first = (await ingestNotify(store, session.id, 'default', firstAssistant.content, firstAssistant.id))
 
-        const secondAssistant = store.messages.addMessage(
+        const secondAssistant = (await store.messages.addMessage(
             session.id,
             assistantOutput(notifyFooter('Second summary same turn'))
-        )
-        const second = ingestNotify(store, session.id, 'default', secondAssistant.content, secondAssistant.id)
+        ))
+        const second = (await ingestNotify(store, session.id, 'default', secondAssistant.content, secondAssistant.id))
 
         expect(second?.event.payloadJson).toMatchObject({
             messageId: secondAssistant.id,
@@ -523,16 +523,16 @@ describe('ingestNotifySummaryFromMessage cause stamping', () => {
         expect(first?.event.summary).toBe('First summary')
     })
 
-    it('peer inbound meta.sentFrom counts as cause', () => {
+    it('peer inbound meta.sentFrom counts as cause', async () => {
         const store = new Store(':memory:')
-        const session = store.sessions.getOrCreateSession('sess-cause-peer', {}, null, 'default')
+        const session = (await store.sessions.getOrCreateSession('sess-cause-peer', {}, null, 'default'))
 
-        const peer = store.messages.addMessage(
+        const peer = (await store.messages.addMessage(
             session.id,
             userInbound('please take this handoff', 'peer')
-        )
-        const assistant = store.messages.addMessage(session.id, assistantOutput(notifyFooter('Ack peer')))
-        const result = ingestNotify(store, session.id, 'default', assistant.content, assistant.id)
+        ))
+        const assistant = (await store.messages.addMessage(session.id, assistantOutput(notifyFooter('Ack peer'))))
+        const result = (await ingestNotify(store, session.id, 'default', assistant.content, assistant.id))
 
         expect(result?.event.payloadJson).toMatchObject({
             messageId: assistant.id,
@@ -542,29 +542,29 @@ describe('ingestNotifySummaryFromMessage cause stamping', () => {
         })
     })
 
-    it('skips agent-role tool/prose rows when choosing cause', () => {
+    it('skips agent-role tool/prose rows when choosing cause', async () => {
         const store = new Store(':memory:')
-        const session = store.sessions.getOrCreateSession('sess-cause-skip-agent', {}, null, 'default')
+        const session = (await store.sessions.getOrCreateSession('sess-cause-skip-agent', {}, null, 'default'))
 
-        const user = store.messages.addMessage(session.id, userInbound('the real prompt'))
-        store.messages.addMessage(session.id, agentToolRow())
-        store.messages.addMessage(session.id, assistantOutput('intermediate prose, no footer'))
-        const assistant = store.messages.addMessage(session.id, assistantOutput(notifyFooter('Done')))
+        const user = (await store.messages.addMessage(session.id, userInbound('the real prompt')))
+        await store.messages.addMessage(session.id, agentToolRow())
+        await store.messages.addMessage(session.id, assistantOutput('intermediate prose, no footer'))
+        const assistant = (await store.messages.addMessage(session.id, assistantOutput(notifyFooter('Done'))))
 
-        const result = ingestNotify(store, session.id, 'default', assistant.content, assistant.id)
+        const result = (await ingestNotify(store, session.id, 'default', assistant.content, assistant.id))
         expect(result?.event.payloadJson).toMatchObject({
             causeMessageId: user.id,
             causeText: 'the real prompt'
         })
     })
 
-    it('clamps oversized inbound causeText so elevation still inserts', () => {
+    it('clamps oversized inbound causeText so elevation still inserts', async () => {
         const store = new Store(':memory:')
-        const session = store.sessions.getOrCreateSession('sess-cause-bound', {}, null, 'default')
+        const session = (await store.sessions.getOrCreateSession('sess-cause-bound', {}, null, 'default'))
         const fat = 'q'.repeat(WORK_GRAPH_MAX_SUMMARY + 400)
-        store.messages.addMessage(session.id, userInbound(fat))
-        const assistant = store.messages.addMessage(session.id, assistantOutput(notifyFooter('ok')))
-        const result = ingestNotify(store, session.id, 'default', assistant.content, assistant.id)
+        await store.messages.addMessage(session.id, userInbound(fat))
+        const assistant = (await store.messages.addMessage(session.id, assistantOutput(notifyFooter('ok'))))
+        const result = (await ingestNotify(store, session.id, 'default', assistant.content, assistant.id))
 
         expect(result?.inserted).toBe(true)
         const causeText = (result?.event.payloadJson as { causeText?: string })?.causeText ?? ''
@@ -572,46 +572,46 @@ describe('ingestNotifySummaryFromMessage cause stamping', () => {
         expect(causeText.startsWith('qq')).toBe(true)
     })
 
-    it('1:1 consume: extra uninvoked queued inbounds wait for later work_ads', () => {
+    it('1:1 consume: extra uninvoked queued inbounds wait for later work_ads', async () => {
         const store = new Store(':memory:')
-        const session = store.sessions.getOrCreateSession('sess-cause-burst', {}, null, 'default')
-        const one = store.messages.addMessage(session.id, userInbound('one: read the file'))
-        const two = store.messages.addMessage(session.id, userInbound('two: also fix the typo'), 'burst-two')
-        const three = store.messages.addMessage(session.id, userInbound('three: and push'), 'burst-three')
-        const firstAssistant = store.messages.addMessage(session.id, assistantOutput(notifyFooter('Drained queue')))
-        const first = ingestNotify(store, session.id, 'default', firstAssistant.content, firstAssistant.id)
+        const session = (await store.sessions.getOrCreateSession('sess-cause-burst', {}, null, 'default'))
+        const one = (await store.messages.addMessage(session.id, userInbound('one: read the file')))
+        const two = (await store.messages.addMessage(session.id, userInbound('two: also fix the typo'), 'burst-two'))
+        const three = (await store.messages.addMessage(session.id, userInbound('three: and push'), 'burst-three'))
+        const firstAssistant = (await store.messages.addMessage(session.id, assistantOutput(notifyFooter('Drained queue'))))
+        const first = (await ingestNotify(store, session.id, 'default', firstAssistant.content, firstAssistant.id))
         expect(first?.event.payloadJson).toMatchObject({ causeMessageId: one.id })
 
-        const secondAssistant = store.messages.addMessage(session.id, assistantOutput(notifyFooter('Still first turn')))
-        const second = ingestNotify(store, session.id, 'default', secondAssistant.content, secondAssistant.id)
+        const secondAssistant = (await store.messages.addMessage(session.id, assistantOutput(notifyFooter('Still first turn'))))
+        const second = (await ingestNotify(store, session.id, 'default', secondAssistant.content, secondAssistant.id))
         expect(second?.event.payloadJson).toMatchObject({ causeMessageId: one.id })
 
-        store.messages.markMessagesInvoked(session.id, ['burst-two'], Date.now())
-        const thirdAssistant = store.messages.addMessage(session.id, assistantOutput(notifyFooter('Next leftover')))
-        const third = ingestNotify(store, session.id, 'default', thirdAssistant.content, thirdAssistant.id)
+        await store.messages.markMessagesInvoked(session.id, ['burst-two'], Date.now())
+        const thirdAssistant = (await store.messages.addMessage(session.id, assistantOutput(notifyFooter('Next leftover'))))
+        const third = (await ingestNotify(store, session.id, 'default', thirdAssistant.content, thirdAssistant.id))
         expect(third?.event.payloadJson).toMatchObject({ causeMessageId: two.id })
         expect((third?.event.payloadJson as { causeMessageId?: string })?.causeMessageId)
             .not.toBe(three.id)
     })
 
-    it('advances causeSeq past every invoked inbound in the same Claude batch', () => {
+    it('advances causeSeq past every invoked inbound in the same Claude batch', async () => {
         const store = new Store(':memory:')
-        const session = store.sessions.getOrCreateSession('sess-cause-batch', {}, null, 'default')
-        const one = store.messages.addMessage(session.id, userInbound('one'), 'batch-1')
-        const two = store.messages.addMessage(session.id, userInbound('two'), 'batch-2')
-        const three = store.messages.addMessage(session.id, userInbound('three'), 'batch-3')
-        store.messages.markMessagesInvoked(session.id, ['batch-1', 'batch-2', 'batch-3'], 1_700_000_111_000)
-        const assistant = store.messages.addMessage(session.id, assistantOutput(notifyFooter('Batched')))
-        const first = ingestNotify(store, session.id, 'default', assistant.content, assistant.id)
+        const session = (await store.sessions.getOrCreateSession('sess-cause-batch', {}, null, 'default'))
+        const one = (await store.messages.addMessage(session.id, userInbound('one'), 'batch-1'))
+        const two = (await store.messages.addMessage(session.id, userInbound('two'), 'batch-2'))
+        const three = (await store.messages.addMessage(session.id, userInbound('three'), 'batch-3'))
+        await store.messages.markMessagesInvoked(session.id, ['batch-1', 'batch-2', 'batch-3'], 1_700_000_111_000)
+        const assistant = (await store.messages.addMessage(session.id, assistantOutput(notifyFooter('Batched'))))
+        const first = (await ingestNotify(store, session.id, 'default', assistant.content, assistant.id))
         expect(first?.event.payloadJson).toMatchObject({
             causeMessageId: one.id,
             causeSeq: three.seq,
             causeCursorMessageId: three.id
         })
 
-        const next = store.messages.addMessage(session.id, userInbound('next turn'))
-        const secondAssistant = store.messages.addMessage(session.id, assistantOutput(notifyFooter('Next')))
-        const second = ingestNotify(store, session.id, 'default', secondAssistant.content, secondAssistant.id)
+        const next = (await store.messages.addMessage(session.id, userInbound('next turn')))
+        const secondAssistant = (await store.messages.addMessage(session.id, assistantOutput(notifyFooter('Next'))))
+        const second = (await ingestNotify(store, session.id, 'default', secondAssistant.content, secondAssistant.id))
         expect(second?.event.payloadJson).toMatchObject({
             causeMessageId: next.id,
             causeText: 'next turn'
@@ -620,25 +620,25 @@ describe('ingestNotifySummaryFromMessage cause stamping', () => {
             .not.toBe(two.id)
     })
 
-    it('does not treat an uninvoked queued inbound as a cause', () => {
+    it('does not treat an uninvoked queued inbound as a cause', async () => {
         const store = new Store(':memory:')
-        const session = store.sessions.getOrCreateSession('sess-cause-uninvoked', {}, null, 'default')
-        const causing = store.messages.addMessage(session.id, userInbound('current turn'))
-        const queued = store.messages.addMessage(
+        const session = (await store.sessions.getOrCreateSession('sess-cause-uninvoked', {}, null, 'default'))
+        const causing = (await store.messages.addMessage(session.id, userInbound('current turn')))
+        const queued = (await store.messages.addMessage(
             session.id,
             userInbound('queued not yet started'),
             'queued-local'
-        )
+        ))
         expect(queued.invokedAt).toBeNull()
-        const firstAssistant = store.messages.addMessage(session.id, assistantOutput(notifyFooter('First')))
-        const first = ingestNotify(store, session.id, 'default', firstAssistant.content, firstAssistant.id)
+        const firstAssistant = (await store.messages.addMessage(session.id, assistantOutput(notifyFooter('First'))))
+        const first = (await ingestNotify(store, session.id, 'default', firstAssistant.content, firstAssistant.id))
         expect(first?.event.payloadJson).toMatchObject({
             causeMessageId: causing.id,
             causeText: 'current turn'
         })
 
-        const secondAssistant = store.messages.addMessage(session.id, assistantOutput(notifyFooter('Still first turn')))
-        const second = ingestNotify(store, session.id, 'default', secondAssistant.content, secondAssistant.id)
+        const secondAssistant = (await store.messages.addMessage(session.id, assistantOutput(notifyFooter('Still first turn'))))
+        const second = (await ingestNotify(store, session.id, 'default', secondAssistant.content, secondAssistant.id))
         expect(second?.event.payloadJson).toMatchObject({
             causeMessageId: causing.id,
             causeText: 'current turn'
@@ -646,30 +646,30 @@ describe('ingestNotifySummaryFromMessage cause stamping', () => {
         expect((second?.event.payloadJson as { causeMessageId?: string })?.causeMessageId)
             .not.toBe(queued.id)
 
-        store.messages.markMessagesInvoked(session.id, ['queued-local'], Date.now())
-        const thirdAssistant = store.messages.addMessage(session.id, assistantOutput(notifyFooter('Queued turn')))
-        const third = ingestNotify(store, session.id, 'default', thirdAssistant.content, thirdAssistant.id)
+        await store.messages.markMessagesInvoked(session.id, ['queued-local'], Date.now())
+        const thirdAssistant = (await store.messages.addMessage(session.id, assistantOutput(notifyFooter('Queued turn'))))
+        const third = (await ingestNotify(store, session.id, 'default', thirdAssistant.content, thirdAssistant.id))
         expect(third?.event.payloadJson).toMatchObject({
             causeMessageId: queued.id,
             causeText: 'queued not yet started'
         })
     })
 
-    it('does not treat a future-scheduled inbound as a cause', () => {
+    it('does not treat a future-scheduled inbound as a cause', async () => {
         const store = new Store(':memory:')
-        const session = store.sessions.getOrCreateSession('sess-cause-sched', {}, null, 'default')
-        const user = store.messages.addMessage(session.id, userInbound('current turn'))
-        const firstAssistant = store.messages.addMessage(session.id, assistantOutput(notifyFooter('First')))
-        const first = ingestNotify(store, session.id, 'default', firstAssistant.content, firstAssistant.id)
+        const session = (await store.sessions.getOrCreateSession('sess-cause-sched', {}, null, 'default'))
+        const user = (await store.messages.addMessage(session.id, userInbound('current turn')))
+        const firstAssistant = (await store.messages.addMessage(session.id, assistantOutput(notifyFooter('First'))))
+        const first = (await ingestNotify(store, session.id, 'default', firstAssistant.content, firstAssistant.id))
 
-        store.messages.addMessage(
+        await store.messages.addMessage(
             session.id,
             userInbound('deploy to prod at 5pm'),
             'sched-later',
             Date.now() + 60 * 60 * 1000
         )
-        const secondAssistant = store.messages.addMessage(session.id, assistantOutput(notifyFooter('Still first turn')))
-        const second = ingestNotify(store, session.id, 'default', secondAssistant.content, secondAssistant.id)
+        const secondAssistant = (await store.messages.addMessage(session.id, assistantOutput(notifyFooter('Still first turn'))))
+        const second = (await ingestNotify(store, session.id, 'default', secondAssistant.content, secondAssistant.id))
         expect(second?.event.payloadJson).toMatchObject({
             causeMessageId: user.id,
             causeText: 'current turn'
@@ -677,14 +677,14 @@ describe('ingestNotifySummaryFromMessage cause stamping', () => {
         expect(second?.event.relatedEventId).toBe(first!.event.id)
     })
 
-    it('ignores client-posted work_ads when chaining cause and related_event_id', () => {
+    it('ignores client-posted work_ads when chaining cause and related_event_id', async () => {
         const store = new Store(':memory:')
-        const session = store.sessions.getOrCreateSession('sess-cause-forge', {}, null, 'default')
-        const user = store.messages.addMessage(session.id, userInbound('real prompt'))
-        const firstAssistant = store.messages.addMessage(session.id, assistantOutput(notifyFooter('Real ad')))
-        const first = ingestNotify(store, session.id, 'default', firstAssistant.content, firstAssistant.id)
+        const session = (await store.sessions.getOrCreateSession('sess-cause-forge', {}, null, 'default'))
+        const user = (await store.messages.addMessage(session.id, userInbound('real prompt')))
+        const firstAssistant = (await store.messages.addMessage(session.id, assistantOutput(notifyFooter('Real ad'))))
+        const first = (await ingestNotify(store, session.id, 'default', firstAssistant.content, firstAssistant.id))
 
-        store.workGraph.insertEvent('default', {
+        await store.workGraph.insertEvent('default', {
             source_kind: 'session',
             source_ref: session.id,
             event_type: 'work_ad',
@@ -699,9 +699,9 @@ describe('ingestNotifySummaryFromMessage cause stamping', () => {
             principal: { kind: 'human', id: '1' }
         })
 
-        const nextUser = store.messages.addMessage(session.id, userInbound('second prompt'))
-        const secondAssistant = store.messages.addMessage(session.id, assistantOutput(notifyFooter('Second real')))
-        const second = ingestNotify(store, session.id, 'default', secondAssistant.content, secondAssistant.id)
+        const nextUser = (await store.messages.addMessage(session.id, userInbound('second prompt')))
+        const secondAssistant = (await store.messages.addMessage(session.id, assistantOutput(notifyFooter('Second real'))))
+        const second = (await ingestNotify(store, session.id, 'default', secondAssistant.content, secondAssistant.id))
         expect(second?.event.relatedEventId).toBe(first!.event.id)
         expect(second?.event.payloadJson).toMatchObject({
             causeMessageId: nextUser.id,
@@ -711,25 +711,25 @@ describe('ingestNotifySummaryFromMessage cause stamping', () => {
             .not.toBe('FORGED CAUSE TEXT')
     })
 
-    it('first notify after copied history uses the latest invoked inbound, not the oldest copy', () => {
+    it('first notify after copied history uses the latest invoked inbound, not the oldest copy', async () => {
         const store = new Store(':memory:')
-        const session = store.sessions.getOrCreateSession('sess-cause-fork-hydrate', {}, null, 'default')
-        const copied = store.messages.addMessage(
+        const session = (await store.sessions.getOrCreateSession('sess-cause-fork-hydrate', {}, null, 'default'))
+        const copied = (await store.messages.addMessage(
             session.id,
             userInbound('copied prefix'),
             undefined,
             undefined,
             1_000
-        )
-        const forkPrompt = store.messages.addMessage(
+        ))
+        const forkPrompt = (await store.messages.addMessage(
             session.id,
             userInbound('fork prompt'),
             undefined,
             undefined,
             2_000
-        )
-        const assistant = store.messages.addMessage(session.id, assistantOutput(notifyFooter('Forked')))
-        const result = ingestNotify(store, session.id, 'default', assistant.content, assistant.id)
+        ))
+        const assistant = (await store.messages.addMessage(session.id, assistantOutput(notifyFooter('Forked'))))
+        const result = (await ingestNotify(store, session.id, 'default', assistant.content, assistant.id))
         expect(result?.event.payloadJson).toMatchObject({
             causeMessageId: forkPrompt.id,
             causeText: 'fork prompt'
@@ -738,17 +738,17 @@ describe('ingestNotifySummaryFromMessage cause stamping', () => {
             .not.toBe(copied.id)
     })
 
-    it('later notifies bound the scan after the previous causeSeq', () => {
+    it('later notifies bound the scan after the previous causeSeq', async () => {
         const store = new Store(':memory:')
-        const session = store.sessions.getOrCreateSession('sess-cause-after-seq', {}, null, 'default')
-        const firstUser = store.messages.addMessage(session.id, userInbound('first'))
-        const firstAssistant = store.messages.addMessage(session.id, assistantOutput(notifyFooter('First')))
-        const first = ingestNotify(store, session.id, 'default', firstAssistant.content, firstAssistant.id)
+        const session = (await store.sessions.getOrCreateSession('sess-cause-after-seq', {}, null, 'default'))
+        const firstUser = (await store.messages.addMessage(session.id, userInbound('first')))
+        const firstAssistant = (await store.messages.addMessage(session.id, assistantOutput(notifyFooter('First'))))
+        const first = (await ingestNotify(store, session.id, 'default', firstAssistant.content, firstAssistant.id))
         expect(first?.event.payloadJson).toMatchObject({ causeSeq: firstUser.seq })
 
-        const nextUser = store.messages.addMessage(session.id, userInbound('second'))
-        const secondAssistant = store.messages.addMessage(session.id, assistantOutput(notifyFooter('Second')))
-        const second = ingestNotify(store, session.id, 'default', secondAssistant.content, secondAssistant.id)
+        const nextUser = (await store.messages.addMessage(session.id, userInbound('second')))
+        const secondAssistant = (await store.messages.addMessage(session.id, assistantOutput(notifyFooter('Second'))))
+        const second = (await ingestNotify(store, session.id, 'default', secondAssistant.content, secondAssistant.id))
         expect(second?.event.payloadJson).toMatchObject({
             causeMessageId: nextUser.id,
             causeText: 'second',
@@ -756,12 +756,12 @@ describe('ingestNotifySummaryFromMessage cause stamping', () => {
         })
     })
 
-    it('legacy notify without causeSeq still consumes inbounds at or before that assistant', () => {
+    it('legacy notify without causeSeq still consumes inbounds at or before that assistant', async () => {
         const store = new Store(':memory:')
-        const session = store.sessions.getOrCreateSession('sess-cause-legacy-seq', {}, null, 'default')
-        const oldUser = store.messages.addMessage(session.id, userInbound('old prompt'))
-        const oldAssistant = store.messages.addMessage(session.id, assistantOutput(notifyFooter('Legacy')))
-        store.workGraph.insertEvent('default', {
+        const session = (await store.sessions.getOrCreateSession('sess-cause-legacy-seq', {}, null, 'default'))
+        const oldUser = (await store.messages.addMessage(session.id, userInbound('old prompt')))
+        const oldAssistant = (await store.messages.addMessage(session.id, assistantOutput(notifyFooter('Legacy'))))
+        await store.workGraph.insertEvent('default', {
             source_kind: 'session',
             source_ref: session.id,
             event_type: 'work_ad',
@@ -775,9 +775,9 @@ describe('ingestNotifySummaryFromMessage cause stamping', () => {
             principal: { kind: 'agent', id: `session:${session.id}`, on_behalf_of: '1' }
         })
 
-        const nextUser = store.messages.addMessage(session.id, userInbound('new prompt'))
-        const nextAssistant = store.messages.addMessage(session.id, assistantOutput(notifyFooter('Next')))
-        const result = ingestNotify(store, session.id, 'default', nextAssistant.content, nextAssistant.id)
+        const nextUser = (await store.messages.addMessage(session.id, userInbound('new prompt')))
+        const nextAssistant = (await store.messages.addMessage(session.id, assistantOutput(notifyFooter('Next'))))
+        const result = (await ingestNotify(store, session.id, 'default', nextAssistant.content, nextAssistant.id))
         expect(result?.event.payloadJson).toMatchObject({
             causeMessageId: nextUser.id,
             causeText: 'new prompt'
@@ -786,12 +786,12 @@ describe('ingestNotifySummaryFromMessage cause stamping', () => {
             .not.toBe(oldUser.id)
     })
 
-    it('treats an unmarked local CLI prompt as a cause', () => {
+    it('treats an unmarked local CLI prompt as a cause', async () => {
         const store = new Store(':memory:')
-        const session = store.sessions.getOrCreateSession('sess-cause-local-cli', {}, null, 'default')
-        const local = store.messages.addMessage(session.id, userInbound('typed in the TTY', 'cli'))
-        const assistant = store.messages.addMessage(session.id, assistantOutput(notifyFooter('Local turn')))
-        const result = ingestNotify(store, session.id, 'default', assistant.content, assistant.id)
+        const session = (await store.sessions.getOrCreateSession('sess-cause-local-cli', {}, null, 'default'))
+        const local = (await store.messages.addMessage(session.id, userInbound('typed in the TTY', 'cli')))
+        const assistant = (await store.messages.addMessage(session.id, assistantOutput(notifyFooter('Local turn'))))
+        const result = (await ingestNotify(store, session.id, 'default', assistant.content, assistant.id))
         expect(result?.event.payloadJson).toMatchObject({
             causeMessageId: local.id,
             causeText: 'typed in the TTY',
@@ -799,38 +799,38 @@ describe('ingestNotifySummaryFromMessage cause stamping', () => {
         })
     })
 
-    it('skips Claude transcript echoes so the next turn is not attributed to the previous prompt copy', () => {
+    it('skips Claude transcript echoes so the next turn is not attributed to the previous prompt copy', async () => {
         const store = new Store(':memory:')
-        const session = store.sessions.getOrCreateSession('sess-cause-echo', {}, null, 'default')
+        const session = (await store.sessions.getOrCreateSession('sess-cause-echo', {}, null, 'default'))
 
-        const web1 = store.messages.addMessage(session.id, userInbound('turn one'))
-        store.messages.addMessage(
+        const web1 = (await store.messages.addMessage(session.id, userInbound('turn one')))
+        await store.messages.addMessage(
             session.id,
             userInbound('turn one', 'cli', { isTranscriptEcho: true })
         )
-        const firstAssistant = store.messages.addMessage(session.id, assistantOutput(notifyFooter('One')))
-        const first = ingestNotify(store, session.id, 'default', firstAssistant.content, firstAssistant.id)
+        const firstAssistant = (await store.messages.addMessage(session.id, assistantOutput(notifyFooter('One'))))
+        const first = (await ingestNotify(store, session.id, 'default', firstAssistant.content, firstAssistant.id))
         expect(first?.event.payloadJson).toMatchObject({ causeMessageId: web1.id })
 
-        const web2 = store.messages.addMessage(session.id, userInbound('turn two'))
-        store.messages.addMessage(
+        const web2 = (await store.messages.addMessage(session.id, userInbound('turn two')))
+        await store.messages.addMessage(
             session.id,
             userInbound('turn two', 'cli', { isTranscriptEcho: true })
         )
-        const secondAssistant = store.messages.addMessage(session.id, assistantOutput(notifyFooter('Two')))
-        const second = ingestNotify(store, session.id, 'default', secondAssistant.content, secondAssistant.id)
+        const secondAssistant = (await store.messages.addMessage(session.id, assistantOutput(notifyFooter('Two'))))
+        const second = (await ingestNotify(store, session.id, 'default', secondAssistant.content, secondAssistant.id))
         expect(second?.event.payloadJson).toMatchObject({
             causeMessageId: web2.id,
             causeText: 'turn two'
         })
     })
 
-    it('still inserts when max-clamped footer fields share the payload with cause', () => {
+    it('still inserts when max-clamped footer fields share the payload with cause', async () => {
         const store = new Store(':memory:')
-        const session = store.sessions.getOrCreateSession('sess-cause-budget', {}, null, 'default')
-        store.messages.addMessage(session.id, userInbound('prompt'))
+        const session = (await store.sessions.getOrCreateSession('sess-cause-budget', {}, null, 'default'))
+        await store.messages.addMessage(session.id, userInbound('prompt'))
         const fat = 'a'.repeat(6_000)
-        const assistant = store.messages.addMessage(session.id, assistantOutput(
+        const assistant = (await store.messages.addMessage(session.id, assistantOutput(
             `AGENT_NOTIFY_SUMMARY ${JSON.stringify({
                 status: 'done',
                 summary: 'ok',
@@ -838,8 +838,8 @@ describe('ingestNotifySummaryFromMessage cause stamping', () => {
                 project: fat,
                 agent: fat
             })}`
-        ))
-        const result = ingestNotify(store, session.id, 'default', assistant.content, assistant.id)
+        )))
+        const result = (await ingestNotify(store, session.id, 'default', assistant.content, assistant.id))
         expect(result?.inserted).toBe(true)
         expect(result?.event.payloadJson).toMatchObject({
             causeText: 'prompt',
@@ -850,38 +850,38 @@ describe('ingestNotifySummaryFromMessage cause stamping', () => {
     it('preserves notify history across mergeSessions into the surviving id', async () => {
         const store = new Store(':memory:')
         const cache = new SessionCache(store, {
-            emit: (_event: SyncEvent) => {}
+            emit: async (_event: SyncEvent) => {}
         } as EventPublisher)
-        const oldSession = cache.getOrCreateSession(
+        const oldSession = (await cache.getOrCreateSession(
             'sess-cause-merge-old',
             { path: '/tmp/project', host: 'localhost' },
             null,
             'default'
-        )
-        const newSession = cache.getOrCreateSession(
+        ))
+        const newSession = (await cache.getOrCreateSession(
             'sess-cause-merge-new',
             { path: '/tmp/project', host: 'localhost' },
             null,
             'default'
-        )
+        ))
 
-        store.messages.addMessage(oldSession.id, userInbound('from the old session'))
-        const firstAssistant = store.messages.addMessage(oldSession.id, assistantOutput(notifyFooter('Old turn')))
-        const first = ingestNotify(store, oldSession.id, 'default', firstAssistant.content, firstAssistant.id)
+        await store.messages.addMessage(oldSession.id, userInbound('from the old session'))
+        const firstAssistant = (await store.messages.addMessage(oldSession.id, assistantOutput(notifyFooter('Old turn'))))
+        const first = (await ingestNotify(store, oldSession.id, 'default', firstAssistant.content, firstAssistant.id))
         expect(first?.inserted).toBe(true)
 
         await cache.mergeSessions(oldSession.id, newSession.id, 'default')
 
-        const nextUser = store.messages.addMessage(newSession.id, userInbound('after merge'))
-        const nextAssistant = store.messages.addMessage(newSession.id, assistantOutput(notifyFooter('New turn')))
-        const second = ingestNotify(store, newSession.id, 'default', nextAssistant.content, nextAssistant.id)
+        const nextUser = (await store.messages.addMessage(newSession.id, userInbound('after merge')))
+        const nextAssistant = (await store.messages.addMessage(newSession.id, assistantOutput(notifyFooter('New turn'))))
+        const second = (await ingestNotify(store, newSession.id, 'default', nextAssistant.content, nextAssistant.id))
 
         expect(second?.event.relatedEventId).toBe(first!.event.id)
         expect(second?.event.payloadJson).toMatchObject({
             causeMessageId: nextUser.id,
             causeText: 'after merge'
         })
-        const onSurvivor = store.workGraph.listWorkAdsByRelatedSession('default', newSession.id)
+        const onSurvivor = (await store.workGraph.listWorkAdsByRelatedSession('default', newSession.id))
             .map((event) => event.id)
         expect(onSurvivor).toContain(first!.event.id)
         expect(onSurvivor).toContain(second!.event.id)
@@ -890,31 +890,31 @@ describe('ingestNotifySummaryFromMessage cause stamping', () => {
     it('keeps notify history on the live source after mergeSessionHistory', async () => {
         const store = new Store(':memory:')
         const cache = new SessionCache(store, {
-            emit: (_event: SyncEvent) => {}
+            emit: async (_event: SyncEvent) => {}
         } as EventPublisher)
-        const source = cache.getOrCreateSession(
+        const source = (await cache.getOrCreateSession(
             'sess-cause-hist-src',
             { path: '/tmp/project', host: 'localhost' },
             null,
             'default'
-        )
-        const target = cache.getOrCreateSession(
+        ))
+        const target = (await cache.getOrCreateSession(
             'sess-cause-hist-tgt',
             { path: '/tmp/project', host: 'localhost' },
             null,
             'default'
-        )
+        ))
 
-        const firstUser = store.messages.addMessage(source.id, userInbound('live source prompt'))
-        const firstAssistant = store.messages.addMessage(source.id, assistantOutput(notifyFooter('Before history merge')))
-        const first = ingestNotify(store, source.id, 'default', firstAssistant.content, firstAssistant.id)
+        const firstUser = (await store.messages.addMessage(source.id, userInbound('live source prompt')))
+        const firstAssistant = (await store.messages.addMessage(source.id, assistantOutput(notifyFooter('Before history merge'))))
+        const first = (await ingestNotify(store, source.id, 'default', firstAssistant.content, firstAssistant.id))
         expect(first?.inserted).toBe(true)
 
         await cache.mergeSessionHistory(source.id, target.id, 'default', { mergeAgentState: false })
 
-        const nextUser = store.messages.addMessage(source.id, userInbound('still on the live source'))
-        const nextAssistant = store.messages.addMessage(source.id, assistantOutput(notifyFooter('After history merge')))
-        const second = ingestNotify(store, source.id, 'default', nextAssistant.content, nextAssistant.id)
+        const nextUser = (await store.messages.addMessage(source.id, userInbound('still on the live source')))
+        const nextAssistant = (await store.messages.addMessage(source.id, assistantOutput(notifyFooter('After history merge'))))
+        const second = (await ingestNotify(store, source.id, 'default', nextAssistant.content, nextAssistant.id))
 
         expect(second?.event.relatedEventId).toBe(first!.event.id)
         expect(second?.event.payloadJson).toMatchObject({
@@ -923,33 +923,33 @@ describe('ingestNotifySummaryFromMessage cause stamping', () => {
         })
         expect((second?.event.payloadJson as { causeMessageId?: string })?.causeMessageId)
             .not.toBe(firstUser.id)
-        const onSource = store.workGraph.listWorkAdsByRelatedSession('default', source.id)
+        const onSource = (await store.workGraph.listWorkAdsByRelatedSession('default', source.id))
             .map((event) => event.id)
         expect(onSource).toContain(first!.event.id)
         expect(onSource).toContain(second!.event.id)
     })
 
-    it('does not re-attribute a prior batch after surviving-session seq-shift', () => {
+    it('does not re-attribute a prior batch after surviving-session seq-shift', async () => {
         const store = new Store(':memory:')
-        const surviving = store.sessions.getOrCreateSession('sess-cause-shift-live', {}, null, 'default')
-        const incoming = store.sessions.getOrCreateSession('sess-cause-shift-in', {}, null, 'default')
+        const surviving = (await store.sessions.getOrCreateSession('sess-cause-shift-live', {}, null, 'default'))
+        const incoming = (await store.sessions.getOrCreateSession('sess-cause-shift-in', {}, null, 'default'))
 
-        const one = store.messages.addMessage(surviving.id, userInbound('one'), 'shift-1')
-        const two = store.messages.addMessage(surviving.id, userInbound('two'), 'shift-2')
-        store.messages.addMessage(surviving.id, userInbound('three'), 'shift-3')
-        store.messages.markMessagesInvoked(surviving.id, ['shift-1', 'shift-2', 'shift-3'], 1_700_000_222_000)
-        const assistant = store.messages.addMessage(surviving.id, assistantOutput(notifyFooter('Batched')))
-        const first = ingestNotify(store, surviving.id, 'default', assistant.content, assistant.id)
+        const one = (await store.messages.addMessage(surviving.id, userInbound('one'), 'shift-1'))
+        const two = (await store.messages.addMessage(surviving.id, userInbound('two'), 'shift-2'))
+        await store.messages.addMessage(surviving.id, userInbound('three'), 'shift-3')
+        await store.messages.markMessagesInvoked(surviving.id, ['shift-1', 'shift-2', 'shift-3'], 1_700_000_222_000)
+        const assistant = (await store.messages.addMessage(surviving.id, assistantOutput(notifyFooter('Batched'))))
+        const first = (await ingestNotify(store, surviving.id, 'default', assistant.content, assistant.id))
         expect(first?.event.payloadJson).toMatchObject({ causeMessageId: one.id })
 
-        store.messages.addMessage(incoming.id, userInbound('history from the other id'))
-        store.messages.mergeSessionMessages(incoming.id, surviving.id)
+        await store.messages.addMessage(incoming.id, userInbound('history from the other id'))
+        await store.messages.mergeSessionMessages(incoming.id, surviving.id)
 
-        const secondAssistant = store.messages.addMessage(
+        const secondAssistant = (await store.messages.addMessage(
             surviving.id,
             assistantOutput(notifyFooter('Sticky after merge'))
-        )
-        const second = ingestNotify(store, surviving.id, 'default', secondAssistant.content, secondAssistant.id)
+        ))
+        const second = (await ingestNotify(store, surviving.id, 'default', secondAssistant.content, secondAssistant.id))
         expect(second?.event.payloadJson).toMatchObject({
             causeMessageId: one.id,
             causeText: 'one'

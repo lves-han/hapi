@@ -85,7 +85,7 @@ export class IosPushService {
     }
 
     async sendToNamespace(namespace: string, payload: IosPushNotificationPayload): Promise<IosPushSendResult> {
-        const devices = this.store.fcm.getDevicesByNamespace(namespace, ['ios'])
+        const devices = (await this.store.fcm.getDevicesByNamespace(namespace, ['ios']))
         if (devices.length === 0) {
             return { sent: 0, failed: 0, invalidTokens: [] }
         }
@@ -113,7 +113,7 @@ export class IosPushService {
             failed += 1
             if (outcome === 'invalid') {
                 invalidTokens.push(device.token)
-                this.store.fcm.removeDeviceByToken(namespace, device.token)
+                await this.store.fcm.removeDeviceByToken(namespace, device.token)
             }
         }))
 

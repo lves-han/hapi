@@ -54,9 +54,9 @@ describe('SyncEngine.maybeAutoMigrateLegacyCursorSession', () => {
         } as unknown as Session
     }
 
-    beforeEach(() => {
+    beforeEach(async () => {
         store = new Store(':memory:')
-        engine = new SyncEngine(store, {} as never, new RpcRegistry(), { broadcast() {} } as never)
+        engine = await SyncEngine.create(store, {} as never, new RpcRegistry(), { broadcast() {} } as never)
         hapiHomeRoot = mkdtempSync(join(tmpdir(), 'auto-migrate-test-'))
         originalEnvFlag = process.env.HAPI_CURSOR_LEGACY_AUTO_MIGRATE
         originalHapiHome = process.env.HAPI_HOME
@@ -195,9 +195,9 @@ describe('SyncEngine.maybeAutoMigrateLegacyCursorSession', () => {
     describe('UX A++ migration-in-progress banner flag', () => {
         // Insert a real cursor legacy session into the store so the helper's
         // metadata writes have something to update.
-        function insertLegacy(sessionId: string): Session {
+        async function insertLegacy(sessionId: string): Promise<Session> {
             const cache = (engine as unknown as { sessionCache: import('./sessionCache').SessionCache }).sessionCache
-            const persisted = cache.getOrCreateSession(
+            const persisted = (await cache.getOrCreateSession(
                 sessionId,
                 {
                     path: '/tmp/proj',
@@ -208,46 +208,46 @@ describe('SyncEngine.maybeAutoMigrateLegacyCursorSession', () => {
                 },
                 null,
                 'default'
-            )
+            ))
             return persisted
         }
-        function getStoredMetadata(sessionId: string): Record<string, unknown> | undefined {
+        async function getStoredMetadata(sessionId: string): Promise<Record<string, unknown> | undefined> {
             const store = (engine as unknown as { store: Store }).store
-            const row = store.sessions.getSession(sessionId)
+            const row = (await store.sessions.getSession(sessionId))
             if (!row) return undefined
             return row.metadata as unknown as Record<string, unknown>
         }
 
         it('sets cursorMigrationState=in_progress before the migrator runs and clears it on failure', async () => {
-            const session = insertLegacy('session-flag-fail')
+            const session = (await insertLegacy('session-flag-fail'))
 
             let observedFlagAtMigrate: unknown
             ;(engine as unknown as { buildMigratorForRequest: (req: unknown) => unknown }).buildMigratorForRequest = () => ({
                 migrateOne: async (s: Session) => {
-                    observedFlagAtMigrate = getStoredMetadata(s.id)?.cursorMigrationState
+                    observedFlagAtMigrate = (await getStoredMetadata(s.id))?.cursorMigrationState
                     return { ok: false, sessionId: s.id, reason: 'internal_error', message: 'stub fail', durationMs: 1 }
                 }
             })
 
             await callHelper(session)
             expect(observedFlagAtMigrate).toBe('in_progress')
-            expect(getStoredMetadata(session.id)?.cursorMigrationState).toBeUndefined()
+            expect((await getStoredMetadata(session.id))?.cursorMigrationState).toBeUndefined()
         })
 
         it('sets cursorMigrationState=in_progress before the migrator runs and clears it on unexpected exception', async () => {
-            const session = insertLegacy('session-flag-exception')
+            const session = (await insertLegacy('session-flag-exception'))
 
             let observedFlagAtMigrate: unknown
             ;(engine as unknown as { buildMigratorForRequest: (req: unknown) => unknown }).buildMigratorForRequest = () => ({
                 migrateOne: async (s: Session) => {
-                    observedFlagAtMigrate = getStoredMetadata(s.id)?.cursorMigrationState
+                    observedFlagAtMigrate = (await getStoredMetadata(s.id))?.cursorMigrationState
                     throw new Error('boom')
                 }
             })
 
             await callHelper(session)
             expect(observedFlagAtMigrate).toBe('in_progress')
-            expect(getStoredMetadata(session.id)?.cursorMigrationState).toBeUndefined()
+            expect((await getStoredMetadata(session.id))?.cursorMigrationState).toBeUndefined()
         })
 
         it('on migrator success the helper does NOT clear the flag (the flip writer is responsible)', async () => {
@@ -256,7 +256,7 @@ describe('SyncEngine.maybeAutoMigrateLegacyCursorSession', () => {
             // (in the same write that flips the protocol). We stub a
             // migrator that returns ok=true WITHOUT calling the flip path,
             // so the flag should still be set after the helper returns.
-            const session = insertLegacy('session-flag-success-no-clear')
+            const session = (await insertLegacy('session-flag-success-no-clear'))
             ;(engine as unknown as { buildMigratorForRequest: (req: unknown) => unknown }).buildMigratorForRequest = () => ({
                 migrateOne: async (s: Session) => ({
                     ok: true,
@@ -270,7 +270,7 @@ describe('SyncEngine.maybeAutoMigrateLegacyCursorSession', () => {
                 })
             })
             await callHelper(session)
-            expect(getStoredMetadata(session.id)?.cursorMigrationState).toBe('in_progress')
+            expect((await getStoredMetadata(session.id))?.cursorMigrationState).toBe('in_progress')
         })
 
         // tiann/hapi#872: on ambiguous_legacy_store / size_mismatch
@@ -278,7 +278,7 @@ describe('SyncEngine.maybeAutoMigrateLegacyCursorSession', () => {
         // 'ambiguous' (not clear it) so the web banner can surface an
         // actionable state instead of silently disappearing.
         it('promotes cursorMigrationState to "ambiguous" on ambiguous_legacy_store refusal (tiann/hapi#872)', async () => {
-            const session = insertLegacy('session-ambiguous-banner')
+            const session = (await insertLegacy('session-ambiguous-banner'))
             ;(engine as unknown as { buildMigratorForRequest: (req: unknown) => unknown }).buildMigratorForRequest = () => ({
                 migrateOne: async (s: Session) => ({
                     ok: false,
@@ -289,11 +289,11 @@ describe('SyncEngine.maybeAutoMigrateLegacyCursorSession', () => {
                 })
             })
             await callHelper(session)
-            expect(getStoredMetadata(session.id)?.cursorMigrationState).toBe('ambiguous')
+            expect((await getStoredMetadata(session.id))?.cursorMigrationState).toBe('ambiguous')
         })
 
         it('promotes cursorMigrationState to "ambiguous" on size_mismatch refusal (tiann/hapi#872)', async () => {
-            const session = insertLegacy('session-size-mismatch-banner')
+            const session = (await insertLegacy('session-size-mismatch-banner'))
             ;(engine as unknown as { buildMigratorForRequest: (req: unknown) => unknown }).buildMigratorForRequest = () => ({
                 migrateOne: async (s: Session) => ({
                     ok: false,
@@ -304,32 +304,32 @@ describe('SyncEngine.maybeAutoMigrateLegacyCursorSession', () => {
                 })
             })
             await callHelper(session)
-            expect(getStoredMetadata(session.id)?.cursorMigrationState).toBe('ambiguous')
+            expect((await getStoredMetadata(session.id))?.cursorMigrationState).toBe('ambiguous')
         })
 
-        it('flipCursorSessionProtocolToAcp clears cursorMigrationState in the same metadata write that flips protocol', () => {
-            const session = insertLegacy('session-flip-clears-flag')
+        it('flipCursorSessionProtocolToAcp clears cursorMigrationState in the same metadata write that flips protocol', async () => {
+            const session = (await insertLegacy('session-flip-clears-flag'))
             const store = (engine as unknown as { store: Store }).store
             const cache = (engine as unknown as { sessionCache: import('./sessionCache').SessionCache }).sessionCache
 
             // Manually plant the flag (simulating the helper having run earlier).
-            const initial = store.sessions.getSession(session.id)!
+            const initial = (await store.sessions.getSession(session.id))!
             const initialMeta = initial.metadata as unknown as Record<string, unknown>
-            store.sessions.updateSessionMetadata(
+            await store.sessions.updateSessionMetadata(
                 session.id,
                 { ...initialMeta, cursorMigrationState: 'in_progress' } as unknown as typeof initial.metadata,
                 initial.metadataVersion,
                 'default',
                 { touchUpdatedAt: false }
             )
-            cache.refreshSession(session.id)
+            await cache.refreshSession(session.id)
 
-            expect(getStoredMetadata(session.id)?.cursorMigrationState).toBe('in_progress')
+            expect((await getStoredMetadata(session.id))?.cursorMigrationState).toBe('in_progress')
 
-            const result = engine.flipCursorSessionProtocolToAcp(session.id, 'default', null)
+            const result = (await engine.flipCursorSessionProtocolToAcp(session.id, 'default', null))
             expect(result.result).toBe('success')
 
-            const after = getStoredMetadata(session.id)
+            const after = (await getStoredMetadata(session.id))
             // Both must be true in a SINGLE atomic metadata write.
             expect(after?.cursorSessionProtocol).toBe('acp')
             expect(after?.cursorMigrationState).toBeUndefined()

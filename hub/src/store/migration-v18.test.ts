@@ -6,13 +6,13 @@ import { tmpdir } from 'node:os'
 import { Store } from './index'
 
 describe('Store V18->V19 migration: usage scan state', () => {
-    it('adds the usage_scan_state table to a V18 database', () => {
+    it('adds the usage_scan_state table to a V18 database', async () => {
         const directory = mkdtempSync(join(tmpdir(), 'hapi-migration-v18-to-v19-'))
         const dbPath = join(directory, 'test.db')
         let store: Store | undefined
         try {
             store = new Store(dbPath)
-            store.close()
+            await store.close()
             store = undefined
 
             const db = new Database(dbPath, { create: true, readwrite: true, strict: true })
@@ -41,7 +41,7 @@ describe('Store V18->V19 migration: usage scan state', () => {
             expect(version.user_version).toBe(26)
             expect(usageRows.count).toBe(0)
         } finally {
-            store?.close()
+            await store?.close()
             rmSync(directory, { recursive: true, force: true })
         }
     })

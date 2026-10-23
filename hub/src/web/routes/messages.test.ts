@@ -90,7 +90,7 @@ describe('GET /api/sessions/:id/messages', () => {
     it('uses latest mode by default and returns the full page metadata', async () => {
         const calls: Array<{ sessionId: string; options: Parameters<GetMessagesPage>[1] }> = []
         const { app } = createApp({
-            getMessagesPage: (sessionId, options) => {
+            getMessagesPage: async (sessionId, options) => {
                 calls.push({ sessionId, options })
                 return {
                     messages: [],
@@ -139,7 +139,7 @@ describe('GET /api/sessions/:id/messages', () => {
     it('forwards after, snapshot-head, epoch, and limit query parameters', async () => {
         const calls: Array<{ sessionId: string; options: Parameters<GetMessagesPage>[1] }> = []
         const { app } = createApp({
-            getMessagesPage: (sessionId, options) => {
+            getMessagesPage: async (sessionId, options) => {
                 calls.push({ sessionId, options })
                 return {
                     messages: [],
@@ -180,7 +180,7 @@ describe('GET /api/sessions/:id/messages', () => {
     it('rejects mixed directional cursors before calling the engine', async () => {
         let called = false
         const { app } = createApp({
-            getMessagesPage: () => {
+            getMessagesPage: async () => {
                 called = true
                 throw new Error('must not be called')
             }

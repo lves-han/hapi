@@ -3,36 +3,36 @@ import { Store } from './index'
 import { mergeMachineMetadata } from './machines'
 
 describe('machine metadata backfill', () => {
-    it('merges incoming metadata over stored fields on re-registration', () => {
+    it('merges incoming metadata over stored fields on re-registration', async () => {
         const store = new Store(':memory:')
-        const created = store.machines.getOrCreateMachine('machine-1', null, null, 'ns')
+        const created = (await store.machines.getOrCreateMachine('machine-1', null, null, 'ns'))
         expect(created.metadata).toBeNull()
 
-        const refreshed = store.machines.getOrCreateMachine(
+        const refreshed = (await store.machines.getOrCreateMachine(
             'machine-1',
             { host: 'MacBook Pro', platform: 'darwin' },
             null,
             'ns'
-        )
+        ))
 
         expect(refreshed.metadata).toEqual({ host: 'MacBook Pro', platform: 'darwin' })
         expect(refreshed.metadataVersion).toBe(created.metadataVersion + 1)
     })
 
-    it('preserves hub-side fields the CLI never sends', () => {
+    it('preserves hub-side fields the CLI never sends', async () => {
         const store = new Store(':memory:')
-        store.machines.getOrCreateMachine('machine-1', { displayName: 'Workstation', host: 'old-host' }, null, 'ns')
+        await store.machines.getOrCreateMachine('machine-1', { displayName: 'Workstation', host: 'old-host' }, null, 'ns')
 
-        const refreshed = store.machines.getOrCreateMachine('machine-1', { host: 'new-host' }, null, 'ns')
+        const refreshed = (await store.machines.getOrCreateMachine('machine-1', { host: 'new-host' }, null, 'ns'))
 
         expect(refreshed.metadata).toEqual({ displayName: 'Workstation', host: 'new-host' })
     })
 
-    it('does not write when the merge changes nothing', () => {
+    it('does not write when the merge changes nothing', async () => {
         const store = new Store(':memory:')
-        const created = store.machines.getOrCreateMachine('machine-1', { host: 'alpha' }, null, 'ns')
+        const created = (await store.machines.getOrCreateMachine('machine-1', { host: 'alpha' }, null, 'ns'))
 
-        const again = store.machines.getOrCreateMachine('machine-1', { host: 'alpha' }, null, 'ns')
+        const again = (await store.machines.getOrCreateMachine('machine-1', { host: 'alpha' }, null, 'ns'))
 
         expect(again.metadataVersion).toBe(created.metadataVersion)
         expect(again.updatedAt).toBe(created.updatedAt)
@@ -80,9 +80,9 @@ describe('mergeMachineMetadata', () => {
 })
 
 describe('runner metadata ad clear on re-registration', () => {
-    it('drops sticky supervisedRestart and capabilities when runner re-registers without them', () => {
+    it('drops sticky supervisedRestart and capabilities when runner re-registers without them', async () => {
         const store = new Store(':memory:')
-        store.machines.getOrCreateMachine(
+        await store.machines.getOrCreateMachine(
             'machine-1',
             {
                 host: 'box',
@@ -94,33 +94,33 @@ describe('runner metadata ad clear on re-registration', () => {
             'ns',
         )
 
-        const refreshed = store.machines.getOrCreateMachine(
+        const refreshed = (await store.machines.getOrCreateMachine(
             'machine-1',
             { host: 'box', supervisedRestart: false },
             { status: 'running', pid: 2 },
             'ns',
-        )
+        ))
 
         expect(refreshed.metadata).toEqual({ host: 'box', supervisedRestart: false })
         expect(refreshed.metadata).not.toHaveProperty('capabilities')
         expect(refreshed.metadata).not.toHaveProperty('startedCliMtimeMs')
     })
 
-    it('does not clear runner ads on terminal-only metadata refresh (no runnerState)', () => {
+    it('does not clear runner ads on terminal-only metadata refresh (no runnerState)', async () => {
         const store = new Store(':memory:')
-        store.machines.getOrCreateMachine(
+        await store.machines.getOrCreateMachine(
             'machine-1',
             { host: 'box', capabilities: ['stop-runner'], supervisedRestart: true },
             { status: 'running', pid: 1 },
             'ns',
         )
 
-        const refreshed = store.machines.getOrCreateMachine(
+        const refreshed = (await store.machines.getOrCreateMachine(
             'machine-1',
             { host: 'box' },
             null,
             'ns',
-        )
+        ))
 
         expect(refreshed.metadata).toEqual({
             host: 'box',
@@ -131,17 +131,17 @@ describe('runner metadata ad clear on re-registration', () => {
 })
 
 describe('runner capabilities backfill', () => {
-    it('merges registration-time capabilities into an existing machine', () => {
+    it('merges registration-time capabilities into an existing machine', async () => {
         const store = new Store(':memory:')
-        const created = store.machines.getOrCreateMachine('machine-1', null, { status: 'offline', pid: 1 }, 'ns')
+        const created = (await store.machines.getOrCreateMachine('machine-1', null, { status: 'offline', pid: 1 }, 'ns'))
         expect(created.runnerState).toEqual({ status: 'offline', pid: 1 })
 
-        const refreshed = store.machines.getOrCreateMachine(
+        const refreshed = (await store.machines.getOrCreateMachine(
             'machine-1',
             null,
             { status: 'offline', pid: 2, capabilities: { piExistingSessionResume: true } },
             'ns'
-        )
+        ))
 
         expect(refreshed.runnerState).toEqual({
             status: 'offline',
@@ -151,16 +151,16 @@ describe('runner capabilities backfill', () => {
         expect(refreshed.runnerStateVersion).toBe(created.runnerStateVersion + 1)
     })
 
-    it('keeps live runner-state fields socket-owned on registration', () => {
+    it('keeps live runner-state fields socket-owned on registration', async () => {
         const store = new Store(':memory:')
-        store.machines.getOrCreateMachine('machine-1', null, { status: 'running', pid: 99 }, 'ns')
+        await store.machines.getOrCreateMachine('machine-1', null, { status: 'running', pid: 99 }, 'ns')
 
-        const refreshed = store.machines.getOrCreateMachine(
+        const refreshed = (await store.machines.getOrCreateMachine(
             'machine-1',
             null,
             { status: 'offline', pid: 100, startedAt: 1, capabilities: { piExistingSessionResume: true } },
             'ns'
-        )
+        ))
 
         expect(refreshed.runnerState).toEqual({
             status: 'running',
@@ -169,37 +169,37 @@ describe('runner capabilities backfill', () => {
         })
     })
 
-    it('does not write when capabilities are unchanged or absent', () => {
+    it('does not write when capabilities are unchanged or absent', async () => {
         const store = new Store(':memory:')
-        const created = store.machines.getOrCreateMachine(
+        const created = (await store.machines.getOrCreateMachine(
             'machine-1',
             null,
             { status: 'running', capabilities: { piExistingSessionResume: true } },
             'ns'
-        )
+        ))
 
-        const unchanged = store.machines.getOrCreateMachine(
+        const unchanged = (await store.machines.getOrCreateMachine(
             'machine-1',
             null,
             { status: 'offline', capabilities: { piExistingSessionResume: true } },
             'ns'
-        )
+        ))
         expect(unchanged.runnerStateVersion).toBe(created.runnerStateVersion)
 
-        const noCaps = store.machines.getOrCreateMachine('machine-1', null, { status: 'offline' }, 'ns')
+        const noCaps = (await store.machines.getOrCreateMachine('machine-1', null, { status: 'offline' }, 'ns'))
         expect(noCaps.runnerStateVersion).toBe(created.runnerStateVersion)
     })
 
-    it('merges capabilities even when metadata also changes in the same call', () => {
+    it('merges capabilities even when metadata also changes in the same call', async () => {
         const store = new Store(':memory:')
-        const created = store.machines.getOrCreateMachine('machine-1', { host: 'old-host' }, { status: 'offline', pid: 1 }, 'ns')
+        const created = (await store.machines.getOrCreateMachine('machine-1', { host: 'old-host' }, { status: 'offline', pid: 1 }, 'ns'))
 
-        const refreshed = store.machines.getOrCreateMachine(
+        const refreshed = (await store.machines.getOrCreateMachine(
             'machine-1',
             { host: 'new-host', happyCliVersion: '0.28.0' },
             { status: 'offline', pid: 2, capabilities: { piExistingSessionResume: true } },
             'ns'
-        )
+        ))
 
         expect(refreshed.metadata).toEqual({ host: 'new-host', happyCliVersion: '0.28.0' })
         expect(refreshed.metadataVersion).toBe(created.metadataVersion + 1)

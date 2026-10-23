@@ -1,4 +1,4 @@
-import type { Database } from 'bun:sqlite'
+import type { Database } from './database'
 
 import type { VersionedUpdateResult } from './types'
 
@@ -17,7 +17,7 @@ type VersionedUpdateArgs<T> = {
     params?: Record<string, unknown>
 }
 
-export function updateVersionedField<T>(args: VersionedUpdateArgs<T>): VersionedUpdateResult<T> {
+export async function updateVersionedField<T>(args: VersionedUpdateArgs<T>): Promise<VersionedUpdateResult<T>> {
     try {
         const setClauses = [
             `${args.field} = @field_value`,
@@ -25,7 +25,7 @@ export function updateVersionedField<T>(args: VersionedUpdateArgs<T>): Versioned
             ...(args.setClauses ?? [])
         ]
 
-        const result = args.db.prepare(
+        const result = (await args.db.prepare(
             `UPDATE ${args.table}
              SET ${setClauses.join(', ')}
              WHERE id = @id AND namespace = @namespace AND ${args.versionField} = @expectedVersion`
@@ -35,17 +35,17 @@ export function updateVersionedField<T>(args: VersionedUpdateArgs<T>): Versioned
             expectedVersion: args.expectedVersion,
             field_value: args.encode(args.value),
             ...(args.params ?? {})
-        })
+        }))
 
         if (result.changes === 1) {
             return { result: 'success', version: args.expectedVersion + 1, value: args.value }
         }
 
-        const current = args.db.prepare(
+        const current = (await args.db.prepare(
             `SELECT ${args.field} AS field_value, ${args.versionField} AS version
              FROM ${args.table}
              WHERE id = ? AND namespace = ?`
-        ).get(args.id, args.namespace) as { field_value: string | null; version: number } | undefined
+        ).get(args.id, args.namespace)) as { field_value: string | null; version: number } | undefined
 
         if (!current) {
             return { result: 'error' }

@@ -27,7 +27,7 @@ function createApp(store: Store) {
 describe('devices routes', () => {
     it('validates and stores phone keys and replaces the legacy install identity without duplicates', async () => {
         const store = new Store(':memory:')
-        store.fcm.upsertDevice('default', { token: 'same-token', platform: 'phone', deviceId: 'old-datastore-id' })
+        await store.fcm.upsertDevice('default', { token: 'same-token', platform: 'phone', deviceId: 'old-datastore-id' })
         const app = createApp(store)
         const headers = { ...await authHeaders(), 'content-type': 'application/json' }
         for (const pushKey of ['', '!!!!' + 'a'.repeat(43), Buffer.alloc(31).toString('base64')]) {
@@ -39,10 +39,10 @@ describe('devices routes', () => {
             expect((await app.request('/api/devices/register', { method: 'POST', headers,
                 body: JSON.stringify({ token, platform: 'phone', deviceId: 'new-id', pushKey: pushKey.replace(/=+$/, '') }) })).status).toBe(200)
         }
-        const devices = store.fcm.getDevicesByNamespace('default')
+        const devices = (await store.fcm.getDevicesByNamespace('default'))
         expect(devices).toHaveLength(1)
         expect(devices[0]).toMatchObject({ deviceId: 'new-id', token: 'rotated-token', pushKey })
-        store.close()
+        await store.close()
     })
     it('registers and unregisters FCM devices for namespace', async () => {
         const store = new Store(':memory:')
@@ -60,7 +60,7 @@ describe('devices routes', () => {
         })
         expect(register.status).toBe(200)
 
-        const devices = store.fcm.getDevicesByNamespace('default')
+        const devices = (await store.fcm.getDevicesByNamespace('default'))
         expect(devices).toHaveLength(1)
         expect(devices[0].platform).toBe('wear')
 
@@ -70,7 +70,7 @@ describe('devices routes', () => {
             body: JSON.stringify({ token: 'fcm-tok-1' })
         })
         expect(unregister.status).toBe(200)
-        expect(store.fcm.getDevicesByNamespace('default')).toHaveLength(0)
+        expect((await store.fcm.getDevicesByNamespace('default'))).toHaveLength(0)
     })
 
     it('old phone registration remains usable without a pushKey', async () => {
@@ -89,7 +89,7 @@ describe('devices routes', () => {
         })
         expect(register.status).toBe(200)
 
-        const devices = store.fcm.getDevicesByNamespace('default')
+        const devices = (await store.fcm.getDevicesByNamespace('default'))
         expect(devices).toHaveLength(1)
         expect(devices[0].platform).toBe('phone')
         expect(devices[0].pushKey).toBeNull()
@@ -113,7 +113,7 @@ describe('devices routes', () => {
         })
         expect(register.status).toBe(200)
 
-        const devices = store.fcm.getDevicesByNamespace('default', ['ios'])
+        const devices = (await store.fcm.getDevicesByNamespace('default', ['ios']))
         expect(devices).toHaveLength(1)
         expect(devices[0].platform).toBe('ios')
         expect(devices[0].token).toBe('a1b2c3d4e5f6')
@@ -135,7 +135,7 @@ describe('devices routes', () => {
             })
         })
         expect(register.status).toBe(400)
-        expect(store.fcm.getDevicesByNamespace('default')).toHaveLength(0)
+        expect((await store.fcm.getDevicesByNamespace('default'))).toHaveLength(0)
     })
 
     it('rejects an iOS pushKey that is not exactly 32 bytes', async () => {
@@ -160,7 +160,7 @@ describe('devices routes', () => {
             })
             expect(register.status).toBe(400)
         }
-        expect(store.fcm.getDevicesByNamespace('default')).toHaveLength(0)
+        expect((await store.fcm.getDevicesByNamespace('default'))).toHaveLength(0)
     })
 
     it('rejects an iOS pushKey with a non-base64 alphabet even at the right length', async () => {
@@ -199,7 +199,7 @@ describe('devices routes', () => {
                 pushKey: Buffer.alloc(32, 5).toString('base64')
             })
         })
-        expect(store.fcm.getDevicesByNamespace('default', ['ios'])).toHaveLength(1)
+        expect((await store.fcm.getDevicesByNamespace('default', ['ios']))).toHaveLength(1)
 
         const unregister = await app.request('/api/devices/register', {
             method: 'DELETE',
@@ -207,6 +207,6 @@ describe('devices routes', () => {
             body: JSON.stringify({ token: 'apns-tok-1' })
         })
         expect(unregister.status).toBe(200)
-        expect(store.fcm.getDevicesByNamespace('default', ['ios'])).toHaveLength(0)
+        expect((await store.fcm.getDevicesByNamespace('default', ['ios']))).toHaveLength(0)
     })
 })

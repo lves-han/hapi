@@ -13,6 +13,14 @@ afterEach(async () => {
 })
 
 describe('GET /api/storage/sqlite', () => {
+    it('identifies PostgreSQL instead of reporting retained source bytes as live storage', async () => {
+        const app = new Hono<WebAppEnv>()
+        app.use('*', async (c, next) => { c.set('namespace', 'default'); await next() })
+        app.route('/api', createStorageRoutes('/retained/hapi.db', 'postgres'))
+        const response = await app.request('/api/storage/sqlite')
+        expect(response.status).toBe(409)
+        expect(await response.json()).toEqual({ error: 'Hub storage uses PostgreSQL; the SQLite file is a retained migration source' })
+    })
     function createApp(dbPath: string, namespace = 'default') {
         const app = new Hono<WebAppEnv>()
         app.use('*', async (c, next) => {

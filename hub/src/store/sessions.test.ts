@@ -7,62 +7,62 @@ function makeStore(): Store {
     return new Store(':memory:')
 }
 
-function getMetadata(store: Store, id: string): Record<string, unknown> | null {
-    const row = store.sessions.getSession(id)
+async function getMetadata(store: Store, id: string): Promise<Record<string, unknown> | null> {
+    const row = (await store.sessions.getSession(id))
     return (row?.metadata ?? null) as Record<string, unknown> | null
 }
 
 describe('getOrCreateSession: active_at', () => {
-    it('persists a non-null active_at on insert (never NULL)', () => {
+    it('persists a non-null active_at on insert (never NULL)', async () => {
         const store = makeStore()
-        const created = store.sessions.getOrCreateSession(
+        const created = (await store.sessions.getOrCreateSession(
             'active-at-write',
             { path: '/tmp/project', host: 'localhost' },
             null,
             'default'
-        )
+        ))
 
         expect(typeof created.activeAt).toBe('number')
         expect(created.activeAt).not.toBeNull()
         expect(created.activeAt).toBe(created.createdAt)
 
-        const reloaded = store.sessions.getSession(created.id)
+        const reloaded = (await store.sessions.getSession(created.id))
         expect(reloaded?.activeAt).toBe(created.createdAt)
-        store.close()
+        await store.close()
     })
 })
 
 describe('session pinning', () => {
-    it('persists project and global pin modes without changing session recency', () => {
+    it('persists project and global pin modes without changing session recency', async () => {
         const store = makeStore()
-        const session = store.sessions.getOrCreateSession('pin-test', {}, null, 'default')
+        const session = (await store.sessions.getOrCreateSession('pin-test', {}, null, 'default'))
 
         expect(session.pinned).toBe(false)
         expect(session.globalPinned).toBe(false)
-        expect(store.sessions.setSessionPinMode(session.id, 'project', 'default')).toBe(true)
+        expect((await store.sessions.setSessionPinMode(session.id, 'project', 'default'))).toBe(true)
 
-        const projectPinned = store.sessions.getSession(session.id)
+        const projectPinned = (await store.sessions.getSession(session.id))
         expect(projectPinned?.pinned).toBe(true)
         expect(projectPinned?.globalPinned).toBe(false)
         expect(projectPinned?.updatedAt).toBe(session.updatedAt)
 
-        expect(store.sessions.setSessionPinMode(session.id, 'global', 'default')).toBe(true)
-        const globalPinned = store.sessions.getSession(session.id)
+        expect((await store.sessions.setSessionPinMode(session.id, 'global', 'default'))).toBe(true)
+        const globalPinned = (await store.sessions.getSession(session.id))
         expect(globalPinned?.pinned).toBe(false)
         expect(globalPinned?.globalPinned).toBe(true)
 
-        expect(store.sessions.setSessionPinMode(session.id, 'none', 'other')).toBe(false)
-        expect(store.sessions.getSession(session.id)?.globalPinned).toBe(true)
-        store.close()
+        expect((await store.sessions.setSessionPinMode(session.id, 'none', 'other'))).toBe(false)
+        expect((await store.sessions.getSession(session.id))?.globalPinned).toBe(true)
+        await store.close()
     })
 })
 
 describe('getOrCreateSession: requested identity', () => {
-    it('creates and idempotently reloads a client-requested id', () => {
+    it('creates and idempotently reloads a client-requested id', async () => {
         const store = makeStore()
         const requestedId = randomUUID()
 
-        const created = store.sessions.getOrCreateSession(
+        const created = (await store.sessions.getOrCreateSession(
             'lazy-session-tag',
             { path: '/tmp/project' },
             { controlledByUser: true },
@@ -71,8 +71,8 @@ describe('getOrCreateSession: requested identity', () => {
             undefined,
             undefined,
             requestedId
-        )
-        const reloaded = store.sessions.getOrCreateSession(
+        ))
+        const reloaded = (await store.sessions.getOrCreateSession(
             'lazy-session-tag',
             { path: '/tmp/ignored' },
             null,
@@ -81,46 +81,46 @@ describe('getOrCreateSession: requested identity', () => {
             undefined,
             undefined,
             requestedId
-        )
+        ))
 
         expect(created.id).toBe(requestedId)
         expect(reloaded.id).toBe(requestedId)
-        expect(store.sessions.getSessionsByNamespace('default')).toHaveLength(1)
-        store.close()
+        expect((await store.sessions.getSessionsByNamespace('default'))).toHaveLength(1)
+        await store.close()
     })
 
-    it('rejects a tag already bound to another requested id', () => {
+    it('rejects a tag already bound to another requested id', async () => {
         const store = makeStore()
         const firstId = randomUUID()
-        store.sessions.getOrCreateSession(
+        await store.sessions.getOrCreateSession(
             'conflicting-tag', {}, null, 'default', undefined, undefined, undefined, firstId
         )
 
-        expect(() => store.sessions.getOrCreateSession(
+        expect(async () => (await store.sessions.getOrCreateSession(
             'conflicting-tag', {}, null, 'default', undefined, undefined, undefined, randomUUID()
-        )).toThrow(SessionIdentityConflictError)
-        store.close()
+        ))).toThrow(SessionIdentityConflictError)
+        await store.close()
     })
 
-    it('rejects a requested id already bound to another tag', () => {
+    it('rejects a requested id already bound to another tag', async () => {
         const store = makeStore()
         const requestedId = randomUUID()
-        store.sessions.getOrCreateSession(
+        await store.sessions.getOrCreateSession(
             'first-tag', {}, null, 'default', undefined, undefined, undefined, requestedId
         )
 
-        expect(() => store.sessions.getOrCreateSession(
+        expect(async () => (await store.sessions.getOrCreateSession(
             'second-tag', {}, null, 'default', undefined, undefined, undefined, requestedId
-        )).toThrow(SessionIdentityConflictError)
-        store.close()
+        ))).toThrow(SessionIdentityConflictError)
+        await store.close()
     })
 
-    it('reproduces hub-prealloc vs CLI-tag conflict (machine-spawn stub, #1911)', () => {
+    it('reproduces hub-prealloc vs CLI-tag conflict (machine-spawn stub, #1911)', async () => {
         // Hub preallocates with tag machine-spawn:<uuid>; CLI create used a random
         // tag + the same id → 409. This documents the bug adopt must fix.
         const store = makeStore()
         const allocatedId = randomUUID()
-        store.sessions.getOrCreateSession(
+        await store.sessions.getOrCreateSession(
             `machine-spawn:${allocatedId}`,
             {
                 path: '/tmp/project',
@@ -138,7 +138,7 @@ describe('getOrCreateSession: requested identity', () => {
             allocatedId
         )
 
-        expect(() => store.sessions.getOrCreateSession(
+        expect(async () => (await store.sessions.getOrCreateSession(
             randomUUID(), // CLI bootstrap tag
             {
                 path: '/tmp/project',
@@ -154,15 +154,15 @@ describe('getOrCreateSession: requested identity', () => {
             undefined,
             undefined,
             allocatedId
-        )).toThrow(SessionIdentityConflictError)
-        store.close()
+        ))).toThrow(SessionIdentityConflictError)
+        await store.close()
     })
 
-    it('adopts a machine-spawn preallocated stub and overwrites tag + metadata', () => {
+    it('adopts a machine-spawn preallocated stub and overwrites tag + metadata', async () => {
         const store = makeStore()
         const allocatedId = randomUUID()
         const cliTag = randomUUID()
-        store.sessions.getOrCreateSession(
+        await store.sessions.getOrCreateSession(
             `machine-spawn:${allocatedId}`,
             {
                 path: '/tmp/project',
@@ -180,7 +180,7 @@ describe('getOrCreateSession: requested identity', () => {
             allocatedId
         )
 
-        const adopted = store.sessions.adoptPreallocatedSession(
+        const adopted = (await store.sessions.adoptPreallocatedSession(
             allocatedId,
             cliTag,
             {
@@ -197,7 +197,7 @@ describe('getOrCreateSession: requested identity', () => {
             'claude-sonnet',
             undefined,
             undefined
-        )
+        ))
 
         expect(adopted.id).toBe(allocatedId)
         expect(adopted.tag).toBe(cliTag)
@@ -205,22 +205,22 @@ describe('getOrCreateSession: requested identity', () => {
         const meta = adopted.metadata as { hostPid?: number }
         expect(meta.hostPid).toBe(4242)
         // Idempotent adopt with same tag returns the row
-        const again = store.sessions.adoptPreallocatedSession(
+        const again = (await store.sessions.adoptPreallocatedSession(
             allocatedId,
             cliTag,
             { path: '/tmp/project', host: 'localhost', flavor: 'claude' },
             {},
             'default'
-        )
+        ))
         expect(again.id).toBe(allocatedId)
         expect(again.tag).toBe(cliTag)
-        store.close()
+        await store.close()
     })
 
-    it('rejects adopt when the row is not a preallocated stub', () => {
+    it('rejects adopt when the row is not a preallocated stub', async () => {
         const store = makeStore()
         const id = randomUUID()
-        store.sessions.getOrCreateSession(
+        await store.sessions.getOrCreateSession(
             'live-terminal-tag',
             { path: '/tmp', startedBy: 'terminal' },
             null,
@@ -231,22 +231,22 @@ describe('getOrCreateSession: requested identity', () => {
             id
         )
 
-        expect(() => store.sessions.adoptPreallocatedSession(
+        expect(async () => (await store.sessions.adoptPreallocatedSession(
             id,
             randomUUID(),
             { path: '/tmp', startedBy: 'runner' },
             {},
             'default'
-        )).toThrow(/not a preallocated stub|not adoptable/i)
-        store.close()
+        ))).toThrow(/not a preallocated stub|not adoptable/i)
+        await store.close()
     })
 
-    it('releases machine-spawn stub tag on metadata update (reopen-flavor path)', () => {
+    it('releases machine-spawn stub tag on metadata update (reopen-flavor path)', async () => {
         // codex/cursor/pi/… use --existing-session-id → bootstrapExistingSession
         // → updateMetadata, never adopt. Stub tag must not stick forever.
         const store = makeStore()
         const allocatedId = randomUUID()
-        const created = store.sessions.getOrCreateSession(
+        const created = (await store.sessions.getOrCreateSession(
             `machine-spawn:${allocatedId}`,
             {
                 path: '/tmp/project',
@@ -262,10 +262,10 @@ describe('getOrCreateSession: requested identity', () => {
             undefined,
             undefined,
             allocatedId
-        )
+        ))
         expect(created.tag).toBe(`machine-spawn:${allocatedId}`)
 
-        const updated = store.sessions.updateSessionMetadata(
+        const updated = (await store.sessions.updateSessionMetadata(
             allocatedId,
             {
                 path: '/tmp/project',
@@ -278,27 +278,27 @@ describe('getOrCreateSession: requested identity', () => {
             },
             created.metadataVersion,
             'default'
-        )
+        ))
         expect(updated.result).toBe('success')
-        const row = store.sessions.getSession(allocatedId)
+        const row = (await store.sessions.getSession(allocatedId))
         expect(row?.tag).not.toMatch(/^machine-spawn:/)
         expect((row?.metadata as { hostPid?: number } | null)?.hostPid).toBe(999)
 
         // Live row must no longer be adoptable.
-        expect(() => store.sessions.adoptPreallocatedSession(
+        expect(async () => (await store.sessions.adoptPreallocatedSession(
             allocatedId,
             randomUUID(),
             { path: '/tmp', flavor: 'cursor' },
             {},
             'default'
-        )).toThrow(/not a preallocated stub|not adoptable/i)
-        store.close()
+        ))).toThrow(/not a preallocated stub|not adoptable/i)
+        await store.close()
     })
 
-    it('rejects adopt of an archived preallocated stub', () => {
+    it('rejects adopt of an archived preallocated stub', async () => {
         const store = makeStore()
         const allocatedId = randomUUID()
-        store.sessions.getOrCreateSession(
+        await store.sessions.getOrCreateSession(
             `machine-spawn:${allocatedId}`,
             {
                 path: '/tmp/project',
@@ -318,25 +318,25 @@ describe('getOrCreateSession: requested identity', () => {
             allocatedId
         )
 
-        expect(() => store.sessions.adoptPreallocatedSession(
+        expect(async () => (await store.sessions.adoptPreallocatedSession(
             allocatedId,
             randomUUID(),
             { path: '/tmp/project', host: 'localhost', flavor: 'claude' },
             {},
             'default'
-        )).toThrow(/archived|not adoptable/i)
-        const row = store.sessions.getSession(allocatedId)
+        ))).toThrow(/archived|not adoptable/i)
+        const row = (await store.sessions.getSession(allocatedId))
         expect(row?.tag).toBe(`machine-spawn:${allocatedId}`)
         expect((row?.metadata as { lifecycleState?: string } | null)?.lifecycleState).toBe('archived')
-        store.close()
+        await store.close()
     })
 })
 
 describe('updateSessionMetadata: refuse un-archive (#1911 M1)', () => {
-    it('merge-preserves hub archive on unauthorized running write (success, not mismatch)', () => {
+    it('merge-preserves hub archive on unauthorized running write (success, not mismatch)', async () => {
         const store = makeStore()
         const allocatedId = randomUUID()
-        const session = store.sessions.getOrCreateSession(
+        const session = (await store.sessions.getOrCreateSession(
             `machine-spawn:${allocatedId}`,
             {
                 path: '/tmp/project',
@@ -354,9 +354,9 @@ describe('updateSessionMetadata: refuse un-archive (#1911 M1)', () => {
             undefined,
             undefined,
             allocatedId
-        )
+        ))
 
-        const preserved = store.sessions.updateSessionMetadata(
+        const preserved = (await store.sessions.updateSessionMetadata(
             session.id,
             {
                 path: '/tmp/project',
@@ -366,18 +366,18 @@ describe('updateSessionMetadata: refuse un-archive (#1911 M1)', () => {
             },
             session.metadataVersion,
             'default'
-        )
+        ))
         expect(preserved.result).toBe('success')
         if (preserved.result !== 'success') throw new Error('expected success')
         expect((preserved.value as { lifecycleState?: string; archivedBy?: string } | null)?.lifecycleState)
             .toBe('archived')
         expect((preserved.value as { archivedBy?: string } | null)?.archivedBy).toBe('hub')
-        expect(getMetadata(store, session.id)?.lifecycleState).toBe('archived')
-        expect(getMetadata(store, session.id)?.archivedBy).toBe('hub')
+        expect((await getMetadata(store, session.id))?.lifecycleState).toBe('archived')
+        expect((await getMetadata(store, session.id))?.archivedBy).toBe('hub')
         // Tag may already be released by archive-via-metadata; assert archive held.
-        expect(store.sessions.getSession(session.id)?.tag).toBe(`machine-spawn:${allocatedId}`)
+        expect((await store.sessions.getSession(session.id))?.tag).toBe(`machine-spawn:${allocatedId}`)
 
-        const allowed = store.sessions.updateSessionMetadata(
+        const allowed = (await store.sessions.updateSessionMetadata(
             session.id,
             {
                 path: '/tmp/project',
@@ -389,15 +389,15 @@ describe('updateSessionMetadata: refuse un-archive (#1911 M1)', () => {
             (preserved.version),
             'default',
             { allowUnarchive: true }
-        )
+        ))
         expect(allowed.result).toBe('success')
-        expect(getMetadata(store, session.id)?.lifecycleState).toBeUndefined()
-        store.close()
+        expect((await getMetadata(store, session.id))?.lifecycleState).toBeUndefined()
+        await store.close()
     })
 
-    it('does not preserve CLI self-archive (archivedBy=cli) when writing running', () => {
+    it('does not preserve CLI self-archive (archivedBy=cli) when writing running', async () => {
         const store = makeStore()
-        const session = store.sessions.getOrCreateSession(
+        const session = (await store.sessions.getOrCreateSession(
             'cli-self-archive',
             {
                 path: '/tmp/project',
@@ -409,9 +409,9 @@ describe('updateSessionMetadata: refuse un-archive (#1911 M1)', () => {
             },
             null,
             'default'
-        )
+        ))
 
-        const result = store.sessions.updateSessionMetadata(
+        const result = (await store.sessions.updateSessionMetadata(
             session.id,
             {
                 path: '/tmp/project',
@@ -421,15 +421,15 @@ describe('updateSessionMetadata: refuse un-archive (#1911 M1)', () => {
             },
             session.metadataVersion,
             'default'
-        )
+        ))
         expect(result.result).toBe('success')
-        expect(getMetadata(store, session.id)?.lifecycleState).toBe('running')
-        store.close()
+        expect((await getMetadata(store, session.id))?.lifecycleState).toBe('running')
+        await store.close()
     })
 
-    it('still allows non-lifecycle updates while hub-archived', () => {
+    it('still allows non-lifecycle updates while hub-archived', async () => {
         const store = makeStore()
-        const session = store.sessions.getOrCreateSession(
+        const session = (await store.sessions.getOrCreateSession(
             'archived-keep-fields',
             {
                 path: '/tmp/project',
@@ -441,9 +441,9 @@ describe('updateSessionMetadata: refuse un-archive (#1911 M1)', () => {
             },
             null,
             'default'
-        )
+        ))
 
-        const result = store.sessions.updateSessionMetadata(
+        const result = (await store.sessions.updateSessionMetadata(
             session.id,
             {
                 path: '/tmp/project',
@@ -456,18 +456,18 @@ describe('updateSessionMetadata: refuse un-archive (#1911 M1)', () => {
             },
             session.metadataVersion,
             'default'
-        )
+        ))
         expect(result.result).toBe('success')
-        expect(getMetadata(store, session.id)?.lifecycleState).toBe('archived')
-        expect(getMetadata(store, session.id)?.hostPid).toBe(4242)
-        store.close()
+        expect((await getMetadata(store, session.id))?.lifecycleState).toBe('archived')
+        expect((await getMetadata(store, session.id))?.hostPid).toBe(4242)
+        await store.close()
     })
 })
 
 describe('updateSessionMetadata: protocol resume token preservation', () => {
-    it('preserves cursorSessionId when archive payload omits it (Cursor crash-archive)', () => {
+    it('preserves cursorSessionId when archive payload omits it (Cursor crash-archive)', async () => {
         const store = makeStore()
-        const session = store.sessions.getOrCreateSession(
+        const session = (await store.sessions.getOrCreateSession(
             'cursor-archive-cursor-id',
             {
                 path: '/tmp/project',
@@ -479,9 +479,9 @@ describe('updateSessionMetadata: protocol resume token preservation', () => {
             },
             null,
             'default'
-        )
+        ))
 
-        const result = store.sessions.updateSessionMetadata(
+        const result = (await store.sessions.updateSessionMetadata(
             session.id,
             {
                 path: '/tmp/project',
@@ -494,10 +494,10 @@ describe('updateSessionMetadata: protocol resume token preservation', () => {
             },
             session.metadataVersion,
             'default'
-        )
+        ))
         expect(result.result).toBe('success')
 
-        const metadata = getMetadata(store, session.id)
+        const metadata = (await getMetadata(store, session.id))
         expect(metadata).not.toBeNull()
         expect(metadata?.cursorSessionId).toBe('cursor-thread-abc')
         expect(metadata?.cursorSessionProtocol).toBe('stream-json')
@@ -506,9 +506,9 @@ describe('updateSessionMetadata: protocol resume token preservation', () => {
         expect(metadata?.archivedBy).toBe('cli')
     })
 
-    it('preserves codexSessionId when archive payload omits it (Codex generic flavor)', () => {
+    it('preserves codexSessionId when archive payload omits it (Codex generic flavor)', async () => {
         const store = makeStore()
-        const session = store.sessions.getOrCreateSession(
+        const session = (await store.sessions.getOrCreateSession(
             'codex-archive',
             {
                 path: '/tmp/project',
@@ -519,9 +519,9 @@ describe('updateSessionMetadata: protocol resume token preservation', () => {
             },
             null,
             'default'
-        )
+        ))
 
-        const result = store.sessions.updateSessionMetadata(
+        const result = (await store.sessions.updateSessionMetadata(
             session.id,
             {
                 path: '/tmp/project',
@@ -533,10 +533,10 @@ describe('updateSessionMetadata: protocol resume token preservation', () => {
             },
             session.metadataVersion,
             'default'
-        )
+        ))
         expect(result.result).toBe('success')
 
-        const metadata = getMetadata(store, session.id)
+        const metadata = (await getMetadata(store, session.id))
         expect(metadata?.codexSessionId).toBe('codex-thread-1')
     })
 
@@ -550,9 +550,9 @@ describe('updateSessionMetadata: protocol resume token preservation', () => {
         ['kimiSessionId', 'kimi-thread-x'],
         ['copilotSessionId', 'copilot-thread-x'],
         ['piSessionId', 'pi-thread-x']
-    ])('preserves %s across an archive metadata replacement', (field, value) => {
+    ])('preserves %s across an archive metadata replacement', async (field, value) => {
         const store = makeStore()
-        const session = store.sessions.getOrCreateSession(
+        const session = (await store.sessions.getOrCreateSession(
             `archive-${field}`,
             {
                 path: '/tmp/project',
@@ -561,9 +561,9 @@ describe('updateSessionMetadata: protocol resume token preservation', () => {
             },
             null,
             'default'
-        )
+        ))
 
-        const result = store.sessions.updateSessionMetadata(
+        const result = (await store.sessions.updateSessionMetadata(
             session.id,
             {
                 path: '/tmp/project',
@@ -573,16 +573,16 @@ describe('updateSessionMetadata: protocol resume token preservation', () => {
             },
             session.metadataVersion,
             'default'
-        )
+        ))
         expect(result.result).toBe('success')
 
-        const metadata = getMetadata(store, session.id)
+        const metadata = (await getMetadata(store, session.id))
         expect(metadata?.[field]).toBe(value)
     })
 
-    it('preserves cursorSessionProtocol independently of cursorSessionId', () => {
+    it('preserves cursorSessionProtocol independently of cursorSessionId', async () => {
         const store = makeStore()
-        const session = store.sessions.getOrCreateSession(
+        const session = (await store.sessions.getOrCreateSession(
             'cursor-protocol-only',
             {
                 path: '/tmp/project',
@@ -592,22 +592,22 @@ describe('updateSessionMetadata: protocol resume token preservation', () => {
             },
             null,
             'default'
-        )
+        ))
 
-        store.sessions.updateSessionMetadata(
+        await store.sessions.updateSessionMetadata(
             session.id,
             { path: '/tmp/project', host: 'example' },
             session.metadataVersion,
             'default'
         )
 
-        const metadata = getMetadata(store, session.id)
+        const metadata = (await getMetadata(store, session.id))
         expect(metadata?.cursorSessionProtocol).toBe('acp')
     })
 
-    it('lets the next write override a flavor session id when it explicitly sets a different value', () => {
+    it('lets the next write override a flavor session id when it explicitly sets a different value', async () => {
         const store = makeStore()
-        const session = store.sessions.getOrCreateSession(
+        const session = (await store.sessions.getOrCreateSession(
             'cursor-overwrite',
             {
                 path: '/tmp/project',
@@ -616,9 +616,9 @@ describe('updateSessionMetadata: protocol resume token preservation', () => {
             },
             null,
             'default'
-        )
+        ))
 
-        store.sessions.updateSessionMetadata(
+        await store.sessions.updateSessionMetadata(
             session.id,
             {
                 path: '/tmp/project',
@@ -629,20 +629,20 @@ describe('updateSessionMetadata: protocol resume token preservation', () => {
             'default'
         )
 
-        const metadata = getMetadata(store, session.id)
+        const metadata = (await getMetadata(store, session.id))
         expect(metadata?.cursorSessionId).toBe('new-thread')
     })
 
-    it('does not invent fields when the prior row had no resume token', () => {
+    it('does not invent fields when the prior row had no resume token', async () => {
         const store = makeStore()
-        const session = store.sessions.getOrCreateSession(
+        const session = (await store.sessions.getOrCreateSession(
             'no-prior-token',
             { path: '/tmp/project', host: 'example' },
             null,
             'default'
-        )
+        ))
 
-        store.sessions.updateSessionMetadata(
+        await store.sessions.updateSessionMetadata(
             session.id,
             {
                 path: '/tmp/project',
@@ -654,15 +654,15 @@ describe('updateSessionMetadata: protocol resume token preservation', () => {
             'default'
         )
 
-        const metadata = getMetadata(store, session.id)
+        const metadata = (await getMetadata(store, session.id))
         expect(metadata).not.toBeNull()
         expect('cursorSessionId' in (metadata as Record<string, unknown>)).toBe(false)
         expect('codexSessionId' in (metadata as Record<string, unknown>)).toBe(false)
     })
 
-    it('preserves resume token when CLI sends an empty payload (stale-cache failure mode)', () => {
+    it('preserves resume token when CLI sends an empty payload (stale-cache failure mode)', async () => {
         const store = makeStore()
-        const session = store.sessions.getOrCreateSession(
+        const session = (await store.sessions.getOrCreateSession(
             'cursor-empty-payload',
             {
                 path: '/tmp/project',
@@ -671,9 +671,9 @@ describe('updateSessionMetadata: protocol resume token preservation', () => {
             },
             null,
             'default'
-        )
+        ))
 
-        store.sessions.updateSessionMetadata(
+        await store.sessions.updateSessionMetadata(
             session.id,
             {
                 lifecycleState: 'archived',
@@ -684,14 +684,14 @@ describe('updateSessionMetadata: protocol resume token preservation', () => {
             'default'
         )
 
-        const metadata = getMetadata(store, session.id)
+        const metadata = (await getMetadata(store, session.id))
         expect(metadata?.cursorSessionId).toBe('survives-empty-payload')
         expect(metadata?.lifecycleState).toBe('archived')
     })
 
-    it('preserves resume token across multiple consecutive metadata writes', () => {
+    it('preserves resume token across multiple consecutive metadata writes', async () => {
         const store = makeStore()
-        const session = store.sessions.getOrCreateSession(
+        const session = (await store.sessions.getOrCreateSession(
             'cursor-multi-write',
             {
                 path: '/tmp/project',
@@ -700,33 +700,33 @@ describe('updateSessionMetadata: protocol resume token preservation', () => {
             },
             null,
             'default'
-        )
+        ))
 
-        const v1 = store.sessions.updateSessionMetadata(
+        const v1 = (await store.sessions.updateSessionMetadata(
             session.id,
             { path: '/tmp/project', host: 'example', name: 'renamed' },
             session.metadataVersion,
             'default'
-        )
+        ))
         expect(v1.result).toBe('success')
 
-        const v2 = store.sessions.updateSessionMetadata(
+        const v2 = (await store.sessions.updateSessionMetadata(
             session.id,
             { path: '/tmp/project', host: 'example', name: 'renamed', tools: ['read_file'] },
             v1.result === 'success' ? v1.version : -1,
             'default'
-        )
+        ))
         expect(v2.result).toBe('success')
 
-        const metadata = getMetadata(store, session.id)
+        const metadata = (await getMetadata(store, session.id))
         expect(metadata?.cursorSessionId).toBe('persistent-thread')
         expect(metadata?.name).toBe('renamed')
         expect(metadata?.tools).toEqual(['read_file'])
     })
 
-    it('returns version-mismatch unchanged when the expected version is stale', () => {
+    it('returns version-mismatch unchanged when the expected version is stale', async () => {
         const store = makeStore()
-        const session = store.sessions.getOrCreateSession(
+        const session = (await store.sessions.getOrCreateSession(
             'cursor-version-mismatch',
             {
                 path: '/tmp/project',
@@ -735,14 +735,14 @@ describe('updateSessionMetadata: protocol resume token preservation', () => {
             },
             null,
             'default'
-        )
+        ))
 
-        const result = store.sessions.updateSessionMetadata(
+        const result = (await store.sessions.updateSessionMetadata(
             session.id,
             { path: '/tmp/project', host: 'example' },
             session.metadataVersion + 99,
             'default'
-        )
+        ))
         expect(result.result).toBe('version-mismatch')
         if (result.result === 'version-mismatch') {
             const value = result.value as Record<string, unknown> | null
@@ -750,20 +750,20 @@ describe('updateSessionMetadata: protocol resume token preservation', () => {
         }
     })
 
-    it('returns error when the session row does not exist', () => {
+    it('returns error when the session row does not exist', async () => {
         const store = makeStore()
-        const result = store.sessions.updateSessionMetadata(
+        const result = (await store.sessions.updateSessionMetadata(
             'no-such-session',
             { path: '/tmp/project', host: 'example' },
             0,
             'default'
-        )
+        ))
         expect(result.result).toBe('error')
     })
 
-    it('archive then read-back ships a payload that legacy resume routing can use', () => {
+    it('archive then read-back ships a payload that legacy resume routing can use', async () => {
         const store = makeStore()
-        const session = store.sessions.getOrCreateSession(
+        const session = (await store.sessions.getOrCreateSession(
             'cursor-roundtrip',
             {
                 path: '/tmp/project',
@@ -774,9 +774,9 @@ describe('updateSessionMetadata: protocol resume token preservation', () => {
             },
             null,
             'default'
-        )
+        ))
 
-        store.sessions.updateSessionMetadata(
+        await store.sessions.updateSessionMetadata(
             session.id,
             {
                 path: '/tmp/project',
@@ -790,7 +790,7 @@ describe('updateSessionMetadata: protocol resume token preservation', () => {
             'default'
         )
 
-        const metadata = getMetadata(store, session.id)
+        const metadata = (await getMetadata(store, session.id))
         // Legacy routing in cursorProtocol.isLegacyCursorSession() defaults to
         // legacy when cursorSessionProtocol is unset and cursorSessionId is
         // truthy. Preserving the id alone is enough for resume to route
@@ -804,9 +804,9 @@ describe('updateSessionMetadata: protocol resume token preservation', () => {
     // are required). Without these, downstream consumers null-out the
     // metadata and resume cannot find the session even though the
     // resume token survived in the DB.
-    it('preserves required path and host when archive payload is sparse (sparse-cache failure mode)', () => {
+    it('preserves required path and host when archive payload is sparse (sparse-cache failure mode)', async () => {
         const store = makeStore()
-        const session = store.sessions.getOrCreateSession(
+        const session = (await store.sessions.getOrCreateSession(
             'cursor-sparse-archive',
             {
                 path: '/tmp/project',
@@ -816,9 +816,9 @@ describe('updateSessionMetadata: protocol resume token preservation', () => {
             },
             null,
             'default'
-        )
+        ))
 
-        store.sessions.updateSessionMetadata(
+        await store.sessions.updateSessionMetadata(
             session.id,
             {
                 lifecycleState: 'archived',
@@ -829,33 +829,33 @@ describe('updateSessionMetadata: protocol resume token preservation', () => {
             'default'
         )
 
-        const metadata = getMetadata(store, session.id) as Record<string, unknown> | null
+        const metadata = (await getMetadata(store, session.id)) as Record<string, unknown> | null
         expect(metadata?.path).toBe('/tmp/project')
         expect(metadata?.host).toBe('example')
         expect(metadata?.cursorSessionId).toBe('parse-required')
         expect(metadata?.lifecycleState).toBe('archived')
     })
 
-    it('does not invent path or host when prior had none', () => {
+    it('does not invent path or host when prior had none', async () => {
         const store = makeStore()
         // create with minimal raw metadata (path is technically required by
         // the schema, but the store accepts any JSON; this exercises the
         // edge case where prior is missing identity fields)
-        const session = store.sessions.getOrCreateSession(
+        const session = (await store.sessions.getOrCreateSession(
             'no-prior-identity',
             { flavor: 'cursor' },
             null,
             'default'
-        )
+        ))
 
-        store.sessions.updateSessionMetadata(
+        await store.sessions.updateSessionMetadata(
             session.id,
             { lifecycleState: 'archived' },
             session.metadataVersion,
             'default'
         )
 
-        const metadata = getMetadata(store, session.id) as Record<string, unknown> | null
+        const metadata = (await getMetadata(store, session.id)) as Record<string, unknown> | null
         expect(metadata?.lifecycleState).toBe('archived')
         expect('path' in (metadata ?? {})).toBe(false)
         expect('host' in (metadata ?? {})).toBe(false)
@@ -866,9 +866,9 @@ describe('updateSessionMetadata: protocol resume token preservation', () => {
     // to the `?? 'claude'` default and ignore the preserved Cursor/Codex
     // token. Without machineId, the CLI's resumable listing filters the
     // row out of the resume picker. Both must survive sparse archive.
-    it('preserves flavor and machineId across sparse archive (resume routing)', () => {
+    it('preserves flavor and machineId across sparse archive (resume routing)', async () => {
         const store = makeStore()
-        const session = store.sessions.getOrCreateSession(
+        const session = (await store.sessions.getOrCreateSession(
             'cursor-routing-survives',
             {
                 path: '/tmp/project',
@@ -879,9 +879,9 @@ describe('updateSessionMetadata: protocol resume token preservation', () => {
             },
             null,
             'default'
-        )
+        ))
 
-        store.sessions.updateSessionMetadata(
+        await store.sessions.updateSessionMetadata(
             session.id,
             {
                 lifecycleState: 'archived',
@@ -892,37 +892,37 @@ describe('updateSessionMetadata: protocol resume token preservation', () => {
             'default'
         )
 
-        const metadata = getMetadata(store, session.id) as Record<string, unknown> | null
+        const metadata = (await getMetadata(store, session.id)) as Record<string, unknown> | null
         expect(metadata?.flavor).toBe('cursor')
         expect(metadata?.machineId).toBe('mach-xyz')
         expect(metadata?.cursorSessionId).toBe('cursor-thread-routed')
     })
 
-    it('does not invent flavor or machineId when prior had none', () => {
+    it('does not invent flavor or machineId when prior had none', async () => {
         const store = makeStore()
-        const session = store.sessions.getOrCreateSession(
+        const session = (await store.sessions.getOrCreateSession(
             'no-prior-routing',
             { path: '/tmp/project', host: 'example' },
             null,
             'default'
-        )
+        ))
 
-        store.sessions.updateSessionMetadata(
+        await store.sessions.updateSessionMetadata(
             session.id,
             { lifecycleState: 'archived' },
             session.metadataVersion,
             'default'
         )
 
-        const metadata = getMetadata(store, session.id) as Record<string, unknown> | null
+        const metadata = (await getMetadata(store, session.id)) as Record<string, unknown> | null
         expect(metadata?.lifecycleState).toBe('archived')
         expect('flavor' in (metadata ?? {})).toBe(false)
         expect('machineId' in (metadata ?? {})).toBe(false)
     })
 
-    it('lets the next write override flavor and machineId when explicitly set', () => {
+    it('lets the next write override flavor and machineId when explicitly set', async () => {
         const store = makeStore()
-        const session = store.sessions.getOrCreateSession(
+        const session = (await store.sessions.getOrCreateSession(
             'override-routing',
             {
                 path: '/tmp/project',
@@ -932,9 +932,9 @@ describe('updateSessionMetadata: protocol resume token preservation', () => {
             },
             null,
             'default'
-        )
+        ))
 
-        store.sessions.updateSessionMetadata(
+        await store.sessions.updateSessionMetadata(
             session.id,
             {
                 path: '/tmp/project',
@@ -946,7 +946,7 @@ describe('updateSessionMetadata: protocol resume token preservation', () => {
             'default'
         )
 
-        const metadata = getMetadata(store, session.id) as Record<string, unknown> | null
+        const metadata = (await getMetadata(store, session.id)) as Record<string, unknown> | null
         expect(metadata?.flavor).toBe('codex')
         expect(metadata?.machineId).toBe('mach-new')
     })
@@ -956,9 +956,9 @@ describe('updateSessionMetadata: protocol resume token preservation', () => {
     // The protocol is tied to the id, and a different id may use a
     // different protocol (e.g. legacy stream-json id under an old
     // ACP marker would be misrouted).
-    it('drops cursorSessionProtocol when a new cursorSessionId is written', () => {
+    it('drops cursorSessionProtocol when a new cursorSessionId is written', async () => {
         const store = makeStore()
-        const session = store.sessions.getOrCreateSession(
+        const session = (await store.sessions.getOrCreateSession(
             'cursor-protocol-pair-drop',
             {
                 path: '/tmp/project',
@@ -968,9 +968,9 @@ describe('updateSessionMetadata: protocol resume token preservation', () => {
             },
             null,
             'default'
-        )
+        ))
 
-        store.sessions.updateSessionMetadata(
+        await store.sessions.updateSessionMetadata(
             session.id,
             {
                 path: '/tmp/project',
@@ -981,14 +981,14 @@ describe('updateSessionMetadata: protocol resume token preservation', () => {
             'default'
         )
 
-        const metadata = getMetadata(store, session.id) as Record<string, unknown> | null
+        const metadata = (await getMetadata(store, session.id)) as Record<string, unknown> | null
         expect(metadata?.cursorSessionId).toBe('new-id')
         expect(metadata?.cursorSessionProtocol).toBeUndefined()
     })
 
-    it('preserves cursorSessionProtocol when neither id nor protocol is in the next write', () => {
+    it('preserves cursorSessionProtocol when neither id nor protocol is in the next write', async () => {
         const store = makeStore()
-        const session = store.sessions.getOrCreateSession(
+        const session = (await store.sessions.getOrCreateSession(
             'cursor-protocol-pair-preserve',
             {
                 path: '/tmp/project',
@@ -998,9 +998,9 @@ describe('updateSessionMetadata: protocol resume token preservation', () => {
             },
             null,
             'default'
-        )
+        ))
 
-        store.sessions.updateSessionMetadata(
+        await store.sessions.updateSessionMetadata(
             session.id,
             {
                 path: '/tmp/project',
@@ -1012,14 +1012,14 @@ describe('updateSessionMetadata: protocol resume token preservation', () => {
             'default'
         )
 
-        const metadata = getMetadata(store, session.id) as Record<string, unknown> | null
+        const metadata = (await getMetadata(store, session.id)) as Record<string, unknown> | null
         expect(metadata?.cursorSessionId).toBe('stable-id')
         expect(metadata?.cursorSessionProtocol).toBe('acp')
     })
 
-    it('respects an explicit cursorSessionProtocol on the next write even when the id is unchanged', () => {
+    it('respects an explicit cursorSessionProtocol on the next write even when the id is unchanged', async () => {
         const store = makeStore()
-        const session = store.sessions.getOrCreateSession(
+        const session = (await store.sessions.getOrCreateSession(
             'cursor-protocol-pair-explicit',
             {
                 path: '/tmp/project',
@@ -1028,9 +1028,9 @@ describe('updateSessionMetadata: protocol resume token preservation', () => {
             },
             null,
             'default'
-        )
+        ))
 
-        store.sessions.updateSessionMetadata(
+        await store.sessions.updateSessionMetadata(
             session.id,
             {
                 path: '/tmp/project',
@@ -1041,7 +1041,7 @@ describe('updateSessionMetadata: protocol resume token preservation', () => {
             'default'
         )
 
-        const metadata = getMetadata(store, session.id) as Record<string, unknown> | null
+        const metadata = (await getMetadata(store, session.id)) as Record<string, unknown> | null
         expect(metadata?.cursorSessionId).toBe('stable-id')
         expect(metadata?.cursorSessionProtocol).toBe('stream-json')
     })
@@ -1052,9 +1052,9 @@ describe('updateSessionMetadata: protocol resume token preservation', () => {
     // socket handler (see hub/src/socket/handlers/cli/sessionHandlers.ts);
     // the store-level guarantee here is that result.value reflects the
     // merged state and not the pre-merge input.
-    it('returns the merged value in the success ack, not the pre-merge input', () => {
+    it('returns the merged value in the success ack, not the pre-merge input', async () => {
         const store = makeStore()
-        const session = store.sessions.getOrCreateSession(
+        const session = (await store.sessions.getOrCreateSession(
             'cursor-ack-merged',
             {
                 path: '/tmp/project',
@@ -1063,9 +1063,9 @@ describe('updateSessionMetadata: protocol resume token preservation', () => {
             },
             null,
             'default'
-        )
+        ))
 
-        const result = store.sessions.updateSessionMetadata(
+        const result = (await store.sessions.updateSessionMetadata(
             session.id,
             {
                 lifecycleState: 'archived',
@@ -1074,7 +1074,7 @@ describe('updateSessionMetadata: protocol resume token preservation', () => {
             },
             session.metadataVersion,
             'default'
-        )
+        ))
 
         expect(result.result).toBe('success')
         if (result.result === 'success') {
@@ -1093,9 +1093,9 @@ describe('updateSessionMetadata: protocol resume token preservation', () => {
     // sentinel: `null` in `next` means "drop this field entirely from
     // the merged blob" (key removed, not stored as null) — distinct
     // from omitted (`undefined`) which carries forward.
-    it('drops a carry-forward field when next sets it to null (explicit clear)', () => {
+    it('drops a carry-forward field when next sets it to null (explicit clear)', async () => {
         const store = makeStore()
-        const session = store.sessions.getOrCreateSession(
+        const session = (await store.sessions.getOrCreateSession(
             'codex-explicit-clear',
             {
                 path: '/tmp/project',
@@ -1105,9 +1105,9 @@ describe('updateSessionMetadata: protocol resume token preservation', () => {
             },
             null,
             'default'
-        )
+        ))
 
-        const result = store.sessions.updateSessionMetadata(
+        const result = (await store.sessions.updateSessionMetadata(
             session.id,
             {
                 path: '/tmp/project',
@@ -1117,18 +1117,18 @@ describe('updateSessionMetadata: protocol resume token preservation', () => {
             },
             session.metadataVersion,
             'default'
-        )
+        ))
 
         expect(result.result).toBe('success')
-        const metadata = getMetadata(store, session.id) as Record<string, unknown> | null
+        const metadata = (await getMetadata(store, session.id)) as Record<string, unknown> | null
         expect(metadata).not.toBeNull()
         expect('codexSessionId' in (metadata ?? {})).toBe(false)
         expect(metadata?.flavor).toBe('codex')
     })
 
-    it('treats null as clear for any carry-forward field, independently of others', () => {
+    it('treats null as clear for any carry-forward field, independently of others', async () => {
         const store = makeStore()
-        const session = store.sessions.getOrCreateSession(
+        const session = (await store.sessions.getOrCreateSession(
             'multi-token-explicit-clear',
             {
                 path: '/tmp/project',
@@ -1139,9 +1139,9 @@ describe('updateSessionMetadata: protocol resume token preservation', () => {
             },
             null,
             'default'
-        )
+        ))
 
-        store.sessions.updateSessionMetadata(
+        await store.sessions.updateSessionMetadata(
             session.id,
             {
                 path: '/tmp/project',
@@ -1152,22 +1152,22 @@ describe('updateSessionMetadata: protocol resume token preservation', () => {
             'default'
         )
 
-        const metadata = getMetadata(store, session.id) as Record<string, unknown> | null
+        const metadata = (await getMetadata(store, session.id)) as Record<string, unknown> | null
         expect('codexSessionId' in (metadata ?? {})).toBe(false)
         expect(metadata?.cursorSessionId).toBe('cursor-keep')
         expect(metadata?.flavor).toBe('cursor')
     })
 
-    it('null on a never-set field is a no-op (does not introduce the key)', () => {
+    it('null on a never-set field is a no-op (does not introduce the key)', async () => {
         const store = makeStore()
-        const session = store.sessions.getOrCreateSession(
+        const session = (await store.sessions.getOrCreateSession(
             'null-on-absent',
             { path: '/tmp/project', host: 'example' },
             null,
             'default'
-        )
+        ))
 
-        store.sessions.updateSessionMetadata(
+        await store.sessions.updateSessionMetadata(
             session.id,
             {
                 path: '/tmp/project',
@@ -1178,13 +1178,13 @@ describe('updateSessionMetadata: protocol resume token preservation', () => {
             'default'
         )
 
-        const metadata = getMetadata(store, session.id) as Record<string, unknown> | null
+        const metadata = (await getMetadata(store, session.id)) as Record<string, unknown> | null
         expect('codexSessionId' in (metadata ?? {})).toBe(false)
     })
 
-    it('explicit clear leaves the merged value in the success ack', () => {
+    it('explicit clear leaves the merged value in the success ack', async () => {
         const store = makeStore()
-        const session = store.sessions.getOrCreateSession(
+        const session = (await store.sessions.getOrCreateSession(
             'explicit-clear-ack',
             {
                 path: '/tmp/project',
@@ -1193,9 +1193,9 @@ describe('updateSessionMetadata: protocol resume token preservation', () => {
             },
             null,
             'default'
-        )
+        ))
 
-        const result = store.sessions.updateSessionMetadata(
+        const result = (await store.sessions.updateSessionMetadata(
             session.id,
             {
                 path: '/tmp/project',
@@ -1204,7 +1204,7 @@ describe('updateSessionMetadata: protocol resume token preservation', () => {
             },
             session.metadataVersion,
             'default'
-        )
+        ))
 
         expect(result.result).toBe('success')
         if (result.result === 'success') {
@@ -1216,80 +1216,80 @@ describe('updateSessionMetadata: protocol resume token preservation', () => {
 })
 
 describe('replaceSessionTodos: watermark ratchet (PR #897 rewind race)', () => {
-    it('advances todosUpdatedAt past the prior write even when rebuilding older content', () => {
+    it('advances todosUpdatedAt past the prior write even when rebuilding older content', async () => {
         const store = makeStore()
-        const session = store.sessions.getOrCreateSession(
+        const session = (await store.sessions.getOrCreateSession(
             'rewind-todos-watermark',
             { path: '/tmp/project' },
             null,
             'default'
-        )
+        ))
 
         const priorAt = 1_700_000_000_000
         const lateTodos = [{ content: 'late', status: 'pending', activeForm: 'doing late' }]
         const earlyTodos = [{ content: 'early', status: 'pending', activeForm: 'doing early' }]
 
-        expect(store.sessions.setSessionTodos(session.id, lateTodos, priorAt, 'default')).toBe(true)
-        expect(store.sessions.getSession(session.id)?.todosUpdatedAt).toBe(priorAt)
+        expect((await store.sessions.setSessionTodos(session.id, lateTodos, priorAt, 'default'))).toBe(true)
+        expect((await store.sessions.getSession(session.id))?.todosUpdatedAt).toBe(priorAt)
 
         // Rewind would otherwise stamp the remaining TodoWrite's older createdAt.
-        expect(store.sessions.replaceSessionTodos(session.id, earlyTodos, 'default')).toBe(true)
+        expect((await store.sessions.replaceSessionTodos(session.id, earlyTodos, 'default'))).toBe(true)
 
-        const after = store.sessions.getSession(session.id)
+        const after = (await store.sessions.getSession(session.id))
         expect(after?.todosUpdatedAt).toBe(priorAt + 1)
         expect(after?.todos).toEqual(earlyTodos)
 
         // A lagged pre-rewind structured patch using priorAt must lose the
         // store-side monotonic write too (defense in depth vs SSE gate).
-        expect(store.sessions.setSessionTodos(session.id, lateTodos, priorAt, 'default')).toBe(false)
-        expect(store.sessions.getSession(session.id)?.todos).toEqual(earlyTodos)
+        expect((await store.sessions.setSessionTodos(session.id, lateTodos, priorAt, 'default'))).toBe(false)
+        expect((await store.sessions.getSession(session.id))?.todos).toEqual(earlyTodos)
 
-        store.close()
+        await store.close()
     })
 
-    it('stamps Date.now() when replacing into a null watermark', () => {
+    it('stamps Date.now() when replacing into a null watermark', async () => {
         const store = makeStore()
-        const session = store.sessions.getOrCreateSession(
+        const session = (await store.sessions.getOrCreateSession(
             'rewind-todos-null-watermark',
             { path: '/tmp/project' },
             null,
             'default'
-        )
+        ))
 
         const before = Date.now()
-        expect(store.sessions.replaceSessionTodos(
+        expect((await store.sessions.replaceSessionTodos(
             session.id,
             [{ content: 'only', status: 'pending', activeForm: 'doing' }],
             'default'
-        )).toBe(true)
-        const after = store.sessions.getSession(session.id)
+        ))).toBe(true)
+        const after = (await store.sessions.getSession(session.id))
         expect(after?.todosUpdatedAt).toBeGreaterThanOrEqual(before)
         expect(after?.todosUpdatedAt).toBeLessThanOrEqual(Date.now())
 
-        store.close()
+        await store.close()
     })
 
-    it('clears todos while still ratcheting the watermark', () => {
+    it('clears todos while still ratcheting the watermark', async () => {
         const store = makeStore()
-        const session = store.sessions.getOrCreateSession(
+        const session = (await store.sessions.getOrCreateSession(
             'rewind-todos-clear',
             { path: '/tmp/project' },
             null,
             'default'
-        )
+        ))
 
-        expect(store.sessions.setSessionTodos(
+        expect((await store.sessions.setSessionTodos(
             session.id,
             [{ content: 'gone', status: 'pending', activeForm: 'going' }],
             50,
             'default'
-        )).toBe(true)
+        ))).toBe(true)
 
-        expect(store.sessions.replaceSessionTodos(session.id, null, 'default')).toBe(true)
-        const after = store.sessions.getSession(session.id)
+        expect((await store.sessions.replaceSessionTodos(session.id, null, 'default'))).toBe(true)
+        const after = (await store.sessions.getSession(session.id))
         expect(after?.todos).toBeNull()
         expect(after?.todosUpdatedAt).toBe(51)
 
-        store.close()
+        await store.close()
     })
 })

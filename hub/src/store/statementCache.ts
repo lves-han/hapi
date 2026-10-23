@@ -1,4 +1,4 @@
-import type { Database, Statement } from 'bun:sqlite'
+import type { Database, AsyncStatement as Statement } from './database'
 
 // Prepared-statement cache keyed by Database instance, then SQL text.
 //

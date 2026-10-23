@@ -13,14 +13,14 @@ export function requireSyncEngine(
     return engine
 }
 
-export function requireSession(
+export async function requireSession(
     c: Context<WebAppEnv>,
     engine: SyncEngine,
     sessionId: string,
     options?: { requireActive?: boolean }
-): { sessionId: string; session: Session } | Response {
+): Promise<{ sessionId: string; session: Session } | Response> {
     const namespace = c.get('namespace')
-    const access = engine.resolveSessionAccess(sessionId, namespace)
+    const access = (await engine.resolveSessionAccess(sessionId, namespace))
     if (!access.ok) {
         const status = access.reason === 'access-denied' ? 403 : 404
         const error = access.reason === 'access-denied' ? 'Session access denied' : 'Session not found'
@@ -36,14 +36,14 @@ export function requireSession(
     return { sessionId: access.sessionId, session: access.session }
 }
 
-export function requireSessionFromParam(
+export async function requireSessionFromParam(
     c: Context<WebAppEnv>,
     engine: SyncEngine,
     options?: { paramName?: string; requireActive?: boolean }
-): { sessionId: string; session: Session } | Response {
+): Promise<{ sessionId: string; session: Session } | Response> {
     const paramName = options?.paramName ?? 'id'
     const sessionId = c.req.param(paramName) ?? ''
-    const result = requireSession(c, engine, sessionId, { requireActive: options?.requireActive })
+    const result = (await requireSession(c, engine, sessionId, { requireActive: options?.requireActive }))
     if (result instanceof Response) {
         return result
     }

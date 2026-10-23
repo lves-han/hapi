@@ -27,12 +27,12 @@ type CliEnv = {
     }
 }
 
-function resolveSessionForNamespace(
+async function resolveSessionForNamespace(
     engine: SyncEngine,
     sessionId: string,
     namespace: string
-): { ok: true; session: Session; sessionId: string } | { ok: false; status: 403 | 404; error: string } {
-    const access = engine.resolveSessionAccess(sessionId, namespace)
+): Promise<{ ok: true; session: Session; sessionId: string } | { ok: false; status: 403 | 404; error: string }> {
+    const access = (await engine.resolveSessionAccess(sessionId, namespace))
     if (access.ok) {
         return { ok: true, session: access.session, sessionId: access.sessionId }
     }
@@ -110,7 +110,7 @@ export function createCliRoutes(getSyncEngine: () => SyncEngine | null): Hono<Cl
             if (existingMachine && existingMachine.namespace !== namespace) {
                 return c.json({ error: 'Machine access denied' }, 403)
             }
-            engine.getOrCreateMachine(
+            await engine.getOrCreateMachine(
                 machineInput.id,
                 machineInput.metadata,
                 machineInput.runnerState ?? null,
@@ -120,7 +120,7 @@ export function createCliRoutes(getSyncEngine: () => SyncEngine | null): Hono<Cl
 
         try {
             const session = parsed.data.adopt === true && parsed.data.id
-                ? engine.adoptPreallocatedSession(
+                ? (await engine.adoptPreallocatedSession(
                     parsed.data.id,
                     parsed.data.tag,
                     parsed.data.metadata,
@@ -129,8 +129,8 @@ export function createCliRoutes(getSyncEngine: () => SyncEngine | null): Hono<Cl
                     parsed.data.model,
                     parsed.data.effort,
                     parsed.data.modelReasoningEffort
-                )
-                : engine.getOrCreateSession(
+                ))
+                : (await engine.getOrCreateSession(
                     parsed.data.tag,
                     parsed.data.metadata,
                     parsed.data.agentState ?? null,
@@ -139,7 +139,7 @@ export function createCliRoutes(getSyncEngine: () => SyncEngine | null): Hono<Cl
                     parsed.data.effort,
                     parsed.data.modelReasoningEffort,
                     parsed.data.id
-                )
+                ))
             const sessionSummaryContract = await readSessionSummaryContractEnabled(
                 getConfiguration().dataDir
             )
@@ -156,7 +156,7 @@ export function createCliRoutes(getSyncEngine: () => SyncEngine | null): Hono<Cl
         }
     })
 
-    app.get('/sessions/resumable', (c) => {
+    app.get('/sessions/resumable', async (c) => {
         const engine = getSyncEngine()
         if (!engine) {
             return c.json({ error: 'Not ready' }, 503)
@@ -164,18 +164,18 @@ export function createCliRoutes(getSyncEngine: () => SyncEngine | null): Hono<Cl
 
         const namespace = c.get('namespace')
         const machineId = c.req.query('machineId') || undefined
-        const sessions = engine.listLocalResumableSessions(namespace, { machineId })
+        const sessions = (await engine.listLocalResumableSessions(namespace, { machineId }))
         return c.json({ sessions })
     })
 
-    app.get('/sessions/:id/resume-target', (c) => {
+    app.get('/sessions/:id/resume-target', async (c) => {
         const engine = getSyncEngine()
         if (!engine) {
             return c.json({ error: 'Not ready' }, 503)
         }
 
         const namespace = c.get('namespace')
-        const result = engine.resolveLocalResumeTarget(c.req.param('id'), namespace)
+        const result = (await engine.resolveLocalResumeTarget(c.req.param('id'), namespace))
         if (result.type === 'error') {
             const status = result.code === 'access_denied' ? 403
                 : result.code === 'session_not_found' ? 404
@@ -222,10 +222,10 @@ export function createCliRoutes(getSyncEngine: () => SyncEngine | null): Hono<Cl
         return c.json({ ok: true, sessionId: result.sessionId })
     })
 
-    app.post('/sessions/:id/clear-opencode/reserve', (c) => {
+    app.post('/sessions/:id/clear-opencode/reserve', async (c) => {
         const engine = getSyncEngine()
         if (!engine) return c.json({ error: 'Not ready' }, 503)
-        const result = engine.reserveOpenCodeClearSession(c.req.param('id'), c.get('namespace'))
+        const result = (await engine.reserveOpenCodeClearSession(c.req.param('id'), c.get('namespace')))
         if (result.type === 'error') {
             const status = result.code === 'access_denied' ? 403 : result.code === 'session_not_found' ? 404 : result.code === 'clear_unavailable' ? 409 : 500
             return c.json({ error: result.message, code: result.code }, status)
@@ -238,7 +238,7 @@ export function createCliRoutes(getSyncEngine: () => SyncEngine | null): Hono<Cl
         if (!engine) return c.json({ error: 'Not ready' }, 503)
         const parsed = ClearOpencodeSessionCallbackRequestSchema.safeParse(await c.req.json().catch(() => null))
         if (!parsed.success) return c.json({ error: 'Invalid clear callback request' }, 400)
-        const result = engine.abortOpenCodeClearSession(c.req.param('id'), c.get('namespace'), parsed.data.replacementSessionId)
+        const result = (await engine.abortOpenCodeClearSession(c.req.param('id'), c.get('namespace'), parsed.data.replacementSessionId))
         if (result.type === 'error') return c.json({ error: result.message, code: result.code }, clearErrorStatus(result.code))
         return c.json({ ok: true, sessionId: result.sessionId })
     })
@@ -248,7 +248,7 @@ export function createCliRoutes(getSyncEngine: () => SyncEngine | null): Hono<Cl
         if (!engine) return c.json({ error: 'Not ready' }, 503)
         const parsed = ClearOpencodeSessionCallbackRequestSchema.safeParse(await c.req.json().catch(() => null))
         if (!parsed.success) return c.json({ error: 'Invalid clear callback request' }, 400)
-        const result = engine.confirmOpenCodeClearCleanup(c.req.param('id'), c.get('namespace'), parsed.data.replacementSessionId)
+        const result = (await engine.confirmOpenCodeClearCleanup(c.req.param('id'), c.get('namespace'), parsed.data.replacementSessionId))
         if (result.type === 'error') return c.json({ error: result.message, code: result.code }, clearErrorStatus(result.code))
         return c.json({ ok: true, sessionId: result.sessionId })
     })
@@ -260,7 +260,7 @@ export function createCliRoutes(getSyncEngine: () => SyncEngine | null): Hono<Cl
         }
         const sessionId = c.req.param('id')
         const namespace = c.get('namespace')
-        const resolved = resolveSessionForNamespace(engine, sessionId, namespace)
+        const resolved = (await resolveSessionForNamespace(engine, sessionId, namespace))
         if (!resolved.ok) {
             return c.json({ error: resolved.error }, resolved.status)
         }
@@ -270,14 +270,14 @@ export function createCliRoutes(getSyncEngine: () => SyncEngine | null): Hono<Cl
         return c.json({ session: resolved.session, sessionSummaryContract })
     })
 
-    app.get('/sessions/:id/messages', (c) => {
+    app.get('/sessions/:id/messages', async (c) => {
         const engine = getSyncEngine()
         if (!engine) {
             return c.json({ error: 'Not ready' }, 503)
         }
         const sessionId = c.req.param('id')
         const namespace = c.get('namespace')
-        const resolved = resolveSessionForNamespace(engine, sessionId, namespace)
+        const resolved = (await resolveSessionForNamespace(engine, sessionId, namespace))
         if (!resolved.ok) {
             return c.json({ error: resolved.error }, resolved.status)
         }
@@ -292,11 +292,11 @@ export function createCliRoutes(getSyncEngine: () => SyncEngine | null): Hono<Cl
         // messages.ts:getDeliverableMessagesAfter for the rationale.  The
         // mature-scan path (releaseMatureScheduledMessages) is the sole
         // emit channel for scheduled rows.
-        const messages = engine.getDeliverableMessagesAfter(resolved.sessionId, {
+        const messages = (await engine.getDeliverableMessagesAfter(resolved.sessionId, {
             afterSeq: parsed.data.afterSeq,
             limit,
             now: Date.now()
-        })
+        }))
         return c.json({ messages })
     })
 
@@ -307,7 +307,7 @@ export function createCliRoutes(getSyncEngine: () => SyncEngine | null): Hono<Cl
         }
         const sessionId = c.req.param('id')
         const namespace = c.get('namespace')
-        const resolved = resolveSessionForNamespace(engine, sessionId, namespace)
+        const resolved = (await resolveSessionForNamespace(engine, sessionId, namespace))
         if (!resolved.ok) {
             return c.json({ error: resolved.error }, resolved.status)
         }
@@ -354,7 +354,7 @@ export function createCliRoutes(getSyncEngine: () => SyncEngine | null): Hono<Cl
         if (existing && existing.namespace !== namespace) {
             return c.json({ error: 'Machine access denied' }, 403)
         }
-        const machine = engine.getOrCreateMachine(parsed.data.id, parsed.data.metadata, parsed.data.runnerState ?? null, namespace)
+        const machine = (await engine.getOrCreateMachine(parsed.data.id, parsed.data.metadata, parsed.data.runnerState ?? null, namespace))
         return c.json({ machine })
     })
 

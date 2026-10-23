@@ -36,7 +36,7 @@ export class IosPushNotificationChannel implements NotificationChannel {
             return
         }
 
-        await this.deliver(session, this.composer.composeReady(session), ctx)
+        await this.deliver(session, (await this.composer.composeReady(session)), ctx)
     }
 
     async sendTaskNotification(session: Session, notification: TaskNotification, ctx?: NotificationSendContext): Promise<void> {

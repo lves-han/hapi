@@ -61,14 +61,14 @@ export function createDevicesRoutes(store: Store): Hono<WebAppEnv> {
             // Store the canonical re-encoding so the send path always
             // decodes cleanly regardless of the client's padding style.
             const decoded = decodePushKey(pushKey ?? '')!
-            store.fcm.upsertDevice(namespace, {
+            await store.fcm.upsertDevice(namespace, {
                 token,
                 platform,
                 deviceId,
                 pushKey: decoded.toString('base64')
             })
         } else {
-            store.fcm.upsertDevice(namespace, { token, platform, deviceId })
+            await store.fcm.upsertDevice(namespace, { token, platform, deviceId })
         }
         return c.json({ ok: true })
     })
@@ -81,7 +81,7 @@ export function createDevicesRoutes(store: Store): Hono<WebAppEnv> {
         }
 
         const namespace = c.get('namespace')
-        store.fcm.removeDeviceByToken(namespace, parsed.data.token)
+        await store.fcm.removeDeviceByToken(namespace, parsed.data.token)
         return c.json({ ok: true })
     })
 

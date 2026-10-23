@@ -45,22 +45,22 @@ function resolvePiMachine(
     return online[0] ?? null
 }
 
-function findImportedPiSession(
+async function findImportedPiSession(
     store: Store,
     namespace: string,
     machineId: string,
     piSessionId: string
-): StoredSession | null {
-    return importedPiSessionsById(store, namespace, machineId).get(piSessionId) ?? null
+): Promise<StoredSession | null> {
+    return (await importedPiSessionsById(store, namespace, machineId)).get(piSessionId) ?? null
 }
 
-function importedPiSessionsById(
+async function importedPiSessionsById(
     store: Store,
     namespace: string,
     machineId: string
-): Map<string, StoredSession> {
+): Promise<Map<string, StoredSession>> {
     const importedByPiId = new Map<string, StoredSession>()
-    for (const session of store.sessions.getSessionsByNamespace(namespace)) {
+    for (const session of (await store.sessions.getSessionsByNamespace(namespace))) {
         const metadata = storedMetadata(session)
         const piSessionId = metadata.piSessionId
         if (metadata.flavor !== 'pi'
@@ -101,32 +101,32 @@ function buildPiMetadata(
     }
 }
 
-function updateMetadataWithRetry(
+async function updateMetadataWithRetry(
     store: Store,
     sessionId: string,
     namespace: string,
     transform: (metadata: Record<string, unknown>) => Metadata
-): Metadata {
+): Promise<Metadata> {
     for (let attempt = 0; attempt < 5; attempt += 1) {
-        const current = store.sessions.getSessionByNamespace(sessionId, namespace)
+        const current = (await store.sessions.getSessionByNamespace(sessionId, namespace))
         if (!current) throw new Error('Imported HAPI session disappeared')
         const next = transform(storedMetadata(current))
-        const result = store.sessions.updateSessionMetadata(
+        const result = (await store.sessions.updateSessionMetadata(
             sessionId,
             next,
             current.metadataVersion,
             namespace,
             { touchUpdatedAt: false }
-        )
+        ))
         if (result.result === 'success') return next
         if (result.result === 'error') throw new Error('Failed to persist Pi import metadata')
     }
     throw new Error('Pi import metadata changed concurrently')
 }
 
-function emitImportedMessages(engine: SyncEngine, sessionId: string, messages: StoredMessage[]): void {
+async function emitImportedMessages(engine: SyncEngine, sessionId: string, messages: StoredMessage[]): Promise<void> {
     for (const message of messages) {
-        engine.handleRealtimeEvent({
+        await engine.handleRealtimeEvent({
             type: 'message-received',
             sessionId,
             message: {
@@ -182,7 +182,7 @@ function classifyImportDelta(
     return { messages: transcript.messages.filter((message) => newEntryIds.has(message.entryId)) }
 }
 
-function markImportState(
+async function markImportState(
     store: Store,
     engine: SyncEngine,
     sessionId: string,
@@ -191,11 +191,11 @@ function markImportState(
     machineId: string,
     state: 'failed' | 'diverged',
     error: string
-): void {
-    const current = store.sessions.getSessionByNamespace(sessionId, namespace)
+): Promise<void> {
+    const current = (await store.sessions.getSessionByNamespace(sessionId, namespace))
     const currentImportState = asRecord(asRecord(current?.metadata)?.piImportState)
     const startedAt = typeof currentImportState?.startedAt === 'number' ? currentImportState.startedAt : Date.now()
-    updateMetadataWithRetry(store, sessionId, namespace, (metadata) => ({
+    await updateMetadataWithRetry(store, sessionId, namespace, (metadata) => ({
         ...metadata,
         path: typeof metadata.path === 'string' ? metadata.path : (transcript.cwd ?? dirname(transcript.file)),
         host: typeof metadata.host === 'string' ? metadata.host : machineId,
@@ -210,21 +210,21 @@ function markImportState(
             error
         }
     } as Metadata))
-    engine.handleRealtimeEvent({ type: 'session-updated', sessionId })
+    await engine.handleRealtimeEvent({ type: 'session-updated', sessionId })
 }
 
-export function importPiSession(options: {
+export async function importPiSession(options: {
     store: Store
     engine: SyncEngine
     namespace: string
     machine: Machine
     transcript: PiLocalSessionWithMessages
     existingSession?: StoredSession | null
-}): PiImportResult {
+}): Promise<PiImportResult> {
     const { store, engine, namespace, machine, transcript, existingSession } = options
     const startedAt = Date.now()
     let stored = existingSession === undefined
-        ? findImportedPiSession(store, namespace, machine.id, transcript.id)
+        ? (await findImportedPiSession(store, namespace, machine.id, transcript.id))
         : existingSession
     const created = !stored
     if (!stored) {
@@ -237,16 +237,16 @@ export function importPiSession(options: {
             updatedAt: startedAt,
             leafEntryId: transcript.leafEntryId ?? null
         })
-        stored = store.sessions.getOrCreateSession(
+        stored = (await store.sessions.getOrCreateSession(
             `pi-import:${machine.id}:${transcript.id}`,
             metadata,
             {},
             namespace,
             transcript.model ?? undefined,
             transcript.thinkingLevel ?? undefined
-        )
+        ))
     } else {
-        updateMetadataWithRetry(store, stored.id, namespace, (metadata) => buildPiMetadata(transcript, machine, metadata, {
+        await updateMetadataWithRetry(store, stored.id, namespace, (metadata) => buildPiMetadata(transcript, machine, metadata, {
             state: 'importing',
             machineId: machine.id,
             piSessionId: transcript.id,
@@ -257,31 +257,31 @@ export function importPiSession(options: {
         }))
     }
 
-    const currentMetadata = storedMetadata(store.sessions.getSessionByNamespace(stored.id, namespace) ?? stored)
+    const currentMetadata = storedMetadata((await store.sessions.getSessionByNamespace(stored.id, namespace)) ?? stored)
     const observedLeafId = typeof currentMetadata.piHistoryLeafEntryId === 'string'
         ? currentMetadata.piHistoryLeafEntryId
         : null
-    const delta = classifyImportDelta(store.messages.getAllMessages(stored.id), transcript, observedLeafId)
+    const delta = classifyImportDelta((await store.messages.getAllMessages(stored.id)), transcript, observedLeafId)
     if (delta.error) {
-        markImportState(store, engine, stored.id, namespace, transcript, machine.id, 'diverged', delta.error)
+        await markImportState(store, engine, stored.id, namespace, transcript, machine.id, 'diverged', delta.error)
         return { piSessionId: transcript.id, hapiSessionId: stored.id, error: { code: 'transcript_diverged', message: delta.error } }
     }
     if (stored.active && delta.messages.length > 0) {
         const message = 'The HAPI Pi session is active; stop it before importing native history changes'
-        markImportState(store, engine, stored.id, namespace, transcript, machine.id, 'failed', message)
+        await markImportState(store, engine, stored.id, namespace, transcript, machine.id, 'failed', message)
         return { piSessionId: transcript.id, hapiSessionId: stored.id, error: { code: 'session_active', message } }
     }
 
     const appended: StoredMessage[] = []
     try {
         for (const source of delta.messages) {
-            const result = store.messages.addImportedMessage(stored.id, source.content, source.localId, source.createdAt)
+            const result = (await store.messages.addImportedMessage(stored.id, source.content, source.localId, source.createdAt))
             if (result.inserted) appended.push(result.message)
         }
     } catch (error) {
         const message = error instanceof Error ? error.message : 'Failed to persist imported Pi history'
         const state = error instanceof ImportedMessageConflictError ? 'diverged' : 'failed'
-        markImportState(store, engine, stored.id, namespace, transcript, machine.id, state, message)
+        await markImportState(store, engine, stored.id, namespace, transcript, machine.id, state, message)
         return {
             piSessionId: transcript.id,
             hapiSessionId: stored.id,
@@ -289,11 +289,11 @@ export function importPiSession(options: {
         }
     }
 
-    const persistedLocalIds = new Set(store.messages.getAllMessages(stored.id)
+    const persistedLocalIds = new Set((await store.messages.getAllMessages(stored.id))
         .map((message) => message.localId)
         .filter((localId): localId is string => Boolean(localId)))
     try {
-        updateMetadataWithRetry(store, stored.id, namespace, (metadata) => {
+        await updateMetadataWithRetry(store, stored.id, namespace, (metadata) => {
             const entryIds = { ...(asRecord(metadata.conversationHistoryEntryIds) ?? {}) } as Record<string, string>
             const points = { ...(asRecord(metadata.conversationHistoryPoints) ?? {}) } as Record<string, true>
             for (const source of transcript.messages) {
@@ -318,15 +318,15 @@ export function importPiSession(options: {
         })
     } catch (error) {
         const message = error instanceof Error ? error.message : 'Failed to finalize imported Pi history'
-        try { markImportState(store, engine, stored.id, namespace, transcript, machine.id, 'failed', message) } catch {}
+        try { await markImportState(store, engine, stored.id, namespace, transcript, machine.id, 'failed', message) } catch {}
         return { piSessionId: transcript.id, hapiSessionId: stored.id, error: { code: 'import_failed', message } }
     }
-    if (transcript.model !== undefined) store.sessions.setSessionModel(stored.id, transcript.model ?? null, namespace, { touchUpdatedAt: false })
-    if (transcript.thinkingLevel !== undefined) store.sessions.setSessionEffort(stored.id, transcript.thinkingLevel ?? null, namespace, { touchUpdatedAt: false })
+    if (transcript.model !== undefined) await store.sessions.setSessionModel(stored.id, transcript.model ?? null, namespace, { touchUpdatedAt: false })
+    if (transcript.thinkingLevel !== undefined) await store.sessions.setSessionEffort(stored.id, transcript.thinkingLevel ?? null, namespace, { touchUpdatedAt: false })
     const activityAt = appended.at(-1)?.createdAt ?? transcript.modifiedAt
-    engine.recordSessionActivity(stored.id, activityAt)
-    emitImportedMessages(engine, stored.id, appended)
-    engine.handleRealtimeEvent({ type: 'session-updated', sessionId: stored.id })
+    await engine.recordSessionActivity(stored.id, activityAt)
+    await emitImportedMessages(engine, stored.id, appended)
+    await engine.handleRealtimeEvent({ type: 'session-updated', sessionId: stored.id })
     return {
         piSessionId: transcript.id,
         hapiSessionId: stored.id,
@@ -335,7 +335,7 @@ export function importPiSession(options: {
     }
 }
 
-async function importWithLock(key: string, work: () => PiImportResult): Promise<PiImportResult> {
+async function importWithLock(key: string, work: () => Promise<PiImportResult>): Promise<PiImportResult> {
     const prior = importLocks.get(key)
     if (prior) return prior
     const current = Promise.resolve().then(work)
@@ -359,7 +359,7 @@ export function createPiSessionRoutes(options: {
         if (!machine) return c.json({ success: false, error: 'No online machine available for Pi history import', sessions: [] }, 503)
         const result = await options.getSyncEngine()!.listPiSessionsForMachine(machine.id, c.req.query('cwd')?.trim() || null)
         if (!result.success) return c.json({ success: false, error: result.error, sessions: [], machineId: machine.id }, 503)
-        const importedByPiId = importedPiSessionsById(options.store, namespace, machine.id)
+        const importedByPiId = (await importedPiSessionsById(options.store, namespace, machine.id))
         const sessions: PiSessionListItem[] = result.sessions.map((summary) => {
             const imported = importedByPiId.get(summary.id)
             const metadata = imported ? storedMetadata(imported) : null
@@ -395,7 +395,7 @@ export function createPiSessionRoutes(options: {
         const byId = new Map(remote.sessions
             .filter((session): session is PiLocalSessionWithMessages => 'messages' in session)
             .map((session) => [session.id, session]))
-        const importedByPiId = importedPiSessionsById(options.store, namespace, machine.id)
+        const importedByPiId = (await importedPiSessionsById(options.store, namespace, machine.id))
         const results: PiImportResult[] = []
         for (const sessionId of uniqueSessionIds) {
             const transcript = byId.get(sessionId)
@@ -403,14 +403,14 @@ export function createPiSessionRoutes(options: {
                 results.push({ piSessionId: sessionId, error: { code: 'not_found', message: 'Pi session transcript not found' } })
                 continue
             }
-            results.push(await importWithLock(`${namespace}:${machine.id}:${sessionId}`, () => importPiSession({
+            results.push(await importWithLock(`${namespace}:${machine.id}:${sessionId}`, async () => (await importPiSession({
                 store: options.store,
                 engine,
                 namespace,
                 machine,
                 transcript,
                 existingSession: importedByPiId.get(sessionId) ?? null
-            })))
+            }))))
         }
         return c.json({ success: results.every((result) => !result.error), results, machineId: machine.id })
     })

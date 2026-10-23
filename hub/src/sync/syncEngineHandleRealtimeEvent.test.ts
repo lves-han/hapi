@@ -29,9 +29,9 @@ import { SyncEngine } from './syncEngine'
  * (CLI resume re-stamps `metadata.cursorSessionId`).
  */
 describe('SyncEngine.handleRealtimeEvent dedup-on-metadata-change', () => {
-    function makeEngine(): { engine: SyncEngine; cache: SessionCache; dedupCalls: string[] } {
+    async function makeEngine(): Promise<{ engine: SyncEngine; cache: SessionCache; dedupCalls: string[] }> {
         const store = new Store(':memory:')
-        const engine = new SyncEngine(
+        const engine = await SyncEngine.create(
             store,
             {} as never,
             new RpcRegistry(),
@@ -50,15 +50,15 @@ describe('SyncEngine.handleRealtimeEvent dedup-on-metadata-change', () => {
         return { engine, cache, dedupCalls }
     }
 
-    it('triggers dedup when a structured metadata patch changes the agent session id', () => {
-        const { engine, cache, dedupCalls } = makeEngine()
+    it('triggers dedup when a structured metadata patch changes the agent session id', async () => {
+        const { engine, cache, dedupCalls } = (await makeEngine())
 
-        const created = cache.getOrCreateSession(
+        const created = (await cache.getOrCreateSession(
             'cursor-session-fast-path',
             { path: '/tmp', host: 'h', flavor: 'cursor', cursorSessionId: 'cursor-old' },
             null,
             'default'
-        )
+        ))
 
         const patch: SessionPatch = {
             metadata: {
@@ -77,21 +77,21 @@ describe('SyncEngine.handleRealtimeEvent dedup-on-metadata-change', () => {
             sessionId: created.id,
             data: patch
         }
-        engine.handleRealtimeEvent(event)
+        await engine.handleRealtimeEvent(event)
 
         expect(dedupCalls).toEqual([created.id])
         expect(cache.getSession(created.id)?.metadata?.cursorSessionId).toBe('cursor-new')
     })
 
-    it('does not trigger dedup when the patch leaves agent session ids unchanged', () => {
-        const { engine, cache, dedupCalls } = makeEngine()
+    it('does not trigger dedup when the patch leaves agent session ids unchanged', async () => {
+        const { engine, cache, dedupCalls } = (await makeEngine())
 
-        const created = cache.getOrCreateSession(
+        const created = (await cache.getOrCreateSession(
             'cursor-session-fast-path-noop',
             { path: '/tmp', host: 'h', flavor: 'cursor', cursorSessionId: 'cursor-stable' },
             null,
             'default'
-        )
+        ))
 
         // A todos patch carries no metadata and must NOT trigger dedup.
         const event: SyncEvent = {
@@ -99,52 +99,52 @@ describe('SyncEngine.handleRealtimeEvent dedup-on-metadata-change', () => {
             sessionId: created.id,
             data: { todos: { version: 1, value: [] } } satisfies SessionPatch
         }
-        engine.handleRealtimeEvent(event)
+        await engine.handleRealtimeEvent(event)
 
         expect(dedupCalls).toEqual([])
     })
 
-    it('triggers dedup on the legacy refresh fallback path (no patch data)', () => {
+    it('triggers dedup on the legacy refresh fallback path (no patch data)', async () => {
         // Tighten the contract for the legacy refresh-from-DB branch:
         // a no-`data` session-updated event still needs to fire dedup
         // when the DB read surfaces a new agent session id. The shared
         // `beforeMetadata` snapshot covers both branches, this guards
         // against a refactor breaking the legacy path.
-        const { engine, cache, dedupCalls } = makeEngine()
+        const { engine, cache, dedupCalls } = (await makeEngine())
 
-        const created = cache.getOrCreateSession(
+        const created = (await cache.getOrCreateSession(
             'cursor-session-legacy-path',
             { path: '/tmp', host: 'h', flavor: 'cursor', cursorSessionId: 'cursor-legacy-old' },
             null,
             'default'
-        )
+        ))
 
         // Persist a metadata change to the DB without going through the
         // cache mutation path, so refreshSession's DB read picks up the
         // new value when handleRealtimeEvent fires.
-        const updateResult = (engine as unknown as { store: Store }).store.sessions.updateSessionMetadata(
+        const updateResult = (await (engine as unknown as { store: Store }).store.sessions.updateSessionMetadata(
             created.id,
             { path: '/tmp', host: 'h', flavor: 'cursor', cursorSessionId: 'cursor-legacy-new' },
             created.metadataVersion,
             'default',
             { touchUpdatedAt: false }
-        )
+        ))
         expect(updateResult.result).toBe('success')
 
         const event: SyncEvent = {
             type: 'session-updated',
             sessionId: created.id
         }
-        engine.handleRealtimeEvent(event)
+        await engine.handleRealtimeEvent(event)
 
         expect(dedupCalls).toEqual([created.id])
     })
 })
 
 describe('SyncEngine.handleRealtimeEvent notify → work-graph ingest', () => {
-    function makeEngine(): { engine: SyncEngine; store: Store } {
+    async function makeEngine(): Promise<{ engine: SyncEngine; store: Store }> {
         const store = new Store(':memory:')
-        const engine = new SyncEngine(
+        const engine = await SyncEngine.create(
             store,
             {} as never,
             new RpcRegistry(),
@@ -154,22 +154,22 @@ describe('SyncEngine.handleRealtimeEvent notify → work-graph ingest', () => {
         return { engine, store }
     }
 
-    it('captures AGENT_NOTIFY_SUMMARY from message-received (display cannot gate)', () => {
-        const { engine, store } = makeEngine()
-        const session = store.sessions.getOrCreateSession(
+    it('captures AGENT_NOTIFY_SUMMARY from message-received (display cannot gate)', async () => {
+        const { engine, store } = (await makeEngine())
+        const session = (await store.sessions.getOrCreateSession(
             'notify-wiring',
             { path: '/tmp', host: 'h', flavor: 'claude' },
             null,
             'default'
-        )
+        ))
         // Ensure cache has the session for ingest namespace/flavor lookup.
-        engine.handleRealtimeEvent({
+        await engine.handleRealtimeEvent({
             type: 'session-updated',
             sessionId: session.id
         })
 
         const messageTs = 1_660_000_000_000
-        engine.handleRealtimeEvent({
+        await engine.handleRealtimeEvent({
             type: 'message-received',
             sessionId: session.id,
             message: {
@@ -195,7 +195,7 @@ describe('SyncEngine.handleRealtimeEvent notify → work-graph ingest', () => {
             }
         })
 
-        const rows = store.workGraph.listByRelatedSession('default', session.id)
+        const rows = (await store.workGraph.listByRelatedSession('default', session.id))
         expect(rows).toHaveLength(1)
         expect(rows[0]!.summary).toBe('Wired through engine')
         expect(rows[0]!.ts).toBe(messageTs)
@@ -203,16 +203,16 @@ describe('SyncEngine.handleRealtimeEvent notify → work-graph ingest', () => {
         expect(rows[0]!.payloadJson).toMatchObject({ status: 'done' })
     })
 
-    it('does not ingest when the footer is missing', () => {
-        const { engine, store } = makeEngine()
-        const session = store.sessions.getOrCreateSession(
+    it('does not ingest when the footer is missing', async () => {
+        const { engine, store } = (await makeEngine())
+        const session = (await store.sessions.getOrCreateSession(
             'notify-wiring-none',
             { path: '/tmp', host: 'h', flavor: 'claude' },
             null,
             'default'
-        )
-        engine.handleRealtimeEvent({ type: 'session-updated', sessionId: session.id })
-        engine.handleRealtimeEvent({
+        ))
+        await engine.handleRealtimeEvent({ type: 'session-updated', sessionId: session.id })
+        await engine.handleRealtimeEvent({
             type: 'message-received',
             sessionId: session.id,
             message: {
@@ -232,19 +232,19 @@ describe('SyncEngine.handleRealtimeEvent notify → work-graph ingest', () => {
                 }
             }
         })
-        expect(store.workGraph.listByRelatedSession('default', session.id)).toHaveLength(0)
+        expect((await store.workGraph.listByRelatedSession('default', session.id))).toHaveLength(0)
     })
 
-    it('captures notify footers from AGY agy_message envelopes', () => {
-        const { engine, store } = makeEngine()
-        const session = store.sessions.getOrCreateSession(
+    it('captures notify footers from AGY agy_message envelopes', async () => {
+        const { engine, store } = (await makeEngine())
+        const session = (await store.sessions.getOrCreateSession(
             'notify-wiring-agy',
             { path: '/tmp', host: 'h', flavor: 'agy' },
             null,
             'default'
-        )
-        engine.handleRealtimeEvent({ type: 'session-updated', sessionId: session.id })
-        engine.handleRealtimeEvent({
+        ))
+        await engine.handleRealtimeEvent({ type: 'session-updated', sessionId: session.id })
+        await engine.handleRealtimeEvent({
             type: 'message-received',
             sessionId: session.id,
             message: {
@@ -265,7 +265,7 @@ describe('SyncEngine.handleRealtimeEvent notify → work-graph ingest', () => {
             }
         })
 
-        const rows = store.workGraph.listByRelatedSession('default', session.id)
+        const rows = (await store.workGraph.listByRelatedSession('default', session.id))
         expect(rows).toHaveLength(1)
         expect(rows[0]!.summary).toBe('AGY footer')
         expect(rows[0]!.principal).toEqual({
@@ -276,18 +276,18 @@ describe('SyncEngine.handleRealtimeEvent notify → work-graph ingest', () => {
         expect(rows[0]!.payloadJson).toMatchObject({ agent: 'forged-peer' })
     })
 
-    it('does not persist footer summary beyond WORK_GRAPH_MAX_SUMMARY (S4)', () => {
-        const { engine, store } = makeEngine()
-        const session = store.sessions.getOrCreateSession(
+    it('does not persist footer summary beyond WORK_GRAPH_MAX_SUMMARY (S4)', async () => {
+        const { engine, store } = (await makeEngine())
+        const session = (await store.sessions.getOrCreateSession(
             'notify-wiring-bound',
             { path: '/tmp', host: 'h', flavor: 'claude' },
             null,
             'default'
-        )
-        engine.handleRealtimeEvent({ type: 'session-updated', sessionId: session.id })
+        ))
+        await engine.handleRealtimeEvent({ type: 'session-updated', sessionId: session.id })
 
         const oversized = 'y'.repeat(WORK_GRAPH_MAX_SUMMARY + 1)
-        engine.handleRealtimeEvent({
+        await engine.handleRealtimeEvent({
             type: 'message-received',
             sessionId: session.id,
             message: {
@@ -313,7 +313,7 @@ describe('SyncEngine.handleRealtimeEvent notify → work-graph ingest', () => {
             }
         })
 
-        const rows = store.workGraph.listByRelatedSession('default', session.id)
+        const rows = (await store.workGraph.listByRelatedSession('default', session.id))
         expect(rows).toHaveLength(1)
         expect(rows[0]!.summary?.length).toBe(WORK_GRAPH_MAX_SUMMARY)
         expect(rows[0]!.summary?.length).toBeLessThan(oversized.length)

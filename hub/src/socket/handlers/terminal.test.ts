@@ -15,13 +15,13 @@ class FakeSocket {
     readonly data: Record<string, unknown> = {}
     readonly emitted: EmittedEvent[] = []
     readonly rooms = new Set<string>()
-    private readonly handlers = new Map<string, (...args: unknown[]) => void>()
+    private readonly handlers = new Map<string, (...args: unknown[]) => unknown>()
 
     constructor(id: string) {
         this.id = id
     }
 
-    on(event: string, handler: (...args: unknown[]) => void): this {
+    on(event: string, handler: (...args: unknown[]) => unknown): this {
         this.handlers.set(event, handler)
         return this
     }
@@ -35,16 +35,16 @@ class FakeSocket {
         this.rooms.add(room)
     }
 
-    trigger(event: string, data?: unknown): void {
+    async trigger(event: string, data?: unknown): Promise<void> {
         const handler = this.handlers.get(event)
         if (!handler) {
             return
         }
         if (typeof data === 'undefined') {
-            handler()
+            await handler()
             return
         }
-        handler(data)
+        await handler(data)
     }
 }
 
@@ -114,10 +114,10 @@ function lastEmit(socket: FakeSocket, event: string): EmittedEvent | undefined {
 }
 
 describe('terminal socket handlers', () => {
-    it('rejects terminal creation when session is inactive', () => {
+    it('rejects terminal creation when session is inactive', async () => {
         const { terminalSocket, terminalRegistry } = createHarness({ sessionActive: false })
 
-        terminalSocket.trigger('terminal:create', {
+        await terminalSocket.trigger('terminal:create', {
             sessionId: 'session-1',
             terminalId: 'terminal-1',
             cols: 80,
@@ -133,12 +133,12 @@ describe('terminal socket handlers', () => {
         expect(terminalRegistry.get('terminal-1')).toBeNull()
     })
 
-    it('opens a terminal and forwards write/resize/close to the CLI socket', () => {
+    it('opens a terminal and forwards write/resize/close to the CLI socket', async () => {
         const { terminalSocket, cliNamespace, terminalRegistry } = createHarness()
         const cliSocket = new FakeSocket('cli-socket-1')
         connectCliSocket(cliNamespace, cliSocket, 'session-1')
 
-        terminalSocket.trigger('terminal:create', {
+        await terminalSocket.trigger('terminal:create', {
             sessionId: 'session-1',
             terminalId: 'terminal-1',
             cols: 120,
@@ -154,7 +154,7 @@ describe('terminal socket handlers', () => {
         })
         expect(terminalRegistry.get('terminal-1')).not.toBeNull()
 
-        terminalSocket.trigger('terminal:write', {
+        await terminalSocket.trigger('terminal:write', {
             terminalId: 'terminal-1',
             data: 'ls\n'
         })
@@ -165,7 +165,7 @@ describe('terminal socket handlers', () => {
             data: 'ls\n'
         })
 
-        terminalSocket.trigger('terminal:resize', {
+        await terminalSocket.trigger('terminal:resize', {
             terminalId: 'terminal-1',
             cols: 100,
             rows: 30
@@ -178,7 +178,7 @@ describe('terminal socket handlers', () => {
             rows: 30
         })
 
-        terminalSocket.trigger('terminal:close', {
+        await terminalSocket.trigger('terminal:close', {
             terminalId: 'terminal-1'
         })
         const closeEvent = lastEmit(cliSocket, 'terminal:close')
@@ -189,7 +189,7 @@ describe('terminal socket handlers', () => {
         expect(terminalRegistry.get('terminal-1')).toBeNull()
     })
 
-    it('replays buffered output once when a replacement socket takes over the same terminal', () => {
+    it('replays buffered output once when a replacement socket takes over the same terminal', async () => {
         clearUserTerminalBuffer('session-1', 'terminal-1')
         clearUserTerminalBuffer('session-2', 'terminal-1')
         appendUserTerminalOutput('session-1', 'terminal-1', 'session-one output')
@@ -197,7 +197,7 @@ describe('terminal socket handlers', () => {
         const { io, terminalSocket, cliNamespace, terminalRegistry } = createHarness()
         const cliSocket = new FakeSocket('cli-socket-1')
         connectCliSocket(cliNamespace, cliSocket, 'session-1')
-        terminalSocket.trigger('terminal:create', {
+        await terminalSocket.trigger('terminal:create', {
             sessionId: 'session-1', terminalId: 'terminal-1', cols: 80, rows: 24
         })
 
@@ -210,7 +210,7 @@ describe('terminal socket handlers', () => {
             maxTerminalsPerSocket: 4,
             maxTerminalsPerSession: 4
         })
-        replacement.trigger('terminal:create', {
+        await replacement.trigger('terminal:create', {
             sessionId: 'session-1', terminalId: 'terminal-1', cols: 80, rows: 24
         })
 
@@ -223,7 +223,7 @@ describe('terminal socket handlers', () => {
         clearUserTerminalBuffer('session-2', 'terminal-1')
     })
 
-    it('does not replay buffered output when the same socket repeats terminal:create', () => {
+    it('does not replay buffered output when the same socket repeats terminal:create', async () => {
         clearUserTerminalBuffer('session-1', 'terminal-1')
         appendUserTerminalOutput('session-1', 'terminal-1', 'scrollback')
         const { terminalSocket, cliNamespace } = createHarness()
@@ -231,20 +231,20 @@ describe('terminal socket handlers', () => {
         connectCliSocket(cliNamespace, cliSocket, 'session-1')
         const create = { sessionId: 'session-1', terminalId: 'terminal-1', cols: 80, rows: 24 }
 
-        terminalSocket.trigger('terminal:create', create)
+        await terminalSocket.trigger('terminal:create', create)
         terminalSocket.emitted.length = 0
-        terminalSocket.trigger('terminal:create', create)
+        await terminalSocket.trigger('terminal:create', create)
 
         expect(terminalSocket.emitted.filter((entry) => entry.event === 'terminal:output')).toHaveLength(0)
         clearUserTerminalBuffer('session-1', 'terminal-1')
     })
 
-    it('preserves the terminal and replays scrollback after a transient socket disconnect', () => {
+    it('preserves the terminal and replays scrollback after a transient socket disconnect', async () => {
         const { io, terminalSocket, cliNamespace, terminalRegistry } = createHarness()
         const cliSocket = new FakeSocket('cli-socket-1')
         connectCliSocket(cliNamespace, cliSocket, 'session-1')
 
-        terminalSocket.trigger('terminal:create', {
+        await terminalSocket.trigger('terminal:create', {
             sessionId: 'session-1',
             terminalId: 'terminal-1',
             cols: 90,
@@ -253,7 +253,7 @@ describe('terminal socket handlers', () => {
 
         appendUserTerminalOutput('session-1', 'terminal-1', 'scrollback')
 
-        terminalSocket.trigger('disconnect')
+        await terminalSocket.trigger('disconnect')
 
         expect(lastEmit(cliSocket, 'terminal:close')).toBeUndefined()
         expect(terminalRegistry.get('terminal-1')).not.toBeNull()
@@ -267,7 +267,7 @@ describe('terminal socket handlers', () => {
             maxTerminalsPerSocket: 4,
             maxTerminalsPerSession: 4
         })
-        reconnectedSocket.trigger('terminal:create', {
+        await reconnectedSocket.trigger('terminal:create', {
             sessionId: 'session-1',
             terminalId: 'terminal-1',
             cols: 90,
@@ -281,12 +281,12 @@ describe('terminal socket handlers', () => {
         clearUserTerminalBuffer('session-1', 'terminal-1')
     })
 
-    it('joins terminal socket to session room on create', () => {
+    it('joins terminal socket to session room on create', async () => {
         const { terminalSocket, cliNamespace } = createHarness()
         const cliSocket = new FakeSocket('cli-socket-1')
         connectCliSocket(cliNamespace, cliSocket, 'session-1')
 
-        terminalSocket.trigger('terminal:create', {
+        await terminalSocket.trigger('terminal:create', {
             sessionId: 'session-1',
             terminalId: 'terminal-1',
             cols: 80,
@@ -302,12 +302,12 @@ describe('terminal socket handlers', () => {
             clearAgentTerminalBuffer('session-2')
         })
 
-        it('replays buffered agent output on subscribe', () => {
+        it('replays buffered agent output on subscribe', async () => {
             const { terminalSocket } = createHarness()
             appendAgentTerminalOutput('session-1', '\x1b[32mInitial output\x1b[0m\r\n')
             appendAgentTerminalOutput('session-1', 'More output\r\n')
 
-            terminalSocket.trigger('agent-terminal:subscribe', { sessionId: 'session-1' })
+            await terminalSocket.trigger('agent-terminal:subscribe', { sessionId: 'session-1' })
 
             expect(terminalSocket.rooms.has('agent-session:session-1')).toBe(true)
             const replayEvent = lastEmit(terminalSocket, 'agent-terminal:output')
@@ -319,7 +319,7 @@ describe('terminal socket handlers', () => {
             })
         })
 
-        it('leaves the replay to the CLI when one is connected, instead of sending the buffer twice', () => {
+        it('leaves the replay to the CLI when one is connected, instead of sending the buffer twice', async () => {
             // The refresh makes the CLI replay its own full screen, which the hub
             // appends and rebroadcasts. Emitting the buffered copy first as well
             // duplicates the whole screen into the 256 KB ring on every toggle.
@@ -329,39 +329,39 @@ describe('terminal socket handlers', () => {
             connectCliSocket(cliNamespace, cliSocket, 'session-1')
             appendAgentTerminalOutput('session-1', 'buffered screen\r\n')
 
-            terminalSocket.trigger('agent-terminal:subscribe', { sessionId: 'session-1' })
+            await terminalSocket.trigger('agent-terminal:subscribe', { sessionId: 'session-1' })
 
             expect(terminalSocket.rooms.has('agent-session:session-1')).toBe(true)
             expect(lastEmit(terminalSocket, 'agent-terminal:output')).toBeUndefined()
             expect(lastEmit(cliSocket, 'agent-terminal:refresh')).toBeDefined()
         })
 
-        it('rejects subscribe to a session in another namespace (no join, no replay)', () => {
+        it('rejects subscribe to a session in another namespace (no join, no replay)', async () => {
             // A valid token for the 'default' namespace must not be able to
             // subscribe to a session that belongs to a different namespace.
             const { terminalSocket } = createHarness({ sessionNamespace: 'other' })
             appendAgentTerminalOutput('session-1', 'secret-output-from-other-namespace')
 
-            terminalSocket.trigger('agent-terminal:subscribe', { sessionId: 'session-1' })
+            await terminalSocket.trigger('agent-terminal:subscribe', { sessionId: 'session-1' })
 
             expect(terminalSocket.rooms.has('agent-session:session-1')).toBe(false)
             expect(lastEmit(terminalSocket, 'agent-terminal:output')).toBeUndefined()
         })
 
-        it('rejects subscribe when the session is inactive (no join, no replay)', () => {
+        it('rejects subscribe when the session is inactive (no join, no replay)', async () => {
             const { terminalSocket } = createHarness({ sessionActive: false })
             appendAgentTerminalOutput('session-1', 'stale-output')
 
-            terminalSocket.trigger('agent-terminal:subscribe', { sessionId: 'session-1' })
+            await terminalSocket.trigger('agent-terminal:subscribe', { sessionId: 'session-1' })
 
             expect(terminalSocket.rooms.has('agent-session:session-1')).toBe(false)
             expect(lastEmit(terminalSocket, 'agent-terminal:output')).toBeUndefined()
         })
 
-        it('joins a dedicated agent-terminal room (not the user-terminal session room)', () => {
+        it('joins a dedicated agent-terminal room (not the user-terminal session room)', async () => {
             const { terminalSocket } = createHarness()
 
-            terminalSocket.trigger('agent-terminal:subscribe', { sessionId: 'session-1' })
+            await terminalSocket.trigger('agent-terminal:subscribe', { sessionId: 'session-1' })
 
             // Agent-terminal viewers must NOT land in the user-terminal `session:` room,
             // otherwise the streaming-teardown viewer count counts the wrong sockets.
@@ -390,12 +390,12 @@ describe('terminal socket handlers', () => {
             clearAgentTerminalBuffer('session-4')
         })
 
-        it('replays buffer per-session independently', () => {
+        it('replays buffer per-session independently', async () => {
             const { terminalSocket } = createHarness()
             appendAgentTerminalOutput('session-1', 'data-for-session-1')
             appendAgentTerminalOutput('session-2', 'data-for-session-2')
 
-            terminalSocket.trigger('agent-terminal:subscribe', { sessionId: 'session-2' })
+            await terminalSocket.trigger('agent-terminal:subscribe', { sessionId: 'session-2' })
 
             const replayEvent = lastEmit(terminalSocket, 'agent-terminal:output')
             expect(replayEvent?.data).toEqual({
@@ -405,18 +405,18 @@ describe('terminal socket handlers', () => {
             })
         })
 
-        it('replays same buffer on repeated subscribe (no clear)', () => {
+        it('replays same buffer on repeated subscribe (no clear)', async () => {
             const { terminalSocket } = createHarness()
             appendAgentTerminalOutput('session-1', 'persistent-data')
 
-            terminalSocket.trigger('agent-terminal:subscribe', { sessionId: 'session-1' })
+            await terminalSocket.trigger('agent-terminal:subscribe', { sessionId: 'session-1' })
             const firstReplay = lastEmit(terminalSocket, 'agent-terminal:output')
             expect(firstReplay).toBeDefined()
             expect((firstReplay!.data as { data: string }).data).toBe('persistent-data')
 
             // Second subscribe gets the same buffer again (not cleared)
             terminalSocket.emitted.length = 0
-            terminalSocket.trigger('agent-terminal:subscribe', { sessionId: 'session-1' })
+            await terminalSocket.trigger('agent-terminal:subscribe', { sessionId: 'session-1' })
             const secondReplay = lastEmit(terminalSocket, 'agent-terminal:output')
             expect(secondReplay).toBeDefined()
             expect((secondReplay!.data as { data: string }).data).toBe('persistent-data')
@@ -424,63 +424,63 @@ describe('terminal socket handlers', () => {
     })
 
     describe('agent-terminal:resize', () => {
-        it('forwards a resize to the CLI socket for an authorized active session', () => {
+        it('forwards a resize to the CLI socket for an authorized active session', async () => {
             const { terminalSocket, cliNamespace } = createHarness()
             const cliSocket = new FakeSocket('cli-socket-1')
             connectCliSocket(cliNamespace, cliSocket, 'session-1')
 
-            terminalSocket.trigger('agent-terminal:resize', { sessionId: 'session-1', cols: 100, rows: 30 })
+            await terminalSocket.trigger('agent-terminal:resize', { sessionId: 'session-1', cols: 100, rows: 30 })
 
             const resizeEvent = lastEmit(cliSocket, 'agent-terminal:resize')
             expect(resizeEvent?.data).toEqual({ sessionId: 'session-1', cols: 100, rows: 30 })
         })
 
-        it('does not forward a resize when the session is inactive (guard, not just pickCliSocket)', () => {
+        it('does not forward a resize when the session is inactive (guard, not just pickCliSocket)', async () => {
             // CLI socket IS connected in this socket's own namespace, so without
             // the authorization guard pickCliSocketId would find it and emit.
             const { terminalSocket, cliNamespace } = createHarness({ sessionActive: false })
             const cliSocket = new FakeSocket('cli-socket-1')
             connectCliSocket(cliNamespace, cliSocket, 'session-1')
 
-            terminalSocket.trigger('agent-terminal:resize', { sessionId: 'session-1', cols: 100, rows: 30 })
+            await terminalSocket.trigger('agent-terminal:resize', { sessionId: 'session-1', cols: 100, rows: 30 })
 
             expect(lastEmit(cliSocket, 'agent-terminal:resize')).toBeUndefined()
         })
     })
 
     describe('agent-terminal:input', () => {
-        it('forwards raw keystrokes to the CLI socket for an authorized active session', () => {
+        it('forwards raw keystrokes to the CLI socket for an authorized active session', async () => {
             const { terminalSocket, cliNamespace } = createHarness()
             const cliSocket = new FakeSocket('cli-socket-1')
             connectCliSocket(cliNamespace, cliSocket, 'session-1')
 
-            terminalSocket.trigger('agent-terminal:input', { sessionId: 'session-1', data: '\u001b' })
+            await terminalSocket.trigger('agent-terminal:input', { sessionId: 'session-1', data: '\u001b' })
 
             const inputEvent = lastEmit(cliSocket, 'agent-terminal:input')
             expect(inputEvent?.data).toEqual({ sessionId: 'session-1', data: '\u001b' })
         })
 
-        it('does not forward input when the session is inactive (same guard as resize)', () => {
+        it('does not forward input when the session is inactive (same guard as resize)', async () => {
             const { terminalSocket, cliNamespace } = createHarness({ sessionActive: false })
             const cliSocket = new FakeSocket('cli-socket-1')
             connectCliSocket(cliNamespace, cliSocket, 'session-1')
 
-            terminalSocket.trigger('agent-terminal:input', { sessionId: 'session-1', data: 'a' })
+            await terminalSocket.trigger('agent-terminal:input', { sessionId: 'session-1', data: 'a' })
 
             expect(lastEmit(cliSocket, 'agent-terminal:input')).toBeUndefined()
         })
 
-        it('drops malformed input (empty data) without emitting', () => {
+        it('drops malformed input (empty data) without emitting', async () => {
             const { terminalSocket, cliNamespace } = createHarness()
             const cliSocket = new FakeSocket('cli-socket-1')
             connectCliSocket(cliNamespace, cliSocket, 'session-1')
 
-            terminalSocket.trigger('agent-terminal:input', { sessionId: 'session-1', data: '' })
+            await terminalSocket.trigger('agent-terminal:input', { sessionId: 'session-1', data: '' })
 
             expect(lastEmit(cliSocket, 'agent-terminal:input')).toBeUndefined()
         })
 
-        it('does not forward input to a session in another namespace (no cross-namespace keystroke injection)', () => {
+        it('does not forward input to a session in another namespace (no cross-namespace keystroke injection)', async () => {
             // The socket's namespace is 'default'; the session belongs to 'other'.
             // A CLI socket IS connected, so without the namespace guard the relay
             // would inject keystrokes into another namespace's live agent PTY.
@@ -488,25 +488,25 @@ describe('terminal socket handlers', () => {
             const cliSocket = new FakeSocket('cli-socket-1')
             connectCliSocket(cliNamespace, cliSocket, 'session-1')
 
-            terminalSocket.trigger('agent-terminal:input', { sessionId: 'session-1', data: 'a' })
+            await terminalSocket.trigger('agent-terminal:input', { sessionId: 'session-1', data: 'a' })
 
             expect(lastEmit(cliSocket, 'agent-terminal:input')).toBeUndefined()
         })
     })
 
-    it('enforces per-socket terminal limits', () => {
+    it('enforces per-socket terminal limits', async () => {
         const { terminalSocket, cliNamespace } = createHarness({ maxTerminalsPerSocket: 1 })
         const cliSocket = new FakeSocket('cli-socket-1')
         connectCliSocket(cliNamespace, cliSocket, 'session-1')
 
-        terminalSocket.trigger('terminal:create', {
+        await terminalSocket.trigger('terminal:create', {
             sessionId: 'session-1',
             terminalId: 'terminal-1',
             cols: 80,
             rows: 24
         })
 
-        terminalSocket.trigger('terminal:create', {
+        await terminalSocket.trigger('terminal:create', {
             sessionId: 'session-1',
             terminalId: 'terminal-2',
             cols: 80,

@@ -16,7 +16,7 @@ describe('Store V7→V8 migration: invoked_at column', () => {
         expect(cols).toContain('invoked_at')
     })
 
-    it('V7 DB migrates to V8 via Store: invoked_at added, existing rows backfilled to created_at', () => {
+    it('V7 DB migrates to V8 via Store: invoked_at added, existing rows backfilled to created_at', async () => {
         const dir = mkdtempSync(join(tmpdir(), 'hapi-migration-v8-test-'))
         const dbPath = join(dir, 'test.db')
         let store: Store | undefined
@@ -41,19 +41,19 @@ describe('Store V7→V8 migration: invoked_at column', () => {
             expect(cols).toContain('invoked_at')
 
             // Backfill: existing rows must have invoked_at == created_at (not NULL)
-            const msgs = store.messages.getMessages('s1')
+            const msgs = (await store.messages.getMessages('s1'))
             expect(msgs).toHaveLength(2)
             const m1 = msgs.find(m => m.id === 'm1')!
             const m2 = msgs.find(m => m.id === 'm2')!
             expect(m1.invokedAt).toBe(1000)
             expect(m2.invokedAt).toBe(2000)
         } finally {
-            store?.close()
+            await store?.close()
             rmSync(dir, { recursive: true, force: true })
         }
     })
 
-    it('V6 DB migrates to V8 (multi-hop)', () => {
+    it('V6 DB migrates to V8 (multi-hop)', async () => {
         const dir = mkdtempSync(join(tmpdir(), 'hapi-migration-v6-test-'))
         const dbPath = join(dir, 'test.db')
         let store: Store | undefined
@@ -72,12 +72,12 @@ describe('Store V7→V8 migration: invoked_at column', () => {
             const sessionCols = getSessionColumns(store)
             expect(sessionCols).toContain('model_reasoning_effort')
         } finally {
-            store?.close()
+            await store?.close()
             rmSync(dir, { recursive: true, force: true })
         }
     })
 
-    it('V5 DB migrates to V8 (multi-hop)', () => {
+    it('V5 DB migrates to V8 (multi-hop)', async () => {
         const dir = mkdtempSync(join(tmpdir(), 'hapi-migration-v5-test-'))
         const dbPath = join(dir, 'test.db')
         let store: Store | undefined
@@ -93,12 +93,12 @@ describe('Store V7→V8 migration: invoked_at column', () => {
             const cols = getMessageColumns(store)
             expect(cols).toContain('invoked_at')
         } finally {
-            store?.close()
+            await store?.close()
             rmSync(dir, { recursive: true, force: true })
         }
     })
 
-    it('V4 DB migrates to V8 (multi-hop)', () => {
+    it('V4 DB migrates to V8 (multi-hop)', async () => {
         const dir = mkdtempSync(join(tmpdir(), 'hapi-migration-v4-test-'))
         const dbPath = join(dir, 'test.db')
         let store: Store | undefined
@@ -114,12 +114,12 @@ describe('Store V7→V8 migration: invoked_at column', () => {
             const cols = getMessageColumns(store)
             expect(cols).toContain('invoked_at')
         } finally {
-            store?.close()
+            await store?.close()
             rmSync(dir, { recursive: true, force: true })
         }
     })
 
-    it('V8 DB reopen is idempotent: schema unchanged', () => {
+    it('V8 DB reopen is idempotent: schema unchanged', async () => {
         const dir = mkdtempSync(join(tmpdir(), 'hapi-migration-v8-idempotent-'))
         const dbPath = join(dir, 'test.db')
         let store1: Store | undefined
@@ -134,13 +134,13 @@ describe('Store V7→V8 migration: invoked_at column', () => {
             const cols2 = getMessageColumns(store2)
             expect(cols2).toEqual(cols1)
         } finally {
-            store2?.close()
-            store1?.close()
+            await store2?.close()
+            await store1?.close()
             rmSync(dir, { recursive: true, force: true })
         }
     })
 
-    it('migrateFromV7ToV8 PRAGMA guard: invoked_at column appears exactly once', () => {
+    it('migrateFromV7ToV8 PRAGMA guard: invoked_at column appears exactly once', async () => {
         const dir = mkdtempSync(join(tmpdir(), 'hapi-migration-v8-guard-'))
         const dbPath = join(dir, 'test.db')
         let store: Store | undefined
@@ -157,81 +157,81 @@ describe('Store V7→V8 migration: invoked_at column', () => {
             const count = cols.filter(c => c === 'invoked_at').length
             expect(count).toBe(1)
         } finally {
-            store?.close()
+            await store?.close()
             rmSync(dir, { recursive: true, force: true })
         }
     })
 
-    it('markMessagesInvoked sets invoked_at on matching messages', () => {
+    it('markMessagesInvoked sets invoked_at on matching messages', async () => {
         const store = new Store(':memory:')
-        const session = store.sessions.getOrCreateSession('test', { path: '/tmp' }, null, 'default')
-        const msg1 = store.messages.addMessage(session.id, 'hello', 'local-1')
-        const msg2 = store.messages.addMessage(session.id, 'world', 'local-2')
+        const session = (await store.sessions.getOrCreateSession('test', { path: '/tmp' }, null, 'default'))
+        const msg1 = (await store.messages.addMessage(session.id, 'hello', 'local-1'))
+        const msg2 = (await store.messages.addMessage(session.id, 'world', 'local-2'))
 
         // Initially both have invokedAt = null (new messages added to fresh V8 DB)
-        expect(store.messages.getMessages(session.id).map(m => m.invokedAt)).toEqual([null, null])
+        expect((await store.messages.getMessages(session.id)).map(m => m.invokedAt)).toEqual([null, null])
 
         const ts = Date.now()
-        store.messages.markMessagesInvoked(session.id, ['local-1'], ts)
+        await store.messages.markMessagesInvoked(session.id, ['local-1'], ts)
 
-        const msgs = store.messages.getMessages(session.id)
+        const msgs = (await store.messages.getMessages(session.id))
         const m1 = msgs.find(m => m.id === msg1.id)!
         const m2 = msgs.find(m => m.id === msg2.id)!
         expect(m1.invokedAt).toBe(ts)
         expect(m2.invokedAt).toBeNull()
     })
 
-    it('markMessagesInvoked is first-write-wins (subsequent calls are no-ops)', () => {
+    it('markMessagesInvoked is first-write-wins (subsequent calls are no-ops)', async () => {
         const store = new Store(':memory:')
-        const session = store.sessions.getOrCreateSession('test', { path: '/tmp' }, null, 'default')
-        store.messages.addMessage(session.id, 'hi', 'local-x')
+        const session = (await store.sessions.getOrCreateSession('test', { path: '/tmp' }, null, 'default'))
+        await store.messages.addMessage(session.id, 'hi', 'local-x')
 
         const ts1 = 1000
         const ts2 = 2000
-        store.messages.markMessagesInvoked(session.id, ['local-x'], ts1)
+        await store.messages.markMessagesInvoked(session.id, ['local-x'], ts1)
         // A duplicate ack (CLI re-emit) must not overwrite the original timestamp:
         // re-stamping invoked_at would shuffle the message in the byPosition-ordered
         // thread for every subscribed client.
-        store.messages.markMessagesInvoked(session.id, ['local-x'], ts2)
+        await store.messages.markMessagesInvoked(session.id, ['local-x'], ts2)
 
-        const msgs = store.messages.getMessages(session.id)
+        const msgs = (await store.messages.getMessages(session.id))
         expect(msgs[0].invokedAt).toBe(ts1)
     })
 
-    it('addMessage with localId leaves invoked_at NULL (ack path is messages-consumed)', () => {
+    it('addMessage with localId leaves invoked_at NULL (ack path is messages-consumed)', async () => {
         const store = new Store(':memory:')
-        const session = store.sessions.getOrCreateSession('test', { path: '/tmp' }, null, 'default')
-        const msg = store.messages.addMessage(session.id, 'content', 'local-1')
+        const session = (await store.sessions.getOrCreateSession('test', { path: '/tmp' }, null, 'default'))
+        const msg = (await store.messages.addMessage(session.id, 'content', 'local-1'))
         expect(msg.invokedAt).toBeNull()
     })
 
-    it('addMessage without localId sets invoked_at = created_at (no ack path)', () => {
+    it('addMessage without localId sets invoked_at = created_at (no ack path)', async () => {
         const store = new Store(':memory:')
-        const session = store.sessions.getOrCreateSession('test', { path: '/tmp' }, null, 'default')
-        const msg = store.messages.addMessage(session.id, 'content')
+        const session = (await store.sessions.getOrCreateSession('test', { path: '/tmp' }, null, 'default'))
+        const msg = (await store.messages.addMessage(session.id, 'content'))
         expect(msg.invokedAt).toBe(msg.createdAt)
     })
 
-    it('getUninvokedLocalMessages returns rows with localId and null invoked_at', () => {
+    it('getUninvokedLocalMessages returns rows with localId and null invoked_at', async () => {
         const store = new Store(':memory:')
-        const session = store.sessions.getOrCreateSession('test', { path: '/tmp' }, null, 'default')
-        const queued = store.messages.addMessage(session.id, 'q', 'local-q')
-        store.messages.addMessage(session.id, 'no-localid')          // invoked_at = createdAt, excluded
-        store.messages.addMessage(session.id, 'invoked', 'local-i')
-        store.messages.markMessagesInvoked(session.id, ['local-i'], Date.now())
+        const session = (await store.sessions.getOrCreateSession('test', { path: '/tmp' }, null, 'default'))
+        const queued = (await store.messages.addMessage(session.id, 'q', 'local-q'))
+        await store.messages.addMessage(session.id, 'no-localid')          // invoked_at = createdAt, excluded
+        await store.messages.addMessage(session.id, 'invoked', 'local-i')
+        await store.messages.markMessagesInvoked(session.id, ['local-i'], Date.now())
 
-        const uninvoked = store.messages.getUninvokedLocalMessages(session.id)
+        const uninvoked = (await store.messages.getUninvokedLocalMessages(session.id))
         expect(uninvoked.map(m => m.id)).toEqual([queued.id])
     })
 
-    it('getUninvokedLocalMessages returns empty for session with no queued messages', () => {
+    it('getUninvokedLocalMessages returns empty for session with no queued messages', async () => {
         const store = new Store(':memory:')
-        const session = store.sessions.getOrCreateSession('test', { path: '/tmp' }, null, 'default')
-        store.messages.addMessage(session.id, 'plain')                                // invoked_at set
-        const sent = store.messages.addMessage(session.id, 'sent', 'local-s')
-        store.messages.markMessagesInvoked(session.id, ['local-s'], Date.now())
+        const session = (await store.sessions.getOrCreateSession('test', { path: '/tmp' }, null, 'default'))
+        await store.messages.addMessage(session.id, 'plain')                                // invoked_at set
+        const sent = (await store.messages.addMessage(session.id, 'sent', 'local-s'))
+        await store.messages.markMessagesInvoked(session.id, ['local-s'], Date.now())
         expect(sent.invokedAt).toBeNull()  // value at insert; row has been updated since
-        expect(store.messages.getUninvokedLocalMessages(session.id)).toEqual([])
+        expect((await store.messages.getUninvokedLocalMessages(session.id))).toEqual([])
     })
 
     // Mirrors the session-end handler's auto-invoke contract at the store
@@ -240,14 +240,14 @@ describe('Store V7→V8 migration: invoked_at column', () => {
     // (markMessagesInvoked). After the sweep, no queued ghosts may remain —
     // otherwise the floating bar would survive across reloads even though the
     // CLI is no longer running.
-    it('session-end pattern: getUninvokedLocalMessages + markMessagesInvoked clears all queued', () => {
+    it('session-end pattern: getUninvokedLocalMessages + markMessagesInvoked clears all queued', async () => {
         const store = new Store(':memory:')
-        const session = store.sessions.getOrCreateSession('test', { path: '/tmp' }, null, 'default')
-        store.messages.addMessage(session.id, 'q1', 'local-1')
-        store.messages.addMessage(session.id, 'q2', 'local-2')
-        store.messages.addMessage(session.id, 'q3', 'local-3')
+        const session = (await store.sessions.getOrCreateSession('test', { path: '/tmp' }, null, 'default'))
+        await store.messages.addMessage(session.id, 'q1', 'local-1')
+        await store.messages.addMessage(session.id, 'q2', 'local-2')
+        await store.messages.addMessage(session.id, 'q3', 'local-3')
 
-        const queuedBefore = store.messages.getUninvokedLocalMessages(session.id)
+        const queuedBefore = (await store.messages.getUninvokedLocalMessages(session.id))
         expect(queuedBefore).toHaveLength(3)
         const localIds = queuedBefore
             .map(m => m.localId)
@@ -255,13 +255,13 @@ describe('Store V7→V8 migration: invoked_at column', () => {
         expect(localIds).toHaveLength(3)
 
         const ts = Date.now()
-        store.messages.markMessagesInvoked(session.id, localIds, ts)
+        await store.messages.markMessagesInvoked(session.id, localIds, ts)
 
-        const queuedAfter = store.messages.getUninvokedLocalMessages(session.id)
+        const queuedAfter = (await store.messages.getUninvokedLocalMessages(session.id))
         expect(queuedAfter).toHaveLength(0)
         // And every row now carries the same invokedAt — a partial sweep would
         // leave the floating bar half-cleared on the web client.
-        const allMessages = store.messages.getMessages(session.id)
+        const allMessages = (await store.messages.getMessages(session.id))
         for (const msg of allMessages) {
             expect(msg.invokedAt).toBe(ts)
         }
@@ -269,50 +269,50 @@ describe('Store V7→V8 migration: invoked_at column', () => {
 })
 
 describe('Store V8 byPosition pagination', () => {
-    it('getMessagesByPosition returns messages in ascending order', () => {
+    it('getMessagesByPosition returns messages in ascending order', async () => {
         const store = new Store(':memory:')
-        const session = store.sessions.getOrCreateSession('test', { path: '/tmp' }, null, 'default')
-        const msg1 = store.messages.addMessage(session.id, 'a', 'loc-1')
-        const msg2 = store.messages.addMessage(session.id, 'b', 'loc-2')
-        const msg3 = store.messages.addMessage(session.id, 'c', 'loc-3')
+        const session = (await store.sessions.getOrCreateSession('test', { path: '/tmp' }, null, 'default'))
+        const msg1 = (await store.messages.addMessage(session.id, 'a', 'loc-1'))
+        const msg2 = (await store.messages.addMessage(session.id, 'b', 'loc-2'))
+        const msg3 = (await store.messages.addMessage(session.id, 'c', 'loc-3'))
         // All start with null invokedAt; set different invokedAt values
-        store.messages.markMessagesInvoked(session.id, ['loc-1'], 1000)
-        store.messages.markMessagesInvoked(session.id, ['loc-2'], 2000)
-        store.messages.markMessagesInvoked(session.id, ['loc-3'], 3000)
+        await store.messages.markMessagesInvoked(session.id, ['loc-1'], 1000)
+        await store.messages.markMessagesInvoked(session.id, ['loc-2'], 2000)
+        await store.messages.markMessagesInvoked(session.id, ['loc-3'], 3000)
 
-        const result = store.messages.getMessagesByPosition(session.id, 50)
+        const result = (await store.messages.getMessagesByPosition(session.id, 50))
         expect(result.map(m => m.id)).toEqual([msg1.id, msg2.id, msg3.id])
     })
 
-    it('getMessagesByPosition sorts by invokedAt DESC, seq DESC (latest first, reversed to ascending)', () => {
+    it('getMessagesByPosition sorts by invokedAt DESC, seq DESC (latest first, reversed to ascending)', async () => {
         const store = new Store(':memory:')
-        const session = store.sessions.getOrCreateSession('test', { path: '/tmp' }, null, 'default')
+        const session = (await store.sessions.getOrCreateSession('test', { path: '/tmp' }, null, 'default'))
         // Insert 3 messages: msg1 has low seq but high invokedAt (queued message that was consumed late)
-        const msg1 = store.messages.addMessage(session.id, 'queued', 'loc-q')
-        const msg2 = store.messages.addMessage(session.id, 'normal-1')  // no localId → invokedAt = createdAt
-        const msg3 = store.messages.addMessage(session.id, 'normal-2')  // no localId → invokedAt = createdAt
+        const msg1 = (await store.messages.addMessage(session.id, 'queued', 'loc-q'))
+        const msg2 = (await store.messages.addMessage(session.id, 'normal-1'))  // no localId → invokedAt = createdAt
+        const msg3 = (await store.messages.addMessage(session.id, 'normal-2'))  // no localId → invokedAt = createdAt
 
         // Simulate: msg1 (seq=1) is invoked much later than msg2 and msg3
-        store.messages.markMessagesInvoked(session.id, ['loc-q'], msg3.createdAt + 10_000)
+        await store.messages.markMessagesInvoked(session.id, ['loc-q'], msg3.createdAt + 10_000)
 
-        const result = store.messages.getMessagesByPosition(session.id, 50)
+        const result = (await store.messages.getMessagesByPosition(session.id, 50))
         // Expected order by position_at ASC: msg2, msg3, msg1 (msg1 has highest invokedAt)
         expect(result[result.length - 1].id).toBe(msg1.id)
         expect(result[0].id).toBe(msg2.id)
     })
 
-    it('getMessagesByPosition composite cursor: second page has no gap or duplicate', () => {
+    it('getMessagesByPosition composite cursor: second page has no gap or duplicate', async () => {
         const store = new Store(':memory:')
-        const session = store.sessions.getOrCreateSession('test', { path: '/tmp' }, null, 'default')
+        const session = (await store.sessions.getOrCreateSession('test', { path: '/tmp' }, null, 'default'))
         // Add 5 messages with distinct invokedAt timestamps
         const messages = []
         for (let i = 0; i < 5; i++) {
-            const msg = store.messages.addMessage(session.id, `msg-${i}`)
+            const msg = (await store.messages.addMessage(session.id, `msg-${i}`))
             messages.push(msg)
         }
 
         // First page: limit=3 (gets last 3 by position DESC, reversed to ASC)
-        const page1 = store.messages.getMessagesByPosition(session.id, 3)
+        const page1 = (await store.messages.getMessagesByPosition(session.id, 3))
         expect(page1).toHaveLength(3)
 
         // Derive cursor from oldest in page1 (first element after reverse)
@@ -321,7 +321,7 @@ describe('Store V8 byPosition pagination', () => {
         const cursorSeq = oldest.seq
 
         // Second page
-        const page2 = store.messages.getMessagesByPosition(session.id, 3, { at: cursorAt, seq: cursorSeq })
+        const page2 = (await store.messages.getMessagesByPosition(session.id, 3, { at: cursorAt, seq: cursorSeq }))
         expect(page2).toHaveLength(2)
 
         // No overlap between pages
@@ -335,26 +335,26 @@ describe('Store V8 byPosition pagination', () => {
         expect(page1Ids.size + page2Ids.size).toBe(5)
     })
 
-    it('long session: low-seq late-invokedAt message appears in first page', () => {
+    it('long session: low-seq late-invokedAt message appears in first page', async () => {
         const store = new Store(':memory:')
-        const session = store.sessions.getOrCreateSession('test', { path: '/tmp' }, null, 'default')
+        const session = (await store.sessions.getOrCreateSession('test', { path: '/tmp' }, null, 'default'))
         // Insert many normal messages first (low invokedAt)
         for (let i = 0; i < 10; i++) {
-            store.messages.addMessage(session.id, `normal-${i}`)
+            await store.messages.addMessage(session.id, `normal-${i}`)
         }
         // Insert a queued message (low seq, but invoked much later)
-        const queued = store.messages.addMessage(session.id, 'queued', 'loc-q')
-        store.messages.markMessagesInvoked(session.id, ['loc-q'], Date.now() + 1_000_000)
+        const queued = (await store.messages.addMessage(session.id, 'queued', 'loc-q'))
+        await store.messages.markMessagesInvoked(session.id, ['loc-q'], Date.now() + 1_000_000)
 
         // The queued message should appear in first page (highest position_at)
-        const page1 = store.messages.getMessagesByPosition(session.id, 5)
+        const page1 = (await store.messages.getMessagesByPosition(session.id, 5))
         const ids = page1.map(m => m.id)
         expect(ids).toContain(queued.id)
         // It should be the last (most recent) in ascending result
         expect(ids[ids.length - 1]).toBe(queued.id)
     })
 
-    it('V7 mode getMessages is unchanged after V8 migration', () => {
+    it('V7 mode getMessages is unchanged after V8 migration', async () => {
         const dir = mkdtempSync(join(tmpdir(), 'hapi-v7-compat-'))
         const dbPath = join(dir, 'test.db')
         let store: Store | undefined
@@ -372,12 +372,12 @@ describe('Store V8 byPosition pagination', () => {
 
             store = new Store(dbPath)
             // V7 getMessages (seq-based) must still work
-            const msgs = store.messages.getMessages('s1')
+            const msgs = (await store.messages.getMessages('s1'))
             expect(msgs).toHaveLength(2)
             expect(msgs[0].seq).toBe(1)
             expect(msgs[1].seq).toBe(2)
         } finally {
-            store?.close()
+            await store?.close()
             rmSync(dir, { recursive: true, force: true })
         }
     })
@@ -391,7 +391,7 @@ describe('Store V8 byPosition pagination', () => {
         expect(rows).toHaveLength(1)
     })
 
-    it('idx_messages_session_position index exists after V7→V8 migration', () => {
+    it('idx_messages_session_position index exists after V7→V8 migration', async () => {
         const dir = mkdtempSync(join(tmpdir(), 'hapi-index-v7-v8-'))
         const dbPath = join(dir, 'test.db')
         let store: Store | undefined
@@ -410,7 +410,7 @@ describe('Store V8 byPosition pagination', () => {
             ).all() as Array<{ name: string }>
             expect(rows).toHaveLength(1)
         } finally {
-            store?.close()
+            await store?.close()
             rmSync(dir, { recursive: true, force: true })
         }
     })
@@ -421,26 +421,26 @@ describe('Store V8 byPosition pagination', () => {
     // layer: a low-position queued row must NOT appear in the latest page once
     // it's been pushed out, but it must still be discoverable via the
     // uninvoked set so the floating bar can render it.
-    it('latest page + uninvoked union: queued rows pushed out of the page are still surfaced', () => {
+    it('latest page + uninvoked union: queued rows pushed out of the page are still surfaced', async () => {
         const store = new Store(':memory:')
-        const session = store.sessions.getOrCreateSession('test', { path: '/tmp' }, null, 'default')
+        const session = (await store.sessions.getOrCreateSession('test', { path: '/tmp' }, null, 'default'))
 
         // Queued message lands first → low createdAt; invoked_at stays NULL,
         // so its position_at = createdAt (the lowest in the session).
-        const queued = store.messages.addMessage(session.id, 'queued', 'local-q')
+        const queued = (await store.messages.addMessage(session.id, 'queued', 'local-q'))
 
         // Add enough later (auto-invoked) messages to push the queued row out
         // of a 3-row latest page.
         for (let i = 0; i < 5; i++) {
-            store.messages.addMessage(session.id, `later-${i}`)
+            await store.messages.addMessage(session.id, `later-${i}`)
         }
 
-        const pageRows = store.messages.getMessagesByPosition(session.id, 3)
+        const pageRows = (await store.messages.getMessagesByPosition(session.id, 3))
         expect(pageRows).toHaveLength(3)
         expect(pageRows.find(m => m.id === queued.id)).toBeUndefined()
 
         // ...but the uninvoked union still surfaces it.
-        const queuedRows = store.messages.getUninvokedLocalMessages(session.id)
+        const queuedRows = (await store.messages.getUninvokedLocalMessages(session.id))
         expect(queuedRows.map(m => m.id)).toContain(queued.id)
     })
 
@@ -448,14 +448,14 @@ describe('Store V8 byPosition pagination', () => {
     // web side: page rows are returned in ascending position order, so
     // pageRows[0] is the oldest row in the page and is the correct anchor for
     // the next older fetch.
-    it('getMessagesByPosition ascending order: pageRows[0] is the oldest in the page', () => {
+    it('getMessagesByPosition ascending order: pageRows[0] is the oldest in the page', async () => {
         const store = new Store(':memory:')
-        const session = store.sessions.getOrCreateSession('test', { path: '/tmp' }, null, 'default')
-        const m1 = store.messages.addMessage(session.id, 'm1')
-        const m2 = store.messages.addMessage(session.id, 'm2')
-        const m3 = store.messages.addMessage(session.id, 'm3')
+        const session = (await store.sessions.getOrCreateSession('test', { path: '/tmp' }, null, 'default'))
+        const m1 = (await store.messages.addMessage(session.id, 'm1'))
+        const m2 = (await store.messages.addMessage(session.id, 'm2'))
+        const m3 = (await store.messages.addMessage(session.id, 'm3'))
 
-        const page = store.messages.getMessagesByPosition(session.id, 10)
+        const page = (await store.messages.getMessagesByPosition(session.id, 10))
         expect(page).toHaveLength(3)
         // Ascending by position_at, with seq as the tiebreaker — m1 is oldest,
         // m3 is newest. If this ever flips, the web client's
@@ -465,7 +465,7 @@ describe('Store V8 byPosition pagination', () => {
         expect(page[2].id).toBe(m3.id)
     })
 
-    it('legacy DB (user_version=0 with V7-shape tables): step ladder backfills invoked_at and index', () => {
+    it('legacy DB (user_version=0 with V7-shape tables): step ladder backfills invoked_at and index', async () => {
         const dir = mkdtempSync(join(tmpdir(), 'hapi-legacy-v0-'))
         const dbPath = join(dir, 'test.db')
         let store: Store | undefined
@@ -490,7 +490,7 @@ describe('Store V8 byPosition pagination', () => {
             expect(cols).toContain('invoked_at')
 
             // Backfill should have happened via V7→V8 step running in the legacy branch.
-            const msgs = store.messages.getMessages('s1')
+            const msgs = (await store.messages.getMessages('s1'))
             expect(msgs).toHaveLength(1)
             expect(msgs[0].invokedAt).toBe(1500)
 
@@ -501,7 +501,7 @@ describe('Store V8 byPosition pagination', () => {
             ).all() as Array<{ name: string }>
             expect(rows).toHaveLength(1)
         } finally {
-            store?.close()
+            await store?.close()
             rmSync(dir, { recursive: true, force: true })
         }
     })

@@ -23,9 +23,9 @@ class FakeSyncEngine {
         this.sessions.set(session.id, session)
     }
 
-    emit(event: SyncEvent): void {
+    async emit(event: SyncEvent): Promise<void> {
         for (const listener of this.listeners) {
-            listener(event)
+            await listener(event)
         }
     }
 }
@@ -94,12 +94,12 @@ describe('NotificationHub', () => {
         })
 
         engine.setSession(firstSession)
-        engine.emit({ type: 'session-updated', sessionId: firstSession.id })
+        await engine.emit({ type: 'session-updated', sessionId: firstSession.id })
         await sleep(25)
 
         expect(channel.permissionSessions).toHaveLength(1)
 
-        engine.emit({ type: 'session-updated', sessionId: firstSession.id })
+        await engine.emit({ type: 'session-updated', sessionId: firstSession.id })
         await sleep(25)
 
         expect(channel.permissionSessions).toHaveLength(1)
@@ -115,7 +115,7 @@ describe('NotificationHub', () => {
         })
 
         engine.setSession(secondSession)
-        engine.emit({ type: 'session-updated', sessionId: secondSession.id })
+        await engine.emit({ type: 'session-updated', sessionId: secondSession.id })
         await sleep(25)
 
         expect(channel.permissionSessions).toHaveLength(2)
@@ -153,16 +153,16 @@ describe('NotificationHub', () => {
             }
         }
 
-        engine.emit(readyEvent)
+        await engine.emit(readyEvent)
         await sleep(5)
         expect(channel.readySessions).toHaveLength(1)
 
-        engine.emit(readyEvent)
+        await engine.emit(readyEvent)
         await sleep(5)
         expect(channel.readySessions).toHaveLength(1)
 
         await sleep(30)
-        engine.emit(readyEvent)
+        await engine.emit(readyEvent)
         await sleep(5)
         expect(channel.readySessions).toHaveLength(2)
 
@@ -203,7 +203,7 @@ describe('NotificationHub', () => {
             }
         }
 
-        engine.emit(taskEvent)
+        await engine.emit(taskEvent)
         await sleep(5)
 
         expect(channel.taskNotifications).toHaveLength(1)
@@ -228,12 +228,12 @@ describe('NotificationHub', () => {
         engine.setSession(completedSession)
         engine.setSession(terminatedSession)
 
-        engine.emit({
+        await engine.emit({
             type: 'session-ended',
             sessionId: completedSession.id,
             reason: 'completed' satisfies SessionEndReason
         })
-        engine.emit({
+        await engine.emit({
             type: 'session-ended',
             sessionId: terminatedSession.id,
             reason: 'terminated' satisfies SessionEndReason

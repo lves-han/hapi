@@ -7,13 +7,13 @@ import { Store } from './index'
 import { getUsageSummary } from '../sync/usageService'
 
 describe('Store V19->current migration: usage re-index', () => {
-    it('clears stale derived usage rows and scan state', () => {
+    it('clears stale derived usage rows and scan state', async () => {
         const directory = mkdtempSync(join(tmpdir(), 'hapi-migration-v19-to-v20-'))
         const dbPath = join(directory, 'test.db')
         let store: Store | undefined
         try {
             store = new Store(dbPath)
-            store.close()
+            await store.close()
             store = undefined
 
             const db = new Database(dbPath, { create: true, readwrite: true, strict: true })
@@ -41,25 +41,25 @@ describe('Store V19->current migration: usage re-index', () => {
             expect(scanRows.count).toBe(0)
             expect(usageRows.count).toBe(0)
         } finally {
-            store?.close()
+            await store?.close()
             rmSync(directory, { recursive: true, force: true })
         }
     })
 
-    it('re-indexes legacy unknown-model events with the session model fallback', () => {
+    it('re-indexes legacy unknown-model events with the session model fallback', async () => {
         const directory = mkdtempSync(join(tmpdir(), 'hapi-migration-v19-to-v20-reindex-'))
         const dbPath = join(directory, 'test.db')
         let store: Store | undefined
         try {
             store = new Store(dbPath)
-            const session = store.sessions.getOrCreateSession(
+            const session = (await store.sessions.getOrCreateSession(
                 'session-1',
                 { path: '/tmp', host: 'test', flavor: 'codex' },
                 null,
                 'default',
                 'gpt-test'
-            )
-            store.messages.addMessage(session.id, {
+            ))
+            await store.messages.addMessage(session.id, {
                 role: 'agent',
                 content: {
                     type: 'codex',
@@ -74,8 +74,8 @@ describe('Store V19->current migration: usage re-index', () => {
                     }
                 }
             })
-            expect(getUsageSummary(store, 'default', 'all').totals.requests).toBe(1)
-            store.close()
+            expect((await getUsageSummary(store, 'default', 'all')).totals.requests).toBe(1)
+            await store.close()
             store = undefined
 
             // Simulate the pre-#1359 state: derived rows without model
@@ -88,13 +88,13 @@ describe('Store V19->current migration: usage re-index', () => {
             db.close()
 
             store = new Store(dbPath)
-            const result = getUsageSummary(store, 'default', 'all')
+            const result = (await getUsageSummary(store, 'default', 'all'))
             expect(result.totals.requests).toBe(1)
             expect(result.byModel).toEqual([
                 expect.objectContaining({ key: 'gpt-test', totalTokens: 110 })
             ])
         } finally {
-            store?.close()
+            await store?.close()
             rmSync(directory, { recursive: true, force: true })
         }
     })

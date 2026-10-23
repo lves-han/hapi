@@ -54,11 +54,11 @@ describe('ApnsJwtProvider', () => {
     it('shares one JWT across concurrent callers on startup and refresh', async () => {
         const provider = new ApnsJwtProvider(TEST_KEY_P8, 'KEYID12345', 'TEAMID9999')
         const t0 = 1_700_000_000_000
-        const first = await Promise.all(Array.from({ length: 8 }, () => provider.getToken(t0)))
+        const first = await Promise.all(Array.from({ length: 8 }, async () => provider.getToken(t0)))
         expect(new Set(first).size).toBe(1)
 
         const later = t0 + APNS_JWT_MAX_AGE_MS + 1
-        const refreshed = await Promise.all(Array.from({ length: 8 }, () => provider.getToken(later)))
+        const refreshed = await Promise.all(Array.from({ length: 8 }, async () => provider.getToken(later)))
         expect(new Set(refreshed).size).toBe(1)
         expect(refreshed[0]).not.toBe(first[0])
         expect(await provider.getToken(later)).toBe(refreshed[0]!)

@@ -138,7 +138,7 @@ function createApp(session: Session, opts?: {
     const sessionExists = opts?.sessionExists !== false
     const archiveSessionMock = opts?.archiveSession ?? (async () => {})
     const engine = {
-        resolveSessionAccess: () => sessionExists
+        resolveSessionAccess: async () => sessionExists
             ? { ok: true, sessionId: session.id, session }
             : { ok: false, reason: 'not-found' },
         applySessionConfig,
@@ -159,9 +159,9 @@ function createApp(session: Session, opts?: {
             status: { onDisk: true, store: 'acp' as const }
         })),
         archiveSession: archiveSessionMock,
-        setSessionPinned: opts?.setSessionPinned ?? (() => {}),
-        setSessionPinMode: opts?.setSessionPinMode ?? (() => {}),
-        getSessionExport: opts?.getSessionExport ?? (() => ({
+        setSessionPinned: async (...args: Parameters<SyncEngine['setSessionPinned']>) => { await opts?.setSessionPinned?.(...args) },
+        setSessionPinMode: async (...args: Parameters<SyncEngine['setSessionPinMode']>) => { await opts?.setSessionPinMode?.(...args) },
+        getSessionExport: async (...args: Parameters<SyncEngine['getSessionExport']>) => opts?.getSessionExport ? await opts.getSessionExport(...args) : ({
             type: 'success',
             payload: {
                 schemaVersion: 2,
@@ -170,7 +170,7 @@ function createApp(session: Session, opts?: {
                 messages: [],
                 scratchlist: []
             }
-        })),
+        }),
         listSlashCommands: opts?.listSlashCommands ?? (async () => ({
             success: true,
             commands: []
@@ -1701,7 +1701,7 @@ describe('sessions routes', () => {
                 return new Map(ids.map((id) => [id, 0]))
             },
             getNextScheduledAtBySessionIds: (_ids: string[]) => new Map<string, number>(),
-            resolveSessionAccess: () => ({ ok: false, reason: 'not-found' as const })
+            resolveSessionAccess: async () => ({ ok: false, reason: 'not-found' as const })
         } as unknown as Partial<SyncEngine>
 
         const app = new Hono<WebAppEnv>()
@@ -1733,7 +1733,7 @@ describe('sessions routes', () => {
             getSessionsByNamespace: () => sessions,
             getFutureScheduledMessageCounts: (ids: string[]) => new Map(ids.map((id) => [id, 0])),
             getNextScheduledAtBySessionIds: (_ids: string[]) => new Map<string, number>(),
-            resolveSessionAccess: () => ({ ok: false, reason: 'not-found' as const })
+            resolveSessionAccess: async () => ({ ok: false, reason: 'not-found' as const })
         } as unknown as Partial<SyncEngine>
 
         const app = new Hono<WebAppEnv>()

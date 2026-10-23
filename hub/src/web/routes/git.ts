@@ -68,7 +68,7 @@ export function createGitRoutes(getSyncEngine: () => SyncEngine | null): Hono<We
             return engine
         }
 
-        const sessionResult = requireSessionFromParam(c, engine)
+        const sessionResult = (await requireSessionFromParam(c, engine))
         if (sessionResult instanceof Response) {
             return sessionResult
         }
@@ -78,7 +78,7 @@ export function createGitRoutes(getSyncEngine: () => SyncEngine | null): Hono<We
             return c.json({ success: false, error: 'Session path not available' })
         }
 
-        const result = await runRpc(() => engine.getGitStatus(sessionResult.sessionId, sessionPath))
+        const result = await runRpc(async () => (engine.getGitStatus(sessionResult.sessionId, sessionPath)))
         return c.json(result)
     })
 
@@ -88,7 +88,7 @@ export function createGitRoutes(getSyncEngine: () => SyncEngine | null): Hono<We
             return engine
         }
 
-        const sessionResult = requireSessionFromParam(c, engine)
+        const sessionResult = (await requireSessionFromParam(c, engine))
         if (sessionResult instanceof Response) {
             return sessionResult
         }
@@ -99,7 +99,7 @@ export function createGitRoutes(getSyncEngine: () => SyncEngine | null): Hono<We
         }
 
         const staged = parseBooleanParam(c.req.query('staged'))
-        const result = await runRpc(() => engine.getGitDiffNumstat(sessionResult.sessionId, { cwd: sessionPath, staged }))
+        const result = await runRpc(async () => (engine.getGitDiffNumstat(sessionResult.sessionId, { cwd: sessionPath, staged })))
         return c.json(result)
     })
 
@@ -109,7 +109,7 @@ export function createGitRoutes(getSyncEngine: () => SyncEngine | null): Hono<We
             return engine
         }
 
-        const sessionResult = requireSessionFromParam(c, engine)
+        const sessionResult = (await requireSessionFromParam(c, engine))
         if (sessionResult instanceof Response) {
             return sessionResult
         }
@@ -125,11 +125,11 @@ export function createGitRoutes(getSyncEngine: () => SyncEngine | null): Hono<We
         }
 
         const staged = parseBooleanParam(c.req.query('staged'))
-        const result = await runRpc(() => engine.getGitDiffFile(sessionResult.sessionId, {
+        const result = await runRpc(async () => (engine.getGitDiffFile(sessionResult.sessionId, {
             cwd: sessionPath,
             filePath: parsed.data.path,
             staged
-        }))
+        })))
         return c.json(result)
     })
 
@@ -139,7 +139,7 @@ export function createGitRoutes(getSyncEngine: () => SyncEngine | null): Hono<We
             return engine
         }
 
-        const sessionResult = requireSessionFromParam(c, engine)
+        const sessionResult = (await requireSessionFromParam(c, engine))
         if (sessionResult instanceof Response) {
             return sessionResult
         }
@@ -154,7 +154,7 @@ export function createGitRoutes(getSyncEngine: () => SyncEngine | null): Hono<We
             return c.json({ error: 'Invalid file path' }, 400)
         }
 
-        const result = await runRpc(() => engine.readSessionFile(sessionResult.sessionId, parsed.data.path))
+        const result = await runRpc(async () => (engine.readSessionFile(sessionResult.sessionId, parsed.data.path)))
         return c.json(result)
     })
 
@@ -164,7 +164,7 @@ export function createGitRoutes(getSyncEngine: () => SyncEngine | null): Hono<We
             return engine
         }
 
-        const sessionResult = requireSessionFromParam(c, engine)
+        const sessionResult = (await requireSessionFromParam(c, engine))
         if (sessionResult instanceof Response) {
             return sessionResult
         }
@@ -185,7 +185,7 @@ export function createGitRoutes(getSyncEngine: () => SyncEngine | null): Hono<We
             })
         }
 
-        const result = await runRpc(() => engine.readGeneratedImage(sessionResult.sessionId, parsed.data.imageId))
+        const result = await runRpc(async () => (engine.readGeneratedImage(sessionResult.sessionId, parsed.data.imageId)))
         if (!result.success || !result.content) {
             return c.json({ success: false, error: result.error ?? 'Generated image not found' }, 404)
         }
@@ -213,7 +213,7 @@ export function createGitRoutes(getSyncEngine: () => SyncEngine | null): Hono<We
             return engine
         }
 
-        const sessionResult = requireSessionFromParam(c, engine)
+        const sessionResult = (await requireSessionFromParam(c, engine))
         if (sessionResult instanceof Response) {
             return sessionResult
         }
@@ -240,12 +240,12 @@ export function createGitRoutes(getSyncEngine: () => SyncEngine | null): Hono<We
             args.push('--iglob', toSearchGlob(normalizedQuery))
         }
 
-        const result = await runRpc(() => engine.runRipgrep(
+        const result = await runRpc(async () => (engine.runRipgrep(
             sessionResult.sessionId,
             args,
             sessionPath,
             { query: normalizedQuery, limit }
-        ))
+        )))
         if (!result.success) {
             return c.json({ success: false, error: result.error ?? 'Failed to list files' })
         }
@@ -262,7 +262,7 @@ export function createGitRoutes(getSyncEngine: () => SyncEngine | null): Hono<We
             .filter((path) => !normalizedQuery || matchesSearchQuery(path, normalizedQuery))
             .slice(0, limit)
 
-        const metadataResult = await runRpc(() => engine.statFiles(sessionResult.sessionId, paths))
+        const metadataResult = await runRpc(async () => (engine.statFiles(sessionResult.sessionId, paths)))
         const metadataByPath = new Map(
             metadataResult.success
                 ? (metadataResult.entries ?? []).map((entry) => [entry.path, entry] as const)
@@ -293,7 +293,7 @@ export function createGitRoutes(getSyncEngine: () => SyncEngine | null): Hono<We
             return engine
         }
 
-        const sessionResult = requireSessionFromParam(c, engine)
+        const sessionResult = (await requireSessionFromParam(c, engine))
         if (sessionResult instanceof Response) {
             return sessionResult
         }
@@ -309,7 +309,7 @@ export function createGitRoutes(getSyncEngine: () => SyncEngine | null): Hono<We
         }
 
         const path = parsed.data.path ?? ''
-        const result = await runRpc(() => engine.listDirectory(sessionResult.sessionId, path))
+        const result = await runRpc(async () => (engine.listDirectory(sessionResult.sessionId, path)))
         return c.json(result)
     })
 

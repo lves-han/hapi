@@ -14,12 +14,12 @@ describe('SessionCache.updateSessionSummary', () => {
     it('preserves metadata.name while stamping the generated summary timestamp', async () => {
         const store = new Store(':memory:')
         const cache = new SessionCache(store, createPublisher([]))
-        const created = cache.getOrCreateSession(
+        const created = (await cache.getOrCreateSession(
             'summary-session',
             { path: '/tmp', host: 'localhost', name: 'Manual name' },
             null,
             'default'
-        )
+        ))
 
         await cache.updateSessionSummary(created.id, 'Generated title')
 
@@ -28,7 +28,7 @@ describe('SessionCache.updateSessionSummary', () => {
         expect(updated?.metadata?.summary?.text).toBe('Generated title')
         expect(updated?.metadata?.summary?.updatedAt).toBeGreaterThan(0)
 
-        const stored = store.sessions.getSession(created.id)
+        const stored = (await store.sessions.getSession(created.id))
         expect(stored?.metadata).toMatchObject({
             name: 'Manual name',
             summary: { text: 'Generated title' }

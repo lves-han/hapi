@@ -10,7 +10,7 @@ import { SyncEngine } from './syncEngine'
 describe('SyncEngine.spawnSession preallocates HAPI id for fresh machine spawns', () => {
     it('creates a hub row and forwards that id as reservedSessionId', async () => {
         const store = new Store(':memory:')
-        const engine = new SyncEngine(
+        const engine = await SyncEngine.create(
             store,
             {} as never,
             new RpcRegistry(),
@@ -18,13 +18,13 @@ describe('SyncEngine.spawnSession preallocates HAPI id for fresh machine spawns'
         )
 
         try {
-            engine.getOrCreateMachine(
+            await engine.getOrCreateMachine(
                 'machine-prealloc',
                 { host: 'localhost', platform: 'linux', happyCliVersion: '0.1.0' },
                 null,
                 'default'
             )
-            engine.handleMachineAlive({ machineId: 'machine-prealloc', time: Date.now() })
+            await engine.handleMachineAlive({ machineId: 'machine-prealloc', time: Date.now() })
 
             let forwardedExistingId: string | undefined
             ;(engine as unknown as { rpcGateway: { spawnSession: unknown } }).rpcGateway.spawnSession =
@@ -78,19 +78,19 @@ describe('SyncEngine.spawnSession preallocates HAPI id for fresh machine spawns'
             if (result.type === 'success') {
                 expect(result.sessionId).toBe(forwardedExistingId!)
             }
-            const row = store.sessions.getSession(forwardedExistingId!)
+            const row = (await store.sessions.getSession(forwardedExistingId!))
             expect(row?.id).toBe(forwardedExistingId)
             const meta = row?.metadata as { flavor?: string; machineId?: string } | null
             expect(meta?.flavor).toBe('claude')
             expect(meta?.machineId).toBe('machine-prealloc')
         } finally {
-            engine.stop()
+            await engine.stop()
         }
     })
 
     it('rejects success when runner reports a different id than the prealloc stub', async () => {
         const store = new Store(':memory:')
-        const engine = new SyncEngine(
+        const engine = await SyncEngine.create(
             store,
             {} as never,
             new RpcRegistry(),
@@ -98,13 +98,13 @@ describe('SyncEngine.spawnSession preallocates HAPI id for fresh machine spawns'
         )
 
         try {
-            engine.getOrCreateMachine(
+            await engine.getOrCreateMachine(
                 'machine-id-mismatch',
                 { host: 'localhost', platform: 'linux', happyCliVersion: '0.1.0' },
                 null,
                 'default'
             )
-            engine.handleMachineAlive({ machineId: 'machine-id-mismatch', time: Date.now() })
+            await engine.handleMachineAlive({ machineId: 'machine-id-mismatch', time: Date.now() })
 
             let reserved: string | undefined
             ;(engine as unknown as { rpcGateway: { spawnSession: unknown } }).rpcGateway.spawnSession =
@@ -129,16 +129,16 @@ describe('SyncEngine.spawnSession preallocates HAPI id for fresh machine spawns'
 
             expect(result.type).toBe('error')
             expect(typeof reserved).toBe('string')
-            expect(store.sessions.getSession(reserved!)?.tag).toBe(`machine-spawn:${reserved}`)
+            expect((await store.sessions.getSession(reserved!))?.tag).toBe(`machine-spawn:${reserved}`)
         } finally {
-            engine.stop()
+            await engine.stop()
         }
     })
 
     it('forwards fresh Codex prealloc as reservedSessionId (not existingSessionId)', async () => {
         // #1911 Critical: existingSessionId → reopen → "no Codex thread binding".
         const store = new Store(':memory:')
-        const engine = new SyncEngine(
+        const engine = await SyncEngine.create(
             store,
             {} as never,
             new RpcRegistry(),
@@ -146,13 +146,13 @@ describe('SyncEngine.spawnSession preallocates HAPI id for fresh machine spawns'
         )
 
         try {
-            engine.getOrCreateMachine(
+            await engine.getOrCreateMachine(
                 'machine-codex-prealloc',
                 { host: 'localhost', platform: 'linux', happyCliVersion: '0.1.0' },
                 null,
                 'default'
             )
-            engine.handleMachineAlive({ machineId: 'machine-codex-prealloc', time: Date.now() })
+            await engine.handleMachineAlive({ machineId: 'machine-codex-prealloc', time: Date.now() })
 
             let forwardedExisting: string | undefined
             let forwardedReserved: string | undefined
@@ -206,17 +206,17 @@ describe('SyncEngine.spawnSession preallocates HAPI id for fresh machine spawns'
             expect(forwardedExisting).toBeUndefined()
             expect(typeof forwardedReserved).toBe('string')
             expect(forwardedReserved!.length).toBeGreaterThan(0)
-            const row = store.sessions.getSession(forwardedReserved!)
+            const row = (await store.sessions.getSession(forwardedReserved!))
             expect(row?.tag).toBe(`machine-spawn:${forwardedReserved}`)
             expect((row?.metadata as { flavor?: string } | null)?.flavor).toBe('codex')
         } finally {
-            engine.stop()
+            await engine.stop()
         }
     })
 
     it('does not mint a second id when existingSessionId is already supplied', async () => {
         const store = new Store(':memory:')
-        const engine = new SyncEngine(
+        const engine = await SyncEngine.create(
             store,
             {} as never,
             new RpcRegistry(),
@@ -224,13 +224,13 @@ describe('SyncEngine.spawnSession preallocates HAPI id for fresh machine spawns'
         )
 
         try {
-            engine.getOrCreateMachine(
+            await engine.getOrCreateMachine(
                 'machine-reuse',
                 { host: 'localhost', platform: 'linux', happyCliVersion: '0.1.0' },
                 null,
                 'default'
             )
-            const existing = engine.getOrCreateSession(
+            const existing = (await engine.getOrCreateSession(
                 'already-reserved',
                 { path: '/tmp/project', host: 'localhost', flavor: 'opencode', machineId: 'machine-reuse' },
                 null,
@@ -239,7 +239,7 @@ describe('SyncEngine.spawnSession preallocates HAPI id for fresh machine spawns'
                 undefined,
                 undefined,
                 'already-reserved-id'
-            )
+            ))
 
             let forwardedExistingId: string | undefined
             let callCount = 0
@@ -276,7 +276,7 @@ describe('SyncEngine.spawnSession preallocates HAPI id for fresh machine spawns'
             expect(forwardedExistingId).toBe('already-reserved-id')
             expect(callCount).toBe(1)
         } finally {
-            engine.stop()
+            await engine.stop()
         }
     })
 
@@ -284,7 +284,7 @@ describe('SyncEngine.spawnSession preallocates HAPI id for fresh machine spawns'
         // Critical: never call stop+delete on ambiguous errors — stop kills healthy
         // late-booting children and delete CASCADE-wipes transcripts.
         const store = new Store(':memory:')
-        const engine = new SyncEngine(
+        const engine = await SyncEngine.create(
             store,
             {} as never,
             new RpcRegistry(),
@@ -292,7 +292,7 @@ describe('SyncEngine.spawnSession preallocates HAPI id for fresh machine spawns'
         )
 
         try {
-            engine.getOrCreateMachine(
+            await engine.getOrCreateMachine(
                 'machine-fail',
                 { host: 'localhost', platform: 'linux', happyCliVersion: '0.1.0' },
                 null,
@@ -337,15 +337,15 @@ describe('SyncEngine.spawnSession preallocates HAPI id for fresh machine spawns'
             expect(result.type).toBe('error')
             expect(typeof forwardedExistingId).toBe('string')
             expect(stopCalls).toBe(0)
-            expect(store.sessions.getSession(forwardedExistingId!)?.id).toBe(forwardedExistingId)
+            expect((await store.sessions.getSession(forwardedExistingId!))?.id).toBe(forwardedExistingId)
         } finally {
-            engine.stop()
+            await engine.stop()
         }
     })
 
     it('keeps the preallocated stub when StopSession cannot confirm the child is gone', async () => {
         const store = new Store(':memory:')
-        const engine = new SyncEngine(
+        const engine = await SyncEngine.create(
             store,
             {} as never,
             new RpcRegistry(),
@@ -353,7 +353,7 @@ describe('SyncEngine.spawnSession preallocates HAPI id for fresh machine spawns'
         )
 
         try {
-            engine.getOrCreateMachine(
+            await engine.getOrCreateMachine(
                 'machine-fail-alive',
                 { host: 'localhost', platform: 'linux', happyCliVersion: '0.1.0' },
                 null,
@@ -399,15 +399,15 @@ describe('SyncEngine.spawnSession preallocates HAPI id for fresh machine spawns'
             expect(typeof forwardedExistingId).toBe('string')
             // Ambiguous spawn: never poke StopSession (would kill a healthy child).
             expect(stopCalls).toBe(0)
-            expect(store.sessions.getSession(forwardedExistingId!)?.id).toBe(forwardedExistingId)
+            expect((await store.sessions.getSession(forwardedExistingId!))?.id).toBe(forwardedExistingId)
         } finally {
-            engine.stop()
+            await engine.stop()
         }
     })
 
     it('deletes the stub on pre-exec rejection without StopSession (childStarted:false)', async () => {
         const store = new Store(':memory:')
-        const engine = new SyncEngine(
+        const engine = await SyncEngine.create(
             store,
             {} as never,
             new RpcRegistry(),
@@ -415,7 +415,7 @@ describe('SyncEngine.spawnSession preallocates HAPI id for fresh machine spawns'
         )
 
         try {
-            engine.getOrCreateMachine(
+            await engine.getOrCreateMachine(
                 'machine-preexec',
                 { host: 'localhost', platform: 'linux', happyCliVersion: '0.1.0' },
                 null,
@@ -464,15 +464,15 @@ describe('SyncEngine.spawnSession preallocates HAPI id for fresh machine spawns'
 
             expect(result.type).toBe('error')
             expect(stopCalls).toBe(0)
-            expect(store.sessions.getSession(forwardedExistingId!)).toBeFalsy()
+            expect((await store.sessions.getSession(forwardedExistingId!))).toBeFalsy()
         } finally {
-            engine.stop()
+            await engine.stop()
         }
     })
 
     it('deletes the stub on directory-approval pre-exec (childStarted:false)', async () => {
         const store = new Store(':memory:')
-        const engine = new SyncEngine(
+        const engine = await SyncEngine.create(
             store,
             {} as never,
             new RpcRegistry(),
@@ -480,7 +480,7 @@ describe('SyncEngine.spawnSession preallocates HAPI id for fresh machine spawns'
         )
 
         try {
-            engine.getOrCreateMachine(
+            await engine.getOrCreateMachine(
                 'machine-dir-approve',
                 { host: 'localhost', platform: 'linux', happyCliVersion: '0.1.0' },
                 null,
@@ -521,9 +521,9 @@ describe('SyncEngine.spawnSession preallocates HAPI id for fresh machine spawns'
             )
 
             expect(result.type).toBe('error')
-            expect(store.sessions.getSession(forwardedExistingId!)).toBeFalsy()
+            expect((await store.sessions.getSession(forwardedExistingId!))).toBeFalsy()
         } finally {
-            engine.stop()
+            await engine.stop()
         }
     })
 
@@ -531,7 +531,7 @@ describe('SyncEngine.spawnSession preallocates HAPI id for fresh machine spawns'
         // End-to-end of the real machine-spawn path: hub preallocates, then CLI
         // create with adopt=true overwrites tag/metadata without 409.
         const store = new Store(':memory:')
-        const engine = new SyncEngine(
+        const engine = await SyncEngine.create(
             store,
             {} as never,
             new RpcRegistry(),
@@ -539,7 +539,7 @@ describe('SyncEngine.spawnSession preallocates HAPI id for fresh machine spawns'
         )
 
         try {
-            engine.getOrCreateMachine(
+            await engine.getOrCreateMachine(
                 'machine-adopt',
                 { host: 'localhost', platform: 'linux', happyCliVersion: '0.1.0' },
                 null,
@@ -552,7 +552,7 @@ describe('SyncEngine.spawnSession preallocates HAPI id for fresh machine spawns'
                     allocatedId = (args[17] ?? args[12]) as string | undefined
                     // Simulate CLI create/adopt before webhook success
                     const cliTag = crypto.randomUUID()
-                    const adopted = engine.adoptPreallocatedSession(
+                    const adopted = (await engine.adoptPreallocatedSession(
                         allocatedId!,
                         cliTag,
                         {
@@ -567,10 +567,10 @@ describe('SyncEngine.spawnSession preallocates HAPI id for fresh machine spawns'
                         { controlledByUser: false },
                         'default',
                         'claude-sonnet'
-                    )
+                    ))
                     expect(adopted.id).toBe(allocatedId!)
                     expect((adopted.metadata as { hostPid?: number } | null)?.hostPid).toBe(999)
-                    const stored = store.sessions.getSession(allocatedId!)
+                    const stored = (await store.sessions.getSession(allocatedId!))
                     expect(stored?.tag).toBe(cliTag)
                     return { type: 'success' as const, sessionId: allocatedId! }
                 }
@@ -597,11 +597,11 @@ describe('SyncEngine.spawnSession preallocates HAPI id for fresh machine spawns'
 
             expect(result.type).toBe('success')
             expect(typeof allocatedId).toBe('string')
-            const row = store.sessions.getSession(allocatedId!)
+            const row = (await store.sessions.getSession(allocatedId!))
             expect(row?.id).toBe(allocatedId)
             expect(row?.tag).not.toMatch(/^machine-spawn:/)
         } finally {
-            engine.stop()
+            await engine.stop()
         }
     })
 
@@ -609,7 +609,7 @@ describe('SyncEngine.spawnSession preallocates HAPI id for fresh machine spawns'
         // Critical: RPC timeout / post-dispatch error must not kill a healthy
         // late-booting CLI or CASCADE-delete its transcript (#1911 Overseer).
         const store = new Store(':memory:')
-        const engine = new SyncEngine(
+        const engine = await SyncEngine.create(
             store,
             {} as never,
             new RpcRegistry(),
@@ -617,7 +617,7 @@ describe('SyncEngine.spawnSession preallocates HAPI id for fresh machine spawns'
         )
 
         try {
-            engine.getOrCreateMachine(
+            await engine.getOrCreateMachine(
                 'machine-ambiguous',
                 { host: 'localhost', platform: 'linux', happyCliVersion: '0.1.0' },
                 null,
@@ -663,17 +663,17 @@ describe('SyncEngine.spawnSession preallocates HAPI id for fresh machine spawns'
 
             expect(result.type).toBe('error')
             expect(stopCalls).toBe(0)
-            expect(store.sessions.getSession(forwardedExistingId!)?.id).toBe(forwardedExistingId)
-            expect(store.sessions.getSession(forwardedExistingId!)?.tag).toMatch(/^machine-spawn:/)
+            expect((await store.sessions.getSession(forwardedExistingId!))?.id).toBe(forwardedExistingId)
+            expect((await store.sessions.getSession(forwardedExistingId!))?.tag).toMatch(/^machine-spawn:/)
         } finally {
-            engine.stop()
+            await engine.stop()
         }
     })
 
     it('does not delete after StopSession when the row is no longer a prealloc stub', async () => {
         // Even if an older path called stop+delete, live rows must stay.
         const store = new Store(':memory:')
-        const engine = new SyncEngine(
+        const engine = await SyncEngine.create(
             store,
             {} as never,
             new RpcRegistry(),
@@ -681,7 +681,7 @@ describe('SyncEngine.spawnSession preallocates HAPI id for fresh machine spawns'
         )
 
         try {
-            engine.getOrCreateMachine(
+            await engine.getOrCreateMachine(
                 'machine-live-protect',
                 { host: 'localhost', platform: 'linux', happyCliVersion: '0.1.0' },
                 null,
@@ -693,9 +693,9 @@ describe('SyncEngine.spawnSession preallocates HAPI id for fresh machine spawns'
                 .rpcGateway.spawnSession = async (...args: unknown[]) => {
                     allocatedId = (args[17] ?? args[12]) as string | undefined
                     // Simulate cursor/codex reopen path: metadata update releases stub tag.
-                    const row = store.sessions.getSession(allocatedId!)
+                    const row = (await store.sessions.getSession(allocatedId!))
                     expect(row?.tag).toMatch(/^machine-spawn:/)
-                    store.sessions.updateSessionMetadata(
+                    await store.sessions.updateSessionMetadata(
                         allocatedId!,
                         {
                             ...(row!.metadata as object),
@@ -705,7 +705,7 @@ describe('SyncEngine.spawnSession preallocates HAPI id for fresh machine spawns'
                         row!.metadataVersion,
                         'default'
                     )
-                    const after = store.sessions.getSession(allocatedId!)
+                    const after = (await store.sessions.getSession(allocatedId!))
                     expect(after?.tag).not.toMatch(/^machine-spawn:/)
                     return {
                         type: 'error' as const,
@@ -737,9 +737,9 @@ describe('SyncEngine.spawnSession preallocates HAPI id for fresh machine spawns'
             )
 
             expect(result.type).toBe('error')
-            expect(store.sessions.getSession(allocatedId!)?.id).toBe(allocatedId)
+            expect((await store.sessions.getSession(allocatedId!))?.id).toBe(allocatedId)
         } finally {
-            engine.stop()
+            await engine.stop()
         }
     })
 })

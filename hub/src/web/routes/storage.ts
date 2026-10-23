@@ -12,7 +12,7 @@ async function fileSize(path: string, required = false): Promise<number> {
     }
 }
 
-export function createStorageRoutes(dbPath: string): Hono<WebAppEnv> {
+export function createStorageRoutes(dbPath: string, backend: 'sqlite' | 'postgres' = 'sqlite'): Hono<WebAppEnv> {
     const app = new Hono<WebAppEnv>()
 
     app.get('/storage/sqlite', async (c) => {
@@ -20,6 +20,9 @@ export function createStorageRoutes(dbPath: string): Hono<WebAppEnv> {
             return c.json({ error: 'Storage usage is only available to the hub owner' }, 403)
         }
         c.header('Cache-Control', 'no-store')
+        if (backend === 'postgres') {
+            return c.json({ error: 'Hub storage uses PostgreSQL; the SQLite file is a retained migration source' }, 409)
+        }
         try {
             const [databaseBytes, walBytes, shmBytes] = await Promise.all([
                 fileSize(dbPath, true),

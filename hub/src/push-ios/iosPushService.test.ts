@@ -33,9 +33,9 @@ function makeTransport(outcomeFor: (request: EncryptedPushRequest) => NativePush
     }
 }
 
-function registerIosDevice(store: Store, namespace: string, token: string, deviceId: string): Buffer {
+async function registerIosDevice(store: Store, namespace: string, token: string, deviceId: string): Promise<Buffer> {
     const key = randomBytes(32)
-    store.fcm.upsertDevice(namespace, {
+    await store.fcm.upsertDevice(namespace, {
         token,
         platform: 'ios',
         deviceId,
@@ -47,7 +47,7 @@ function registerIosDevice(store: Store, namespace: string, token: string, devic
 describe('IosPushService.sendToNamespace', () => {
     it('encrypts the canonical payload per device key and sends with collapse id + priority 10', async () => {
         const store = new Store(':memory:')
-        const key = registerIosDevice(store, 'default', 'tok-1', 'iphone-1')
+        const key = (await registerIosDevice(store, 'default', 'tok-1', 'iphone-1'))
         const transport = makeTransport(() => 'sent')
         const service = new IosPushService(transport, store)
 
@@ -80,8 +80,8 @@ describe('IosPushService.sendToNamespace', () => {
 
     it('each device gets an envelope only its own key can open', async () => {
         const store = new Store(':memory:')
-        const keyA = registerIosDevice(store, 'default', 'tok-a', 'iphone-a')
-        const keyB = registerIosDevice(store, 'default', 'tok-b', 'iphone-b')
+        const keyA = (await registerIosDevice(store, 'default', 'tok-a', 'iphone-a'))
+        const keyB = (await registerIosDevice(store, 'default', 'tok-b', 'iphone-b'))
         const transport = makeTransport(() => 'sent')
         const service = new IosPushService(transport, store)
 
@@ -97,8 +97,8 @@ describe('IosPushService.sendToNamespace', () => {
 
     it('prunes the device row on invalid outcome and keeps it on failed', async () => {
         const store = new Store(':memory:')
-        registerIosDevice(store, 'default', 'dead-token', 'iphone-dead')
-        registerIosDevice(store, 'default', 'flaky-token', 'iphone-flaky')
+        await registerIosDevice(store, 'default', 'dead-token', 'iphone-dead')
+        await registerIosDevice(store, 'default', 'flaky-token', 'iphone-flaky')
         const transport = makeTransport((request) =>
             request.token === 'dead-token' ? 'invalid' : 'failed'
         )
@@ -109,7 +109,7 @@ describe('IosPushService.sendToNamespace', () => {
         expect(result.sent).toBe(0)
         expect(result.failed).toBe(2)
         expect(result.invalidTokens).toEqual(['dead-token'])
-        const remaining = store.fcm.getDevicesByNamespace('default', ['ios'])
+        const remaining = (await store.fcm.getDevicesByNamespace('default', ['ios']))
         expect(remaining).toHaveLength(1)
         expect(remaining[0].token).toBe('flaky-token')
     })
@@ -117,7 +117,7 @@ describe('IosPushService.sendToNamespace', () => {
     it('returns zero counts and skips the transport when the namespace has no ios devices', async () => {
         const store = new Store(':memory:')
         // Android rows must not leak into the iOS pipeline.
-        store.fcm.upsertDevice('default', { token: 'fcm-tok', platform: 'phone', deviceId: 'pixel-1' })
+        await store.fcm.upsertDevice('default', { token: 'fcm-tok', platform: 'phone', deviceId: 'pixel-1' })
         const transport = makeTransport(() => 'sent')
         const service = new IosPushService(transport, store)
 
@@ -130,7 +130,7 @@ describe('IosPushService.sendToNamespace', () => {
     it('prunes a row whose stored pushKey is corrupt without calling the transport', async () => {
         const store = new Store(':memory:')
         // Store layer accepts what it is given; the route normally validates.
-        store.fcm.upsertDevice('default', {
+        await store.fcm.upsertDevice('default', {
             token: 'corrupt-token',
             platform: 'ios',
             deviceId: 'iphone-corrupt',
@@ -143,12 +143,12 @@ describe('IosPushService.sendToNamespace', () => {
 
         expect(result.invalidTokens).toEqual(['corrupt-token'])
         expect(transport.requests).toHaveLength(0)
-        expect(store.fcm.getDevicesByNamespace('default', ['ios'])).toHaveLength(0)
+        expect((await store.fcm.getDevicesByNamespace('default', ['ios']))).toHaveLength(0)
     })
 
     it('treats a transport throw as transient failure (device kept)', async () => {
         const store = new Store(':memory:')
-        registerIosDevice(store, 'default', 'tok-1', 'iphone-1')
+        await registerIosDevice(store, 'default', 'tok-1', 'iphone-1')
         const transport: EncryptedPushTransport = {
             async send() {
                 throw new Error('boom')
@@ -159,12 +159,12 @@ describe('IosPushService.sendToNamespace', () => {
         const result = await service.sendToNamespace('default', makePayload())
 
         expect(result).toEqual({ sent: 0, failed: 1, invalidTokens: [] })
-        expect(store.fcm.getDevicesByNamespace('default', ['ios'])).toHaveLength(1)
+        expect((await store.fcm.getDevicesByNamespace('default', ['ios']))).toHaveLength(1)
     })
 
     it('drops undefined optional fields from the encrypted plaintext', async () => {
         const store = new Store(':memory:')
-        const key = registerIosDevice(store, 'default', 'tok-1', 'iphone-1')
+        const key = (await registerIosDevice(store, 'default', 'tok-1', 'iphone-1'))
         const transport = makeTransport(() => 'sent')
         const service = new IosPushService(transport, store)
 
@@ -213,7 +213,7 @@ describe('IosPushService.isHealthy (rolling outcome window)', () => {
 
     it('flips to healthy after the first successful send', async () => {
         const store = new Store(':memory:')
-        registerIosDevice(store, 'default', 'tok-1', 'iphone-1')
+        await registerIosDevice(store, 'default', 'tok-1', 'iphone-1')
         const service = new IosPushService(makeTransport(() => 'sent'), store)
         expect(service.isHealthy()).toBe(false)
         await service.sendToNamespace('default', makePayload())
@@ -222,7 +222,7 @@ describe('IosPushService.isHealthy (rolling outcome window)', () => {
 
     it('stays unhealthy across failures with no successes (broken transport cold start)', async () => {
         const store = new Store(':memory:')
-        registerIosDevice(store, 'default', 'tok-1', 'iphone-1')
+        await registerIosDevice(store, 'default', 'tok-1', 'iphone-1')
         const service = new IosPushService(makeTransport(() => 'failed'), store)
         for (let i = 0; i < 5; i += 1) {
             await service.sendToNamespace('default', makePayload())
@@ -232,7 +232,7 @@ describe('IosPushService.isHealthy (rolling outcome window)', () => {
 
     it('flips back to unhealthy when failures stack past threshold after prior successes', async () => {
         const store = new Store(':memory:')
-        registerIosDevice(store, 'default', 'tok-1', 'iphone-1')
+        await registerIosDevice(store, 'default', 'tok-1', 'iphone-1')
         let callCount = 0
         const service = new IosPushService(makeTransport(() => {
             callCount += 1
@@ -251,8 +251,8 @@ describe('IosPushService.isHealthy (rolling outcome window)', () => {
 
     it('does not count invalid-token outcomes against health', async () => {
         const store = new Store(':memory:')
-        registerIosDevice(store, 'default', 'good-token', 'iphone-good')
-        registerIosDevice(store, 'default', 'dead-token', 'iphone-dead')
+        await registerIosDevice(store, 'default', 'good-token', 'iphone-good')
+        await registerIosDevice(store, 'default', 'dead-token', 'iphone-dead')
         const service = new IosPushService(makeTransport((request) =>
             request.token === 'good-token' ? 'sent' : 'invalid'
         ), store)

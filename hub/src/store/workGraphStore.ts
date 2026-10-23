@@ -1,4 +1,4 @@
-import type { Database } from 'bun:sqlite'
+import type { Database } from './database'
 import type {
     WorkGraphEvent,
     WorkGraphEventCreate,
@@ -23,39 +23,39 @@ export class WorkGraphStore {
         this.db = db
     }
 
-    insertEvent(
+    async insertEvent(
         namespace: string,
         input: WorkGraphEventCreate,
         options?: { id?: string; ts?: number }
-    ): InsertWorkGraphEventResult {
-        return insertWorkGraphEvent(this.db, namespace, input, options)
+    ): Promise<InsertWorkGraphEventResult> {
+        return this.db.operation(() => insertWorkGraphEvent(this.db, namespace, input, options), true)
     }
 
-    getEvent(eventId: string, namespace: string): WorkGraphEvent | null {
-        return getWorkGraphEventByNamespace(this.db, eventId, namespace)
+    async getEvent(eventId: string, namespace: string): Promise<WorkGraphEvent | null> {
+        return this.db.operation(() => getWorkGraphEventByNamespace(this.db, eventId, namespace), false)
     }
 
-    listByRelatedSession(
+    async listByRelatedSession(
         namespace: string,
         relatedSessionId: string,
         options?: { limit?: number }
-    ): WorkGraphEvent[] {
-        return listWorkGraphEventsByRelatedSession(this.db, namespace, relatedSessionId, options)
+    ): Promise<WorkGraphEvent[]> {
+        return this.db.operation(() => listWorkGraphEventsByRelatedSession(this.db, namespace, relatedSessionId, options), false)
     }
 
-    listWorkAdsByRelatedSession(namespace: string, relatedSessionId: string): WorkGraphEvent[] {
-        return listWorkGraphWorkAdsByRelatedSession(this.db, namespace, relatedSessionId)
+    async listWorkAdsByRelatedSession(namespace: string, relatedSessionId: string): Promise<WorkGraphEvent[]> {
+        return this.db.operation(() => listWorkGraphWorkAdsByRelatedSession(this.db, namespace, relatedSessionId), false)
     }
 
-    reassignNotifySession(namespace: string, oldSessionId: string, newSessionId: string): number {
-        return reassignWorkGraphNotifySession(this.db, namespace, oldSessionId, newSessionId)
+    async reassignNotifySession(namespace: string, oldSessionId: string, newSessionId: string): Promise<number> {
+        return this.db.operation(() => reassignWorkGraphNotifySession(this.db, namespace, oldSessionId, newSessionId), true)
     }
 
-    insertLink(namespace: string, input: WorkGraphEventLinkCreate): WorkGraphEventLink {
-        return insertWorkGraphEventLink(this.db, namespace, input)
+    async insertLink(namespace: string, input: WorkGraphEventLinkCreate): Promise<WorkGraphEventLink> {
+        return this.db.operation(() => insertWorkGraphEventLink(this.db, namespace, input), true)
     }
 
-    listLinksForEvent(namespace: string, eventId: string): WorkGraphEventLink[] {
-        return listWorkGraphEventLinksForEvent(this.db, namespace, eventId)
+    async listLinksForEvent(namespace: string, eventId: string): Promise<WorkGraphEventLink[]> {
+        return this.db.operation(() => listWorkGraphEventLinksForEvent(this.db, namespace, eventId), false)
     }
 }

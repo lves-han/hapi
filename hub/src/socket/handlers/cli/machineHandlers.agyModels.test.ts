@@ -25,18 +25,18 @@ function harness(options: { access: 'ok' | 'denied' }) {
 }
 
 describe('machine-agy-models-changed', () => {
-    it('forwards a catalog announcement for a machine this CLI may speak for', () => {
+    it('forwards a catalog announcement for a machine this CLI may speak for', async () => {
         const { socket, events } = harness({ access: 'ok' })
 
-        socket.emit('machine-agy-models-changed', { machineId: 'machine-1' })
+        await Promise.all(socket.listeners('machine-agy-models-changed').map(handler => handler({ machineId: 'machine-1' })))
 
         expect(events).toEqual([{ type: 'machine-agy-models-updated', machineId: 'machine-1' }])
     })
 
-    it('refuses to announce for a machine the CLI has no access to', () => {
+    it('refuses to announce for a machine the CLI has no access to', async () => {
         const { socket, events, accessErrors } = harness({ access: 'denied' })
 
-        socket.emit('machine-agy-models-changed', { machineId: 'someone-elses-machine' })
+        await Promise.all(socket.listeners('machine-agy-models-changed').map(handler => handler({ machineId: 'someone-elses-machine' })))
 
         expect(events).toEqual([])
         expect(accessErrors).toEqual([
@@ -44,13 +44,13 @@ describe('machine-agy-models-changed', () => {
         ])
     })
 
-    it('drops a malformed payload without announcing or erroring', () => {
+    it('drops a malformed payload without announcing or erroring', async () => {
         const { socket, events, accessErrors } = harness({ access: 'ok' })
 
-        socket.emit('machine-agy-models-changed', {})
-        socket.emit('machine-agy-models-changed', { machineId: '' })
-        socket.emit('machine-agy-models-changed', null)
-        socket.emit('machine-agy-models-changed', 'machine-1')
+        await Promise.all(socket.listeners('machine-agy-models-changed').map(handler => handler({})))
+        await Promise.all(socket.listeners('machine-agy-models-changed').map(handler => handler({ machineId: '' })))
+        await Promise.all(socket.listeners('machine-agy-models-changed').map(handler => handler(null)))
+        await Promise.all(socket.listeners('machine-agy-models-changed').map(handler => handler('machine-1')))
 
         expect(events).toEqual([])
         expect(accessErrors).toEqual([])

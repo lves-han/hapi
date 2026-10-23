@@ -1,0 +1,43 @@
+services:
+  postgres:
+    image: postgres:16-bookworm
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: hapi
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_ADMIN_PASSWORD:?Set POSTGRES_ADMIN_PASSWORD}
+      HAPI_DATABASE_PASSWORD: ${HAPI_DATABASE_PASSWORD:?Set HAPI_DATABASE_PASSWORD}
+    volumes:
+      - ${HAPI_POSTGRES_DATA_DIR:-/data/hapi-postgres}:/var/lib/postgresql/data
+      - ./postgres-init.sh:/docker-entrypoint-initdb.d/10-hapi.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "PGPASSWORD=\"$$HAPI_DATABASE_PASSWORD\" psql -h 127.0.0.1 -U hapi -d hapi -tAc 'SELECT 1' >/dev/null"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+  hub:
+    build:
+      context: ..
+    image: local/hapi-fork-hub:postgres
+    user: "${HAPI_UID:?Set the original data owner UID}:${HAPI_GID:?Set the original data owner GID}"
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      HAPI_HOME: ${HAPI_HOME:?Set the original absolute HAPI_HOME}
+      DB_PATH: ${DB_PATH:-}
+      DATABASE_URL: ${DATABASE_URL:?Set the hapi application role PostgreSQL URL}
+      HAPI_LISTEN_HOST: 0.0.0.0
+      HAPI_LISTEN_PORT: 3006
+      HAPI_PUBLIC_URL: ${HAPI_PUBLIC_URL:-http://localhost:3006}
+    ports:
+      - ${HAPI_BIND_ADDRESS:-127.0.0.1}:${HAPI_PORT:-3006}:3006
+    volumes:
+      - ${HAPI_HOME:?}:${HAPI_HOME:?}
+    healthcheck:
+      test: ["CMD", "bun", "-e", "fetch('http://127.0.0.1:3006/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 5s
+      timeout: 5s
+      start_period: 10m
+      retries: 12

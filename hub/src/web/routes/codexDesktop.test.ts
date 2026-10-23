@@ -338,25 +338,25 @@ function createMachine(id: string, workspaceRoots: string[], namespace = 'defaul
     }
 }
 
-function createImportSyncEngine(store: Store, machines: Machine[]): SyncEngine {
+async function createImportSyncEngine(store: Store, machines: Machine[]): Promise<SyncEngine> {
     return {
         getOnlineMachinesByNamespace: (namespace: string) => machines.filter((machine) => (
             machine.namespace === namespace && machine.active
         )),
-        getSessionsByNamespace: (namespace: string) => (
-            store.sessions.getSessionsByNamespace(namespace) as unknown as ReturnType<SyncEngine['getSessionsByNamespace']>
+        getSessionsByNamespace: async (namespace: string) => (
+            (await store.sessions.getSessionsByNamespace(namespace)) as unknown as Awaited<ReturnType<SyncEngine['getSessionsByNamespace']>>
         ),
-        getOrCreateSession: (
+        getOrCreateSession: async (
             tag: string,
             metadata: unknown,
             agentState: unknown,
             namespace: string
         ) => (
-            store.sessions.getOrCreateSession(tag, metadata, agentState, namespace) as unknown as ReturnType<SyncEngine['getOrCreateSession']>
+            (await store.sessions.getOrCreateSession(tag, metadata, agentState, namespace)) as unknown as Awaited<ReturnType<SyncEngine['getOrCreateSession']>>
         ),
         handleRealtimeEvent: () => {},
-        recordSessionActivity: (sessionId: string, updatedAt: number) => {
-            store.sessions.touchSessionUpdatedAt(sessionId, updatedAt, 'default')
+        recordSessionActivity: async (sessionId: string, updatedAt: number) => {
+            await store.sessions.touchSessionUpdatedAt(sessionId, updatedAt, 'default')
         }
     } as unknown as SyncEngine
 }
@@ -386,7 +386,7 @@ describe('Codex Desktop import routes', () => {
     it('imports normal response_item chat messages', async () => {
         const codexHome = mkdtempSync(join(tmpdir(), 'hapi-codex-home-test-'))
         const store = new Store(':memory:')
-        const engine = new SyncEngine(store, {} as never, new RpcRegistry(), { broadcast() {} } as never)
+        const engine = await SyncEngine.create(store, {} as never, new RpcRegistry(), { broadcast() {} } as never)
         const codexSessionId = '11111111-1111-4111-8111-111111111111'
         process.env.CODEX_HOME = codexHome
 
@@ -401,10 +401,10 @@ describe('Codex Desktop import routes', () => {
             })
 
             expect(result.success).toBe(true)
-            const session = store.sessions.getSessionsByNamespace('default')[0]
+            const session = (await store.sessions.getSessionsByNamespace('default'))[0]
             expect(session).toBeDefined()
-            expect(engine.getSession(session.id)?.hasConversationContent).toBe(true)
-            const messages = store.messages.getAllMessages(session.id)
+            expect((await engine.getSession(session.id))?.hasConversationContent).toBe(true)
+            const messages = (await store.messages.getAllMessages(session.id))
             expect(messages).toHaveLength(2)
             expect(messages[0].content).toEqual({
                 role: 'user',
@@ -431,8 +431,8 @@ describe('Codex Desktop import routes', () => {
                 }
             })
         } finally {
-            engine.stop()
-            store.close()
+            await engine.stop()
+            await store.close()
             rmSync(codexHome, { recursive: true, force: true })
         }
     })
@@ -445,12 +445,12 @@ describe('Codex Desktop import routes', () => {
 
         try {
             createTranscript(codexHome, codexSessionId)
-            const liveSession = store.sessions.getOrCreateSession('live-session', {
+            const liveSession = (await store.sessions.getOrCreateSession('live-session', {
                 path: 'C:\\work\\project',
                 flavor: 'codex',
                 codexSessionId
-            }, {}, 'default')
-            store.messages.addMessage(liveSession.id, {
+            }, {}, 'default'))
+            await store.messages.addMessage(liveSession.id, {
                 role: 'user',
                 content: { type: 'text', text: 'different from the transcript' }
             }, 'live-1')
@@ -468,10 +468,10 @@ describe('Codex Desktop import routes', () => {
             expect(result.success).toBe(false)
             if (result.success) throw new Error('Expected active-session transcript import to fail')
             expect(result.error).toContain('matching HAPI session is active')
-            expect(store.sessions.getSessionsByNamespace('default')).toHaveLength(1)
-            expect(store.messages.getAllMessages(liveSession.id)).toHaveLength(1)
+            expect((await store.sessions.getSessionsByNamespace('default'))).toHaveLength(1)
+            expect((await store.messages.getAllMessages(liveSession.id))).toHaveLength(1)
         } finally {
-            store.close()
+            await store.close()
             rmSync(codexHome, { recursive: true, force: true })
         }
     })
@@ -493,9 +493,9 @@ describe('Codex Desktop import routes', () => {
             })
             expect(first.success).toBe(true)
 
-            const imported = store.sessions.getSessionsByNamespace('default')[0]
+            const imported = (await store.sessions.getSessionsByNamespace('default'))[0]
             expect(imported).toBeDefined()
-            store.sessions.updateSessionMetadata(imported.id, {
+            await store.sessions.updateSessionMetadata(imported.id, {
                 ...(imported.metadata ?? {}),
                 codexSessionId: 'fork-session-id',
                 codexSourceSessionId: codexSessionId
@@ -509,14 +509,14 @@ describe('Codex Desktop import routes', () => {
             })
 
             expect(second.success).toBe(true)
-            const sessions = store.sessions.getSessionsByNamespace('default')
+            const sessions = (await store.sessions.getSessionsByNamespace('default'))
             expect(sessions).toHaveLength(1)
             expect(sessions[0]?.metadata).toMatchObject({
                 codexSessionId: 'fork-session-id',
                 codexSourceSessionId: codexSessionId
             })
         } finally {
-            store.close()
+            await store.close()
             rmSync(codexHome, { recursive: true, force: true })
         }
     })
@@ -538,9 +538,9 @@ describe('Codex Desktop import routes', () => {
             })
 
             expect(result.success).toBe(true)
-            const session = store.sessions.getSessionsByNamespace('default')[0]
+            const session = (await store.sessions.getSessionsByNamespace('default'))[0]
             expect(session).toBeDefined()
-            const messages = store.messages.getAllMessages(session.id)
+            const messages = (await store.messages.getAllMessages(session.id))
             expect(messages).toHaveLength(1)
             expect(messages[0].content).toEqual({
                 role: 'user',
@@ -553,7 +553,7 @@ describe('Codex Desktop import routes', () => {
                 }
             })
         } finally {
-            store.close()
+            await store.close()
             rmSync(codexHome, { recursive: true, force: true })
         }
     })
@@ -575,9 +575,9 @@ describe('Codex Desktop import routes', () => {
             })
 
             expect(result.success).toBe(true)
-            const session = store.sessions.getSessionsByNamespace('default')[0]
+            const session = (await store.sessions.getSessionsByNamespace('default'))[0]
             expect(session).toBeDefined()
-            const messages = store.messages.getAllMessages(session.id)
+            const messages = (await store.messages.getAllMessages(session.id))
             expect(messages).toHaveLength(1)
             expect(messages[0].content).toEqual({
                 role: 'agent',
@@ -594,7 +594,7 @@ describe('Codex Desktop import routes', () => {
                 }
             })
         } finally {
-            store.close()
+            await store.close()
             rmSync(codexHome, { recursive: true, force: true })
         }
     })
@@ -616,9 +616,9 @@ describe('Codex Desktop import routes', () => {
             })
 
             expect(result.success).toBe(true)
-            const session = store.sessions.getSessionsByNamespace('default')[0]
+            const session = (await store.sessions.getSessionsByNamespace('default'))[0]
             expect(session).toBeDefined()
-            const messages = store.messages.getAllMessages(session.id)
+            const messages = (await store.messages.getAllMessages(session.id))
             expect(messages).toHaveLength(1)
             expect(messages[0].content).toEqual({
                 role: 'user',
@@ -631,7 +631,7 @@ describe('Codex Desktop import routes', () => {
                 }
             })
         } finally {
-            store.close()
+            await store.close()
             rmSync(codexHome, { recursive: true, force: true })
         }
     })
@@ -653,9 +653,9 @@ describe('Codex Desktop import routes', () => {
             })
 
             expect(result.success).toBe(true)
-            const session = store.sessions.getSessionsByNamespace('default')[0]
+            const session = (await store.sessions.getSessionsByNamespace('default'))[0]
             expect(session).toBeDefined()
-            const messages = store.messages.getAllMessages(session.id)
+            const messages = (await store.messages.getAllMessages(session.id))
             expect(messages).toHaveLength(1)
             expect(messages[0].content).toMatchObject({
                 role: 'user',
@@ -665,7 +665,7 @@ describe('Codex Desktop import routes', () => {
                 }
             })
         } finally {
-            store.close()
+            await store.close()
             rmSync(codexHome, { recursive: true, force: true })
         }
     })
@@ -687,9 +687,9 @@ describe('Codex Desktop import routes', () => {
             })
 
             expect(result.success).toBe(true)
-            const session = store.sessions.getSessionsByNamespace('default')[0]
+            const session = (await store.sessions.getSessionsByNamespace('default'))[0]
             expect(session).toBeDefined()
-            const messages = store.messages.getAllMessages(session.id)
+            const messages = (await store.messages.getAllMessages(session.id))
             expect(messages).toHaveLength(4)
             expect(messages.map((message) => (message.content as { role?: unknown }).role)).toEqual([
                 'user',
@@ -698,7 +698,7 @@ describe('Codex Desktop import routes', () => {
                 'agent'
             ])
         } finally {
-            store.close()
+            await store.close()
             rmSync(codexHome, { recursive: true, force: true })
         }
     })
@@ -720,9 +720,9 @@ describe('Codex Desktop import routes', () => {
             })
 
             expect(result.success).toBe(true)
-            const session = store.sessions.getSessionsByNamespace('default')[0]
+            const session = (await store.sessions.getSessionsByNamespace('default'))[0]
             expect(session).toBeDefined()
-            const messages = store.messages.getAllMessages(session.id)
+            const messages = (await store.messages.getAllMessages(session.id))
             const roles = messages.map((message) => (message.content as { role?: unknown }).role)
             expect(roles).toEqual(['user', 'agent', 'user'])
             expect(messages[0].content).toMatchObject({
@@ -740,7 +740,7 @@ describe('Codex Desktop import routes', () => {
                 }
             })
         } finally {
-            store.close()
+            await store.close()
             rmSync(codexHome, { recursive: true, force: true })
         }
     })
@@ -762,9 +762,9 @@ describe('Codex Desktop import routes', () => {
             })
 
             expect(result.success).toBe(true)
-            const session = store.sessions.getSessionsByNamespace('default')[0]
+            const session = (await store.sessions.getSessionsByNamespace('default'))[0]
             expect(session).toBeDefined()
-            const messages = store.messages.getAllMessages(session.id)
+            const messages = (await store.messages.getAllMessages(session.id))
             expect(messages).toHaveLength(2)
             expect(messages.map((message) => message.content)).toEqual([
                 {
@@ -789,7 +789,7 @@ describe('Codex Desktop import routes', () => {
                 }
             ])
         } finally {
-            store.close()
+            await store.close()
             rmSync(codexHome, { recursive: true, force: true })
         }
     })
@@ -823,14 +823,14 @@ describe('Codex Desktop import routes', () => {
             })
 
             expect(result.success).toBe(true)
-            const session = store.sessions.getSessionsByNamespace('default')[0]
+            const session = (await store.sessions.getSessionsByNamespace('default'))[0]
             expect(session.metadata).toMatchObject({
                 name: 'new thread title',
                 flavor: 'codex',
                 codexSessionId
             })
         } finally {
-            store.close()
+            await store.close()
             rmSync(codexHome, { recursive: true, force: true })
         }
     })
@@ -852,14 +852,14 @@ describe('Codex Desktop import routes', () => {
             })
 
             expect(result.success).toBe(true)
-            const session = store.sessions.getSessionsByNamespace('default')[0]
+            const session = (await store.sessions.getSessionsByNamespace('default'))[0]
             expect(session.metadata).toMatchObject({
                 name: 'normal user message',
                 flavor: 'codex',
                 codexSessionId
             })
         } finally {
-            store.close()
+            await store.close()
             rmSync(codexHome, { recursive: true, force: true })
         }
     })
@@ -888,14 +888,14 @@ describe('Codex Desktop import routes', () => {
             })
 
             expect(result.success).toBe(true)
-            const session = store.sessions.getSessionsByNamespace('default')[0]
+            const session = (await store.sessions.getSessionsByNamespace('default'))[0]
             expect(session.metadata).toMatchObject({
                 name: 'normal user message',
                 flavor: 'codex',
                 codexSessionId
             })
         } finally {
-            store.close()
+            await store.close()
             rmSync(codexHome, { recursive: true, force: true })
         }
     })
@@ -908,9 +908,9 @@ describe('Codex Desktop import routes', () => {
 
         try {
             createTranscript(codexHome, codexSessionId, '/home/user/workspace/project')
-            const engine = createImportSyncEngine(store, [
+            const engine = (await createImportSyncEngine(store, [
                 createMachine('machine-1', ['/home/user/workspace'])
-            ])
+            ]))
             const applied: Array<{ sessionId: string; config: unknown }> = []
             ;(engine as unknown as { applySessionConfig: (sessionId: string, config: unknown) => Promise<void> }).applySessionConfig = async (sessionId, config) => {
                 applied.push({ sessionId, config })
@@ -936,7 +936,7 @@ describe('Codex Desktop import routes', () => {
                 config: { serviceTier: 'standard', collaborationMode: 'plan' }
             }])
         } finally {
-            store.close()
+            await store.close()
             rmSync(codexHome, { recursive: true, force: true })
         }
     })
@@ -949,10 +949,10 @@ describe('Codex Desktop import routes', () => {
 
         try {
             createTranscript(codexHome, codexSessionId, '/home/user/workspace/project')
-            const engine = createImportSyncEngine(store, [
+            const engine = (await createImportSyncEngine(store, [
                 createMachine('machine-1', ['/home/user/workspace']),
                 createMachine('machine-2', ['/other/workspace'])
-            ])
+            ]))
 
             const result = await importSelectedCodexSessions({
                 codexSessionIds: [codexSessionId],
@@ -962,13 +962,13 @@ describe('Codex Desktop import routes', () => {
             })
 
             expect(result.success).toBe(true)
-            const session = store.sessions.getSessionsByNamespace('default')[0]
+            const session = (await store.sessions.getSessionsByNamespace('default'))[0]
             expect(session.metadata).toMatchObject({
                 path: '/home/user/workspace/project',
                 machineId: 'machine-1'
             })
         } finally {
-            store.close()
+            await store.close()
             rmSync(codexHome, { recursive: true, force: true })
         }
     })
@@ -981,10 +981,10 @@ describe('Codex Desktop import routes', () => {
 
         try {
             createTranscript(codexHome, codexSessionId, '/home/user/workspace/project')
-            const engine = createImportSyncEngine(store, [
+            const engine = (await createImportSyncEngine(store, [
                 createMachine('machine-1', ['/home/user/workspace']),
                 createMachine('machine-2', ['/home/user/workspace/project'])
-            ])
+            ]))
 
             const result = await importSelectedCodexSessions({
                 codexSessionIds: [codexSessionId],
@@ -994,13 +994,13 @@ describe('Codex Desktop import routes', () => {
             })
 
             expect(result.success).toBe(true)
-            const session = store.sessions.getSessionsByNamespace('default')[0]
+            const session = (await store.sessions.getSessionsByNamespace('default'))[0]
             expect(session.metadata).toMatchObject({
                 path: '/home/user/workspace/project'
             })
             expect(session.metadata).not.toHaveProperty('machineId')
         } finally {
-            store.close()
+            await store.close()
             rmSync(codexHome, { recursive: true, force: true })
         }
     })
@@ -1013,9 +1013,9 @@ describe('Codex Desktop import routes', () => {
 
         try {
             createTranscript(codexHome, codexSessionId, '/home/user/workspace/project')
-            const engine = createImportSyncEngine(store, [
+            const engine = (await createImportSyncEngine(store, [
                 createMachine('machine-1', ['/home/user/other'])
-            ])
+            ]))
 
             const result = await importSelectedCodexSessions({
                 codexSessionIds: [codexSessionId],
@@ -1025,13 +1025,13 @@ describe('Codex Desktop import routes', () => {
             })
 
             expect(result.success).toBe(true)
-            const session = store.sessions.getSessionsByNamespace('default')[0]
+            const session = (await store.sessions.getSessionsByNamespace('default'))[0]
             expect(session.metadata).toMatchObject({
                 path: '/home/user/workspace/project'
             })
             expect(session.metadata).not.toHaveProperty('machineId')
         } finally {
-            store.close()
+            await store.close()
             rmSync(codexHome, { recursive: true, force: true })
         }
     })
@@ -1044,15 +1044,15 @@ describe('Codex Desktop import routes', () => {
 
         try {
             createTranscript(codexHome, codexSessionId, '/home/user/workspace/project')
-            store.sessions.getOrCreateSession(randomUUID(), {
+            await store.sessions.getOrCreateSession(randomUUID(), {
                 path: '/home/user/workspace/project',
                 flavor: 'codex',
                 codexSessionId,
                 machineId: 'machine-existing'
             }, {}, 'default')
-            const engine = createImportSyncEngine(store, [
+            const engine = (await createImportSyncEngine(store, [
                 createMachine('machine-new', ['/home/user/workspace'])
-            ])
+            ]))
 
             const result = await importSelectedCodexSessions({
                 codexSessionIds: [codexSessionId],
@@ -1063,7 +1063,7 @@ describe('Codex Desktop import routes', () => {
             })
 
             expect(result.success).toBe(true)
-            const sessions = store.sessions.getSessionsByNamespace('default')
+            const sessions = (await store.sessions.getSessionsByNamespace('default'))
             expect(sessions).toHaveLength(2)
             expect(sessions.some((session) => (
                 (session.metadata as Record<string, unknown> | null)?.path === '/home/user/workspace/project'
@@ -1074,7 +1074,7 @@ describe('Codex Desktop import routes', () => {
                 && (session.metadata as Record<string, unknown> | null)?.machineId === 'machine-existing'
             ))).toBe(true)
         } finally {
-            store.close()
+            await store.close()
             rmSync(codexHome, { recursive: true, force: true })
         }
     })
@@ -1131,7 +1131,7 @@ describe('Codex Desktop import routes', () => {
             expect(response.status).toBe(503)
             expect(listCalls).toBe(0)
         } finally {
-            store.close()
+            await store.close()
         }
     })
 
@@ -1143,13 +1143,13 @@ describe('Codex Desktop import routes', () => {
 
         try {
             createTranscript(codexHome, codexSessionId)
-            const archived = store.sessions.getOrCreateSession('archived-session', {
+            const archived = (await store.sessions.getOrCreateSession('archived-session', {
                 path: 'C:\\work\\project',
                 flavor: 'codex',
                 codexSessionId,
                 lifecycleState: 'archived'
-            }, {}, 'default')
-            store.messages.addMessage(archived.id, { type: 'text', text: 'archived old message' }, 'archived-1')
+            }, {}, 'default'))
+            await store.messages.addMessage(archived.id, { type: 'text', text: 'archived old message' }, 'archived-1')
 
             const result = await importSelectedCodexSessions({
                 codexSessionIds: [codexSessionId],
@@ -1159,13 +1159,13 @@ describe('Codex Desktop import routes', () => {
             })
 
             expect(result.success).toBe(true)
-            const sessions = store.sessions.getSessionsByNamespace('default')
+            const sessions = (await store.sessions.getSessionsByNamespace('default'))
             expect(sessions).toHaveLength(2)
             expect(result.hapiSessionIds?.[0]).not.toBe(archived.id)
-            expect(store.messages.getAllMessages(archived.id)).toHaveLength(1)
-            expect(store.messages.getAllMessages(result.hapiSessionIds![0]!)).toHaveLength(2)
+            expect((await store.messages.getAllMessages(archived.id))).toHaveLength(1)
+            expect((await store.messages.getAllMessages(result.hapiSessionIds![0]!))).toHaveLength(2)
         } finally {
-            store.close()
+            await store.close()
             rmSync(codexHome, { recursive: true, force: true })
         }
     })
@@ -1177,12 +1177,12 @@ describe('Codex Desktop import routes', () => {
             await next()
         })
         const store = new Store(':memory:')
-        const session = store.sessions.getOrCreateSession('imported-session', {
+        const session = (await store.sessions.getOrCreateSession('imported-session', {
             codexSessionId: 'codex-thread-1',
             codexSourceSessionId: 'codex-thread-1',
             lifecycleState: 'imported'
-        }, {}, 'default')
-        store.messages.addMessage(session.id, { type: 'text', text: 'imported message' }, 'message-1')
+        }, {}, 'default'))
+        await store.messages.addMessage(session.id, { type: 'text', text: 'imported message' }, 'message-1')
         app.route('/api', createCodexDesktopRoutes({
             store,
             getSyncEngine: () => null
@@ -1211,10 +1211,10 @@ describe('Codex Desktop import routes', () => {
             expect(mergeBody.success).toBe(true)
             expect(mergeBody.merged).toEqual([])
             expect(mergeBody.mergedCount).toBe(0)
-            expect(store.sessions.getSessionByNamespace(session.id, 'default')).toBeDefined()
-            expect(store.messages.getAllMessages(session.id)).toHaveLength(1)
+            expect((await store.sessions.getSessionByNamespace(session.id, 'default'))).toBeDefined()
+            expect((await store.messages.getAllMessages(session.id))).toHaveLength(1)
         } finally {
-            store.close()
+            await store.close()
         }
     })
 
@@ -1225,11 +1225,11 @@ describe('Codex Desktop import routes', () => {
             await next()
         })
         const store = new Store(':memory:')
-        const archived = store.sessions.getOrCreateSession('archived-session', {
+        const archived = (await store.sessions.getOrCreateSession('archived-session', {
             codexSessionId: 'codex-thread-1',
             lifecycleState: 'archived'
-        }, {}, 'default')
-        const imported = store.sessions.getOrCreateSession('imported-session', { codexSessionId: 'codex-thread-1' }, {}, 'default')
+        }, {}, 'default'))
+        const imported = (await store.sessions.getOrCreateSession('imported-session', { codexSessionId: 'codex-thread-1' }, {}, 'default'))
         app.route('/api', createCodexDesktopRoutes({
             store,
             getSyncEngine: () => null
@@ -1258,9 +1258,9 @@ describe('Codex Desktop import routes', () => {
             expect(mergeBody.success).toBe(true)
             expect(mergeBody.merged).toEqual([])
             expect(mergeBody.mergedCount).toBe(0)
-            expect(store.sessions.getSessionsByNamespace('default').map((session) => session.id).sort()).toEqual([archived.id, imported.id].sort())
+            expect((await store.sessions.getSessionsByNamespace('default')).map((session) => session.id).sort()).toEqual([archived.id, imported.id].sort())
         } finally {
-            store.close()
+            await store.close()
         }
     })
 
@@ -1271,7 +1271,7 @@ describe('Codex Desktop import routes', () => {
             await next()
         })
         const store = new Store(':memory:')
-        const storedSession = store.sessions.getOrCreateSession('stored-session', { codexSessionId: 'codex-thread-1' }, {}, 'default')
+        const storedSession = (await store.sessions.getOrCreateSession('stored-session', { codexSessionId: 'codex-thread-1' }, {}, 'default'))
         const engineOnlySession = {
             id: 'engine-only-session',
             active: false,
@@ -1309,9 +1309,9 @@ describe('Codex Desktop import routes', () => {
             expect(mergeBody.success).toBe(true)
             expect(mergeBody.merged).toEqual([])
             expect(mergeBody.mergedCount).toBe(0)
-            expect(store.sessions.getSessionsByNamespace('default').map((session) => session.id)).toEqual([storedSession.id])
+            expect((await store.sessions.getSessionsByNamespace('default')).map((session) => session.id)).toEqual([storedSession.id])
         } finally {
-            store.close()
+            await store.close()
         }
     })
 
@@ -1322,8 +1322,8 @@ describe('Codex Desktop import routes', () => {
             await next()
         })
         const store = new Store(':memory:')
-        const storedSession = store.sessions.getOrCreateSession('stored-session', { codexSessionId: 'codex-thread-1' }, {}, 'default')
-        const engineSession = store.sessions.getOrCreateSession('engine-session', { codexSessionId: 'codex-thread-1' }, {}, 'default')
+        const storedSession = (await store.sessions.getOrCreateSession('stored-session', { codexSessionId: 'codex-thread-1' }, {}, 'default'))
+        const engineSession = (await store.sessions.getOrCreateSession('engine-session', { codexSessionId: 'codex-thread-1' }, {}, 'default'))
         const engine = {
             getSessionsByNamespace: () => [engineSession]
         } as unknown as SyncEngine
@@ -1345,7 +1345,7 @@ describe('Codex Desktop import routes', () => {
             expect(body.duplicates).toHaveLength(1)
             expect(body.duplicates[0]?.hapiSessionIds.sort()).toEqual([storedSession.id, engineSession.id].sort())
         } finally {
-            store.close()
+            await store.close()
         }
     })
 
@@ -1356,19 +1356,19 @@ describe('Codex Desktop import routes', () => {
             await next()
         })
         const store = new Store(':memory:')
-        const storedSession = store.sessions.getOrCreateSession('stored-session', { codexSessionId: 'codex-thread-1' }, {}, 'default')
-        const engineSession = store.sessions.getOrCreateSession('engine-session', { codexSessionId: 'codex-thread-1' }, {}, 'default')
-        store.messages.addMessage(storedSession.id, { type: 'text', text: 'first stored message' }, 'stored-1')
-        store.messages.addMessage(storedSession.id, { type: 'text', text: 'second stored message' }, 'stored-2')
-        store.messages.addMessage(engineSession.id, { type: 'text', text: 'engine-only message' }, 'engine-1')
+        const storedSession = (await store.sessions.getOrCreateSession('stored-session', { codexSessionId: 'codex-thread-1' }, {}, 'default'))
+        const engineSession = (await store.sessions.getOrCreateSession('engine-session', { codexSessionId: 'codex-thread-1' }, {}, 'default'))
+        await store.messages.addMessage(storedSession.id, { type: 'text', text: 'first stored message' }, 'stored-1')
+        await store.messages.addMessage(storedSession.id, { type: 'text', text: 'second stored message' }, 'stored-2')
+        await store.messages.addMessage(engineSession.id, { type: 'text', text: 'engine-only message' }, 'engine-1')
         const engine = {
             getSessionsByNamespace: () => [engineSession],
             deleteSession: async (sessionId: string) => {
-                store.sessions.deleteSession(sessionId, 'default')
+                await store.sessions.deleteSession(sessionId, 'default')
             },
             handleRealtimeEvent: () => {},
-            recordSessionActivity: (sessionId: string, updatedAt: number) => {
-                store.sessions.touchSessionUpdatedAt(sessionId, updatedAt, 'default')
+            recordSessionActivity: async (sessionId: string, updatedAt: number) => {
+                await store.sessions.touchSessionUpdatedAt(sessionId, updatedAt, 'default')
             }
         } as unknown as SyncEngine
         app.route('/api', createCodexDesktopRoutes({
@@ -1388,11 +1388,11 @@ describe('Codex Desktop import routes', () => {
             expect(body.success).toBe(true)
             expect(body.merged[0]?.canonicalSessionId).toBe(storedSession.id)
             expect(body.merged[0]?.removedSessionIds).toEqual([engineSession.id])
-            const sessions = store.sessions.getSessionsByNamespace('default')
+            const sessions = (await store.sessions.getSessionsByNamespace('default'))
             expect(sessions.map((session) => session.id)).toEqual([storedSession.id])
-            expect(store.messages.getAllMessages(storedSession.id)).toHaveLength(3)
+            expect((await store.messages.getAllMessages(storedSession.id))).toHaveLength(3)
         } finally {
-            store.close()
+            await store.close()
         }
     })
 
@@ -1403,8 +1403,8 @@ describe('Codex Desktop import routes', () => {
             await next()
         })
         const store = new Store(':memory:')
-        const forkSession = store.sessions.getOrCreateSession('fork-session-id', { codexSessionId: 'fork-session-id', codexSourceSessionId: 'original-session-id' }, {}, 'default')
-        const dupSession = store.sessions.getOrCreateSession('dup-session-id', { codexSessionId: 'original-session-id' }, {}, 'default')
+        const forkSession = (await store.sessions.getOrCreateSession('fork-session-id', { codexSessionId: 'fork-session-id', codexSourceSessionId: 'original-session-id' }, {}, 'default'))
+        const dupSession = (await store.sessions.getOrCreateSession('dup-session-id', { codexSessionId: 'original-session-id' }, {}, 'default'))
         app.route('/api', createCodexDesktopRoutes({
             store,
             getSyncEngine: () => null

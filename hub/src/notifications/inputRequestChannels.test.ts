@@ -34,7 +34,7 @@ describe('input-request notification channels', () => {
         const store = new Store(':memory:')
         try {
             const key = Buffer.alloc(32, 1)
-            store.fcm.upsertDevice(session.namespace, { token: 'device-token', deviceId: 'device-1',
+            await store.fcm.upsertDevice(session.namespace, { token: 'device-token', deviceId: 'device-1',
                 platform: platform === 'ios' ? 'ios' : 'phone', pushKey: key.toString('base64') })
             const requests: EncryptedPushRequest[] = []
             const transport = { async send(request: EncryptedPushRequest) {
@@ -54,7 +54,7 @@ describe('input-request notification channels', () => {
             expect(requests[0].priority).toBe(10)
             expect(requests[0].collapseId).toBe(platform === 'ios' ? 'input-request-session-input' : undefined)
         } finally {
-            store.close()
+            await store.close()
         }
     })
 

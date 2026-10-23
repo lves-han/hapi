@@ -13,17 +13,17 @@ import { Store } from './index'
  * reconciliation, V14→V15 = attachments column (#921).
  */
 describe('Store V14→V15 migration: scratchlist attachments column', () => {
-    it('fresh DB has session_scratchlist.attachments', () => {
+    it('fresh DB has session_scratchlist.attachments', async () => {
         const store = new Store(':memory:')
         const cols = getColumns(store, 'session_scratchlist')
         expect(cols).toContain('attachments')
         expect(getColumns(store, 'usage_events')).toContain('last_input_tokens')
         expect(getColumns(store, 'usage_scan_state')).toContain('last_seq')
         expect(getUserVersion(store)).toBe(26)
-        store.close()
+        await store.close()
     })
 
-    it('V14 text-only scratchlist migrates to V15 and gains attachments column', () => {
+    it('V14 text-only scratchlist migrates to V15 and gains attachments column', async () => {
         const dir = mkdtempSync(join(tmpdir(), 'hapi-migration-v14-to-v15-'))
         const dbPath = join(dir, 'test.db')
         let store: Store | undefined
@@ -42,12 +42,12 @@ describe('Store V14→V15 migration: scratchlist attachments column', () => {
             expect(getColumns(store, 'usage_scan_state')).toContain('last_seq')
             expect(getUserVersion(store)).toBe(26)
         } finally {
-            store?.close()
+            await store?.close()
             rmSync(dir, { recursive: true, force: true })
         }
     })
 
-    it('latest DB reopen is idempotent: schema unchanged', () => {
+    it('latest DB reopen is idempotent: schema unchanged', async () => {
         const dir = mkdtempSync(join(tmpdir(), 'hapi-migration-v15-idempotent-'))
         const dbPath = join(dir, 'test.db')
         let store1: Store | undefined
@@ -62,8 +62,8 @@ describe('Store V14→V15 migration: scratchlist attachments column', () => {
             expect(cols2).toEqual(cols1)
             expect(getUserVersion(store2)).toBe(26)
         } finally {
-            store2?.close()
-            store1?.close()
+            await store2?.close()
+            await store1?.close()
             rmSync(dir, { recursive: true, force: true })
         }
     })

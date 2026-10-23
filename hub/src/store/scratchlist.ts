@@ -1,4 +1,4 @@
-import type { Database } from 'bun:sqlite'
+import type { Database } from './database'
 import { randomUUID } from 'node:crypto'
 
 import {
@@ -56,36 +56,36 @@ function toStoredEntry(row: DbScratchlistRow): StoredScratchlistEntry {
 
 const SCRATCHLIST_ENTRY_COLUMNS = `session_id, entry_id, text, created_at, updated_at, attachments`
 
-export function listScratchlistEntries(
+export async function listScratchlistEntries(
     db: Database,
     sessionId: string
-): StoredScratchlistEntry[] {
-    const rows = db.prepare(
+): Promise<StoredScratchlistEntry[]> {
+    const rows = (await db.prepare(
         `SELECT ${SCRATCHLIST_ENTRY_COLUMNS}
          FROM session_scratchlist
          WHERE session_id = ?
          ORDER BY created_at DESC, entry_id DESC`
-    ).all(sessionId) as DbScratchlistRow[]
+    ).all(sessionId)) as DbScratchlistRow[]
     return rows.map(toStoredEntry)
 }
 
-export function countScratchlistEntries(db: Database, sessionId: string): number {
-    const row = db.prepare(
+export async function countScratchlistEntries(db: Database, sessionId: string): Promise<number> {
+    const row = (await db.prepare(
         'SELECT COUNT(*) AS n FROM session_scratchlist WHERE session_id = ?'
-    ).get(sessionId) as { n: number } | undefined
+    ).get(sessionId)) as { n: number } | undefined
     return row?.n ?? 0
 }
 
-export function getScratchlistEntry(
+export async function getScratchlistEntry(
     db: Database,
     sessionId: string,
     entryId: string
-): StoredScratchlistEntry | null {
-    const row = db.prepare(
+): Promise<StoredScratchlistEntry | null> {
+    const row = (await db.prepare(
         `SELECT ${SCRATCHLIST_ENTRY_COLUMNS}
          FROM session_scratchlist
          WHERE session_id = ? AND entry_id = ?`
-    ).get(sessionId, entryId) as DbScratchlistRow | undefined
+    ).get(sessionId, entryId)) as DbScratchlistRow | undefined
     return row ? toStoredEntry(row) : null
 }
 
@@ -102,10 +102,10 @@ export type CreateScratchlistResult =
     | { outcome: 'duplicate'; entry: StoredScratchlistEntry }
     | { outcome: 'session-not-found' }
 
-export function sumScratchlistAttachmentBytesForSession(db: Database, sessionId: string): number {
-    const rows = db.prepare(
+export async function sumScratchlistAttachmentBytesForSession(db: Database, sessionId: string): Promise<number> {
+    const rows = (await db.prepare(
         `SELECT attachments FROM session_scratchlist WHERE session_id = ?`
-    ).all(sessionId) as Array<{ attachments: string | null }>
+    ).all(sessionId)) as Array<{ attachments: string | null }>
     let total = 0
     for (const row of rows) {
         for (const att of parseScratchlistAttachmentsJson(row.attachments)) {
@@ -115,7 +115,7 @@ export function sumScratchlistAttachmentBytesForSession(db: Database, sessionId:
     return total
 }
 
-export function createScratchlistEntry(
+export async function createScratchlistEntry(
     db: Database,
     sessionId: string,
     text: string,
@@ -124,7 +124,7 @@ export function createScratchlistEntry(
         createdAt?: number
         attachments?: ScratchlistAttachmentMetadata[]
     }
-): CreateScratchlistResult {
+): Promise<CreateScratchlistResult> {
     const now = Date.now()
     const entryId = options?.entryId ?? randomUUID()
     const createdAt = options?.createdAt ?? now
@@ -133,21 +133,21 @@ export function createScratchlistEntry(
     // Pre-check FK so the route layer can return a clean 404. Doing this
     // before the INSERT keeps the error-handling path narrower (no
     // SQLite-error string parsing).
-    const sessionExists = db.prepare(
+    const sessionExists = (await db.prepare(
         'SELECT 1 FROM sessions WHERE id = ? LIMIT 1'
-    ).get(sessionId) as { 1: number } | undefined
+    ).get(sessionId)) as { 1: number } | undefined
     if (!sessionExists) {
         return { outcome: 'session-not-found' }
     }
 
-    const existing = getScratchlistEntry(db, sessionId, entryId)
+    const existing = (await getScratchlistEntry(db, sessionId, entryId))
     if (existing) {
         return { outcome: 'duplicate', entry: existing }
     }
 
     const attachmentsJson = serializeScratchlistAttachments(options?.attachments ?? [])
 
-    db.prepare(
+    await db.prepare(
         `INSERT INTO session_scratchlist
             (session_id, entry_id, text, created_at, updated_at, attachments)
          VALUES (@session_id, @entry_id, @text, @created_at, @updated_at, @attachments)`
@@ -160,7 +160,7 @@ export function createScratchlistEntry(
         attachments: attachmentsJson,
     })
 
-    const created = getScratchlistEntry(db, sessionId, entryId)
+    const created = (await getScratchlistEntry(db, sessionId, entryId))
     if (!created) {
         // Should be unreachable: we just inserted under the same scope.
         throw new Error('Failed to read scratchlist entry after insert')
@@ -173,13 +173,13 @@ export function createScratchlistEntry(
  * Returns `null` when the entry does not exist (route layer turns into a
  * 404). Note: `created_at` is intentionally NOT updated.
  */
-export function updateScratchlistEntry(
+export async function updateScratchlistEntry(
     db: Database,
     sessionId: string,
     entryId: string,
     patch: { text?: string; attachments?: ScratchlistAttachmentMetadata[] }
-): StoredScratchlistEntry | null {
-    const existing = getScratchlistEntry(db, sessionId, entryId)
+): Promise<StoredScratchlistEntry | null> {
+    const existing = (await getScratchlistEntry(db, sessionId, entryId))
     if (!existing) return null
 
     const now = Date.now()
@@ -187,7 +187,7 @@ export function updateScratchlistEntry(
     const attachments = patch.attachments ?? existing.attachments
     const attachmentsJson = serializeScratchlistAttachments(attachments)
 
-    const result = db.prepare(
+    const result = (await db.prepare(
         `UPDATE session_scratchlist
             SET text = @text,
                 updated_at = @updated_at,
@@ -200,22 +200,22 @@ export function updateScratchlistEntry(
         text,
         updated_at: now,
         attachments: attachmentsJson,
-    })
+    }))
     if (result.changes === 0) {
         return null
     }
-    return getScratchlistEntry(db, sessionId, entryId)
+    return (await getScratchlistEntry(db, sessionId, entryId))
 }
 
-export function deleteScratchlistEntry(
+export async function deleteScratchlistEntry(
     db: Database,
     sessionId: string,
     entryId: string
-): boolean {
-    const result = db.prepare(
+): Promise<boolean> {
+    const result = (await db.prepare(
         `DELETE FROM session_scratchlist
           WHERE session_id = ? AND entry_id = ?`
-    ).run(sessionId, entryId)
+    ).run(sessionId, entryId))
     return result.changes > 0
 }
 
@@ -231,7 +231,7 @@ export function deleteScratchlistEntry(
  * hub-restart-cascade path documented in tiann/hapi#915.
  *
  * Strategy:
- *   1. `UPDATE OR IGNORE` the session_id column. Rows that would
+ *   1. Update the session_id column for entries without a target collision. Rows that would
  *      collide with an existing (toSessionId, entry_id) PK simply do
  *      not move - the dedup target's copy wins, which matches the
  *      operator's mental model that the consolidated session is the
@@ -246,34 +246,33 @@ export function deleteScratchlistEntry(
  * writers. Returns counts so the caller can decide whether to fire
  * SSE patches.
  */
-export function transferScratchlistEntries(
+export async function transferScratchlistEntries(
     db: Database,
     fromSessionId: string,
     toSessionId: string
-): { moved: number; collided: number } {
+): Promise<{ moved: number; collided: number }> {
     if (fromSessionId === toSessionId) {
         return { moved: 0, collided: 0 }
     }
 
-    try {
-        db.exec('BEGIN')
-        const before = db.prepare(
+    return (await db.transaction(async () => {
+        const before = (await db.prepare(
             'SELECT COUNT(*) AS n FROM session_scratchlist WHERE session_id = ?'
-        ).get(fromSessionId) as { n: number } | undefined
+        ).get(fromSessionId)) as { n: number } | undefined
         const total = before?.n ?? 0
-        const moved = db.prepare(
-            'UPDATE OR IGNORE session_scratchlist SET session_id = ? WHERE session_id = ?'
-        ).run(toSessionId, fromSessionId).changes
+        const moved = (await db.prepare(
+            `UPDATE session_scratchlist AS source SET session_id = ?
+             WHERE source.session_id = ? AND NOT EXISTS (
+                 SELECT 1 FROM session_scratchlist AS target
+                 WHERE target.session_id = ? AND target.entry_id = source.entry_id
+             )`
+        ).run(toSessionId, fromSessionId, toSessionId)).changes
         const collided = total - moved
         if (collided > 0) {
-            db.prepare(
+            await db.prepare(
                 'DELETE FROM session_scratchlist WHERE session_id = ?'
             ).run(fromSessionId)
         }
-        db.exec('COMMIT')
         return { moved, collided }
-    } catch (error) {
-        db.exec('ROLLBACK')
-        throw error
-    }
+    })())
 }

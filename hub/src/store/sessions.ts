@@ -1,6 +1,5 @@
-import type { Database } from 'bun:sqlite'
+import type { Database } from './database'
 import { prepareCached } from './statementCache'
-import { bumpSessionDeletionEpoch } from './sessionInvalidation'
 import { randomUUID } from 'node:crypto'
 
 import type { StoredSession, VersionedUpdateResult } from './types'
@@ -188,7 +187,7 @@ function toStoredSession(row: DbSessionRow): StoredSession {
     }
 }
 
-export function getOrCreateSession(
+export async function getOrCreateSession(
     db: Database,
     tag: string,
     metadata: unknown,
@@ -198,10 +197,10 @@ export function getOrCreateSession(
     effort?: string,
     modelReasoningEffort?: string,
     requestedId?: string
-): StoredSession {
-    const existing = prepareCached(db, 
+): Promise<StoredSession> {
+    const existing = (await prepareCached(db,
         'SELECT * FROM sessions WHERE tag = ? AND namespace = ? ORDER BY created_at DESC LIMIT 1'
-    ).get(tag, namespace) as DbSessionRow | undefined
+    ).get(tag, namespace)) as DbSessionRow | undefined
 
     if (existing) {
         if (requestedId && existing.id !== requestedId) {
@@ -214,7 +213,7 @@ export function getOrCreateSession(
     const id = requestedId ?? randomUUID()
 
     if (requestedId) {
-        const existingById = getSession(db, requestedId)
+        const existingById = (await getSession(db, requestedId))
         if (existingById) {
             if (existingById.namespace === namespace && existingById.tag === tag) {
                 return existingById
@@ -226,7 +225,7 @@ export function getOrCreateSession(
     const metadataJson = JSON.stringify(metadata)
     const agentStateJson = agentState === null || agentState === undefined ? null : JSON.stringify(agentState)
 
-    prepareCached(db, `
+    await prepareCached(db, `
         INSERT INTO sessions (
             id, tag, namespace, machine_id, created_at, updated_at,
             metadata, metadata_version,
@@ -262,7 +261,7 @@ export function getOrCreateSession(
         effort: effort ?? null
     })
 
-    const row = getSession(db, id)
+    const row = (await getSession(db, id))
     if (!row) {
         throw new Error('Failed to create session')
     }
@@ -325,7 +324,7 @@ function preserveHubArchiveOnMerged(prior: unknown, merged: unknown): unknown {
  * Rejects rows that are not machine-spawn stubs — live sessions stay protected.
  * Rejects archived stubs so adopt cannot resurrect and wipe archive metadata.
  */
-export function adoptPreallocatedSession(
+export async function adoptPreallocatedSession(
     db: Database,
     id: string,
     tag: string,
@@ -335,9 +334,9 @@ export function adoptPreallocatedSession(
     model?: string,
     effort?: string,
     modelReasoningEffort?: string
-): StoredSession {
-    return db.transaction(() => {
-        const existing = getSessionByNamespace(db, id, namespace)
+): Promise<StoredSession> {
+    return (await db.transaction(async () => {
+        const existing = (await getSessionByNamespace(db, id, namespace))
         if (!existing) {
             throw new SessionNotAdoptableError('Session not found')
         }
@@ -356,9 +355,9 @@ export function adoptPreallocatedSession(
         }
 
         // New tag must not already belong to another session in this namespace.
-        const tagOwner = prepareCached(db,
+        const tagOwner = (await prepareCached(db,
             'SELECT id FROM sessions WHERE tag = ? AND namespace = ? LIMIT 1'
-        ).get(tag, namespace) as { id: string } | undefined
+        ).get(tag, namespace)) as { id: string } | undefined
         if (tagOwner && tagOwner.id !== id) {
             throw new SessionIdentityConflictError('Session tag is already bound to a different id')
         }
@@ -369,7 +368,7 @@ export function adoptPreallocatedSession(
         const stubTag = machineSpawnPreallocTag(id)
 
         // CAS on the stub tag — concurrent adopt / metadata release cannot win a race.
-        const changed = prepareCached(db, `
+        const changed = (await prepareCached(db, `
             UPDATE sessions SET
                 tag = @tag,
                 metadata = @metadata,
@@ -393,35 +392,35 @@ export function adoptPreallocatedSession(
             model_reasoning_effort: modelReasoningEffort ?? null,
             effort: effort ?? null,
             updated_at: now,
-        })
+        }))
 
         if (changed.changes !== 1) {
             throw new SessionNotAdoptableError('Session is not a preallocated stub')
         }
 
-        const updated = getSessionByNamespace(db, id, namespace)
+        const updated = (await getSessionByNamespace(db, id, namespace))
         if (!updated) {
             throw new Error('Failed to adopt preallocated session')
         }
         return updated
-    })()
+    })())
 }
 
-export function updateSessionMetadata(
+export async function updateSessionMetadata(
     db: Database,
     id: string,
     metadata: unknown,
     expectedVersion: number,
     namespace: string,
     options?: { touchUpdatedAt?: boolean; allowUnarchive?: boolean }
-): VersionedUpdateResult<unknown | null> {
+): Promise<VersionedUpdateResult<unknown | null>> {
     const now = Date.now()
     const touchUpdatedAt = options?.touchUpdatedAt !== false
     const allowUnarchive = options?.allowUnarchive === true
 
     try {
-        return db.transaction((): VersionedUpdateResult<unknown | null> => {
-            const existing = getSessionByNamespace(db, id, namespace)
+        return (await db.transaction(async (): Promise<VersionedUpdateResult<unknown | null>> => {
+            const existing = (await getSessionByNamespace(db, id, namespace))
             if (!existing) {
                 return { result: 'error' }
             }
@@ -443,7 +442,7 @@ export function updateSessionMetadata(
                 merged = preserveHubArchiveOnMerged(prior, merged)
             }
 
-            const result = updateVersionedField({
+            const result = (await updateVersionedField({
                 db,
                 table: 'sessions',
                 id,
@@ -465,7 +464,7 @@ export function updateSessionMetadata(
                     updated_at: now,
                     touch_updated_at: touchUpdatedAt ? 1 : 0
                 }
-            })
+            }))
 
             // Reopen flavors (--existing-session-id) never call adopt; they only
             // updateMetadata. Release the machine-spawn stub tag here so live
@@ -478,7 +477,7 @@ export function updateSessionMetadata(
                 && !isHubArchivedSessionMetadata(merged)
             ) {
                 const liveTag = randomUUID()
-                prepareCached(db, `
+                await prepareCached(db, `
                     UPDATE sessions
                     SET tag = @tag,
                         updated_at = CASE WHEN @touch_updated_at = 1 THEN @updated_at ELSE updated_at END,
@@ -497,23 +496,23 @@ export function updateSessionMetadata(
             }
 
             return result
-        })()
+        })())
     } catch {
         return { result: 'error' }
     }
 }
 
-export function updateSessionAgentState(
+export async function updateSessionAgentState(
     db: Database,
     id: string,
     agentState: unknown,
     expectedVersion: number,
     namespace: string
-): VersionedUpdateResult<unknown | null> {
+): Promise<VersionedUpdateResult<unknown | null>> {
     const now = Date.now()
     const normalized = agentState ?? null
 
-    return updateVersionedField({
+    return (await updateVersionedField({
         db,
         table: 'sessions',
         id,
@@ -526,19 +525,19 @@ export function updateSessionAgentState(
         decode: safeJsonParse,
         setClauses: ['updated_at = @updated_at', 'seq = seq + 1'],
         params: { updated_at: now }
-    })
+    }))
 }
 
-export function setSessionTodos(
+export async function setSessionTodos(
     db: Database,
     id: string,
     todos: unknown,
     todosUpdatedAt: number,
     namespace: string
-): boolean {
+): Promise<boolean> {
     try {
         const json = todos === null || todos === undefined ? null : JSON.stringify(todos)
-        const result = prepareCached(db, `
+        const result = (await prepareCached(db, `
             UPDATE sessions
             SET todos = @todos,
                 todos_updated_at = @todos_updated_at,
@@ -553,7 +552,7 @@ export function setSessionTodos(
             todos_updated_at: todosUpdatedAt,
             updated_at: todosUpdatedAt,
             namespace
-        })
+        }))
 
         return result.changes === 1
     } catch {
@@ -573,16 +572,16 @@ export function setSessionTodos(
  * Ratchet: `null → now`, else `previous + 1`. Always strictly greater than any
  * prior write on this row, so lagged pre-rewind versions are rejected.
  */
-export function replaceSessionTodos(
+export async function replaceSessionTodos(
     db: Database,
     id: string,
     todos: unknown,
     namespace: string
-): boolean {
+): Promise<boolean> {
     try {
         const json = todos === null || todos === undefined ? null : JSON.stringify(todos)
         const now = Date.now()
-        const result = prepareCached(db, `
+        const result = (await prepareCached(db, `
             UPDATE sessions
             SET todos = @todos,
                 todos_updated_at = CASE
@@ -598,23 +597,23 @@ export function replaceSessionTodos(
             todos: json,
             now,
             namespace
-        })
+        }))
         return result.changes === 1
     } catch {
         return false
     }
 }
 
-export function setSessionTeamState(
+export async function setSessionTeamState(
     db: Database,
     id: string,
     teamState: unknown,
     updatedAt: number,
     namespace: string
-): boolean {
+): Promise<boolean> {
     try {
         const json = teamState === null || teamState === undefined ? null : JSON.stringify(teamState)
-        const result = prepareCached(db, `
+        const result = (await prepareCached(db, `
             UPDATE sessions
             SET team_state = @team_state,
                 team_state_updated_at = @team_state_updated_at,
@@ -629,7 +628,7 @@ export function setSessionTeamState(
             team_state_updated_at: updatedAt,
             updated_at: updatedAt,
             namespace
-        })
+        }))
 
         return result.changes === 1
     } catch {
@@ -637,18 +636,18 @@ export function setSessionTeamState(
     }
 }
 
-export function setSessionModel(
+export async function setSessionModel(
     db: Database,
     id: string,
     model: string | null,
     namespace: string,
     options?: { touchUpdatedAt?: boolean }
-): boolean {
+): Promise<boolean> {
     const now = Date.now()
     const touchUpdatedAt = options?.touchUpdatedAt === true
 
     try {
-        const result = prepareCached(db, `
+        const result = (await prepareCached(db, `
             UPDATE sessions
             SET model = @model,
                 updated_at = CASE WHEN @touch_updated_at = 1 THEN @updated_at ELSE updated_at END,
@@ -662,7 +661,7 @@ export function setSessionModel(
             model,
             updated_at: now,
             touch_updated_at: touchUpdatedAt ? 1 : 0
-        })
+        }))
 
         return result.changes === 1
     } catch {
@@ -670,18 +669,18 @@ export function setSessionModel(
     }
 }
 
-export function setSessionModelReasoningEffort(
+export async function setSessionModelReasoningEffort(
     db: Database,
     id: string,
     modelReasoningEffort: string | null,
     namespace: string,
     options?: { touchUpdatedAt?: boolean }
-): boolean {
+): Promise<boolean> {
     const now = Date.now()
     const touchUpdatedAt = options?.touchUpdatedAt === true
 
     try {
-        const result = prepareCached(db, `
+        const result = (await prepareCached(db, `
             UPDATE sessions
             SET model_reasoning_effort = @model_reasoning_effort,
                 updated_at = CASE WHEN @touch_updated_at = 1 THEN @updated_at ELSE updated_at END,
@@ -695,7 +694,7 @@ export function setSessionModelReasoningEffort(
             model_reasoning_effort: modelReasoningEffort,
             updated_at: now,
             touch_updated_at: touchUpdatedAt ? 1 : 0
-        })
+        }))
 
         return result.changes === 1
     } catch {
@@ -703,18 +702,18 @@ export function setSessionModelReasoningEffort(
     }
 }
 
-export function setSessionServiceTier(
+export async function setSessionServiceTier(
     db: Database,
     id: string,
     serviceTier: string | null,
     namespace: string,
     options?: { touchUpdatedAt?: boolean }
-): boolean {
+): Promise<boolean> {
     const now = Date.now()
     const touchUpdatedAt = options?.touchUpdatedAt === true
 
     try {
-        const result = prepareCached(db, `
+        const result = (await prepareCached(db, `
             UPDATE sessions
             SET service_tier = @service_tier,
                 updated_at = CASE WHEN @touch_updated_at = 1 THEN @updated_at ELSE updated_at END,
@@ -728,7 +727,7 @@ export function setSessionServiceTier(
             service_tier: serviceTier,
             updated_at: now,
             touch_updated_at: touchUpdatedAt ? 1 : 0
-        })
+        }))
 
         return result.changes === 1
     } catch {
@@ -736,18 +735,18 @@ export function setSessionServiceTier(
     }
 }
 
-export function setSessionEffort(
+export async function setSessionEffort(
     db: Database,
     id: string,
     effort: string | null,
     namespace: string,
     options?: { touchUpdatedAt?: boolean }
-): boolean {
+): Promise<boolean> {
     const now = Date.now()
     const touchUpdatedAt = options?.touchUpdatedAt === true
 
     try {
-        const result = prepareCached(db, `
+        const result = (await prepareCached(db, `
             UPDATE sessions
             SET effort = @effort,
                 updated_at = CASE WHEN @touch_updated_at = 1 THEN @updated_at ELSE updated_at END,
@@ -761,7 +760,7 @@ export function setSessionEffort(
             effort,
             updated_at: now,
             touch_updated_at: touchUpdatedAt ? 1 : 0
-        })
+        }))
 
         return result.changes === 1
     } catch {
@@ -769,15 +768,15 @@ export function setSessionEffort(
     }
 }
 
-export function setSessionActive(
+export async function setSessionActive(
     db: Database,
     id: string,
     active: boolean,
     activeAt: number,
     namespace: string
-): boolean {
+): Promise<boolean> {
     try {
-        const result = prepareCached(db, `
+        const result = (await prepareCached(db, `
             UPDATE sessions
             SET active = @active,
                 active_at = CASE
@@ -793,7 +792,7 @@ export function setSessionActive(
             namespace,
             active: active ? 1 : 0,
             active_at: activeAt
-        })
+        }))
 
         return result.changes === 1
     } catch {
@@ -803,33 +802,33 @@ export function setSessionActive(
 
 export type SessionPinMode = 'none' | 'project' | 'global'
 
-export function setSessionPinMode(db: Database, id: string, mode: SessionPinMode, namespace: string): boolean {
+export async function setSessionPinMode(db: Database, id: string, mode: SessionPinMode, namespace: string): Promise<boolean> {
     const pinned = mode === 'project' ? 1 : 0
     const globalPinned = mode === 'global' ? 1 : 0
-    const result = prepareCached(db, `
+    const result = (await prepareCached(db, `
         UPDATE sessions
         SET pinned = @pinned,
             global_pinned = @global_pinned
         WHERE id = @id
           AND namespace = @namespace
           AND (pinned != @pinned OR global_pinned != @global_pinned)
-    `).run({ id, namespace, pinned, global_pinned: globalPinned })
+    `).run({ id, namespace, pinned, global_pinned: globalPinned }))
     return result.changes === 1
 }
 
 /** @deprecated Prefer setSessionPinMode — kept for project-pin merge helpers. */
-export function setSessionPinned(db: Database, id: string, pinned: boolean, namespace: string): boolean {
-    return setSessionPinMode(db, id, pinned ? 'project' : 'none', namespace)
+export async function setSessionPinned(db: Database, id: string, pinned: boolean, namespace: string): Promise<boolean> {
+    return (await setSessionPinMode(db, id, pinned ? 'project' : 'none', namespace))
 }
 
-export function touchSessionUpdatedAt(
+export async function touchSessionUpdatedAt(
     db: Database,
     id: string,
     updatedAt: number,
     namespace: string
-): boolean {
+): Promise<boolean> {
     try {
-        const result = prepareCached(db, `
+        const result = (await prepareCached(db, `
             UPDATE sessions
             SET updated_at = @updated_at,
                 seq = seq + 1
@@ -840,7 +839,7 @@ export function touchSessionUpdatedAt(
             id,
             namespace,
             updated_at: updatedAt
-        })
+        }))
 
         return result.changes === 1
     } catch {
@@ -848,39 +847,33 @@ export function touchSessionUpdatedAt(
     }
 }
 
-export function getSession(db: Database, id: string): StoredSession | null {
-    const row = prepareCached(db, 'SELECT * FROM sessions WHERE id = ?').get(id) as DbSessionRow | undefined
+export async function getSession(db: Database, id: string): Promise<StoredSession | null> {
+    const row = (await prepareCached(db, 'SELECT * FROM sessions WHERE id = ?').get(id)) as DbSessionRow | undefined
     return row ? toStoredSession(row) : null
 }
 
-export function getSessionByNamespace(db: Database, id: string, namespace: string): StoredSession | null {
-    const row = prepareCached(db, 
+export async function getSessionByNamespace(db: Database, id: string, namespace: string): Promise<StoredSession | null> {
+    const row = (await prepareCached(db,
         'SELECT * FROM sessions WHERE id = ? AND namespace = ?'
-    ).get(id, namespace) as DbSessionRow | undefined
+    ).get(id, namespace)) as DbSessionRow | undefined
     return row ? toStoredSession(row) : null
 }
 
-export function getSessions(db: Database): StoredSession[] {
-    const rows = prepareCached(db, 'SELECT * FROM sessions ORDER BY updated_at DESC').all() as DbSessionRow[]
+export async function getSessions(db: Database): Promise<StoredSession[]> {
+    const rows = (await prepareCached(db, 'SELECT * FROM sessions ORDER BY updated_at DESC').all()) as DbSessionRow[]
     return rows.map(toStoredSession)
 }
 
-export function getSessionsByNamespace(db: Database, namespace: string): StoredSession[] {
-    const rows = prepareCached(db, 
+export async function getSessionsByNamespace(db: Database, namespace: string): Promise<StoredSession[]> {
+    const rows = (await prepareCached(db,
         'SELECT * FROM sessions WHERE namespace = ? ORDER BY updated_at DESC'
-    ).all(namespace) as DbSessionRow[]
+    ).all(namespace)) as DbSessionRow[]
     return rows.map(toStoredSession)
 }
 
-export function deleteSession(db: Database, id: string, namespace: string): boolean {
-    const result = prepareCached(db,
+export async function deleteSession(db: Database, id: string, namespace: string): Promise<boolean> {
+    const result = (await prepareCached(db,
         'DELETE FROM sessions WHERE id = ? AND namespace = ?'
-    ).run(id, namespace)
-    if (result.changes > 0) {
-        // Per-socket access memos stamp the epoch they were filled under;
-        // bumping makes their next event re-resolve instead of serving a
-        // grant for a row that no longer exists.
-        bumpSessionDeletionEpoch()
-    }
+    ).run(id, namespace))
     return result.changes > 0
 }

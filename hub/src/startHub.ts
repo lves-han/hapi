@@ -1,5 +1,5 @@
 import { createConfiguration, type ConfigSource } from './configuration'
-import { Store } from './store'
+import { openStore } from './store/openStore'
 import { SyncEngine, type SyncEvent } from './sync/syncEngine'
 import { NotificationHub } from './notifications/notificationHub'
 import type { NotificationChannel } from './notifications/notificationTypes'
@@ -8,6 +8,7 @@ import { startWebServer } from './web/server'
 import { getOrCreateJwtSecret } from './config/jwtSecret'
 import { getOrCreateOwnerId } from './config/ownerId'
 import { createSocketServer } from './socket/server'
+import { drainCliHandlers } from './socket/handlers/cli/orderedHandler'
 import { SSEManager } from './sse/sseManager'
 import { getOrCreateVapidKeys } from './config/vapidKeys'
 import { PushService } from './push/pushService'
@@ -177,7 +178,7 @@ export async function startHub(options: StartHubOptions = {}): Promise<HubInstan
         console.log(`[Hub] Tunnel: disabled (${relayFlag.source})`)
     }
 
-    const store = new Store(config.dbPath)
+    const store = await openStore({ dbPath: config.dbPath, dataDir: config.dataDir, databaseUrl: config.databaseUrl, explicitDbPath: Boolean(process.env.DB_PATH) })
     const jwtSecret = await getOrCreateJwtSecret()
     const vapidKeys = await getOrCreateVapidKeys(config.dataDir)
     const vapidSubject = process.env.VAPID_SUBJECT ?? 'mailto:admin@hapi.run'
@@ -190,25 +191,25 @@ export async function startHub(options: StartHubOptions = {}): Promise<HubInstan
         store,
         jwtSecret,
         corsOrigins,
-        getSession: (sessionId) => {
+        getSession: async (sessionId) => {
             if (syncEngine) {
-                return syncEngine.getSession(sessionId) ?? null
+                return (await syncEngine.getSession(sessionId)) ?? null
             }
-            return store.sessions.getSession(sessionId)
+            return (await store.sessions.getSession(sessionId))
         },
-        onWebappEvent: (event: SyncEvent) => syncEngine?.handleRealtimeEvent(event),
-        onSessionAlive: (payload) => syncEngine?.handleSessionAlive(payload),
-        onSessionReady: (payload) => syncEngine?.handleSessionReady(payload),
-        onSessionEnd: (payload) => syncEngine?.handleSessionEnd(payload),
-        onMachineAlive: (payload) => syncEngine?.handleMachineAlive(payload),
-        onBackgroundTaskDelta: (sessionId, delta) => syncEngine?.handleBackgroundTaskDelta(sessionId, delta),
-        onSessionActivity: (sessionId, updatedAt) => syncEngine?.recordSessionActivity(sessionId, updatedAt),
+        onWebappEvent: async (event: SyncEvent) => (await syncEngine?.handleRealtimeEvent(event)),
+        onSessionAlive: async (payload) => (await syncEngine?.handleSessionAlive(payload)),
+        onSessionReady: async (payload) => (await syncEngine?.handleSessionReady(payload)),
+        onSessionEnd: async (payload) => (await syncEngine?.handleSessionEnd(payload)),
+        onMachineAlive: async (payload) => (await syncEngine?.handleMachineAlive(payload)),
+        onBackgroundTaskDelta: async (sessionId, delta) => (await syncEngine?.handleBackgroundTaskDelta(sessionId, delta)),
+        onSessionActivity: async (sessionId, updatedAt) => (await syncEngine?.recordSessionActivity(sessionId, updatedAt)),
         onAgentProgress: (sessionId, at) => syncEngine?.recordAgentProgress(sessionId, at),
-        onSweepImmediateQueued: (sessionId, now) => syncEngine?.sweepImmediateQueuedOnSessionEnd(sessionId, now),
+        onSweepImmediateQueued: async (sessionId, now) => (await syncEngine?.sweepImmediateQueuedOnSessionEnd(sessionId, now)),
         onMessagesConsumed: (sessionId) => syncEngine?.clearQueuedThinkingGrace(sessionId)
     })
 
-    syncEngine = new SyncEngine(store, socketServer.io, socketServer.rpcRegistry, sseManager)
+    syncEngine = await SyncEngine.create(store, socketServer.io, socketServer.rpcRegistry, sseManager)
     // Accountable principal for A2A work-graph notify ingest (P3).
     syncEngine.setHubOwnerUserId(await getOrCreateOwnerId())
 
@@ -394,9 +395,12 @@ export async function startHub(options: StartHubOptions = {}): Promise<HubInstan
             await tunnelManager?.stop()
             await happyBot?.stop()
             notificationHub?.stop()
-            syncEngine?.stop()
+            await syncEngine?.stop()
             sseManager?.stop()
-            webServer?.stop()
+            await new Promise<void>(resolve => socketServer.io.close(() => resolve()))
+            await drainCliHandlers()
+            await webServer?.stop()
+            await store.close()
         }
     }
 }

@@ -6,15 +6,15 @@ import { tmpdir } from 'node:os'
 import { Store } from './index'
 
 describe('Store V12/V13→V14 schema reconciliation', () => {
-    it('fresh DB has both reconciled tables', () => {
+    it('fresh DB has both reconciled tables', async () => {
         const store = new Store(':memory:')
         expect(tableExists(store, 'message_epochs')).toBe(true)
         expect(tableExists(store, 'session_scratchlist')).toBe(true)
         expect(getUserVersion(store)).toBe(26)
-        store.close()
+        await store.close()
     })
 
-    it('scratchlist V12 DB migrates to V14 and preserves existing messages', () => {
+    it('scratchlist V12 DB migrates to V14 and preserves existing messages', async () => {
         const dir = mkdtempSync(join(tmpdir(), 'hapi-migration-v14-test-'))
         const dbPath = join(dir, 'test.db')
         let store: Store | undefined
@@ -35,10 +35,10 @@ describe('Store V12/V13→V14 schema reconciliation', () => {
             expect(tableExists(store, 'message_epochs')).toBe(true)
             expect(tableExists(store, 'session_scratchlist')).toBe(true)
             expect(getUserVersion(store)).toBe(26)
-            expect(store.messages.getMessageEpoch('session-1')).toBe(0)
-            expect(store.messages.getMessages('session-1')).toHaveLength(1)
+            expect((await store.messages.getMessageEpoch('session-1'))).toBe(0)
+            expect((await store.messages.getMessages('session-1'))).toHaveLength(1)
         } finally {
-            store?.close()
+            await store?.close()
             rmSync(dir, { recursive: true, force: true })
         }
     })
@@ -46,7 +46,7 @@ describe('Store V12/V13→V14 schema reconciliation', () => {
     it.each([
         ['V12', 12],
         ['V13', 13]
-    ] as const)('repairs divergent %s DB missing session_scratchlist', (_label, version) => {
+    ] as const)('repairs divergent %s DB missing session_scratchlist', async (_label, version) => {
         const dir = mkdtempSync(join(tmpdir(), `hapi-migration-v${version}-repair-test-`))
         const dbPath = join(dir, 'test.db')
         let store: Store | undefined
@@ -73,9 +73,9 @@ describe('Store V12/V13→V14 schema reconciliation', () => {
             expect(tableExists(store, 'message_epochs')).toBe(true)
             expect(tableExists(store, 'session_scratchlist')).toBe(true)
             expect(getUserVersion(store)).toBe(26)
-            expect(store.messages.getMessages('session-1')).toHaveLength(1)
+            expect((await store.messages.getMessages('session-1'))).toHaveLength(1)
         } finally {
-            store?.close()
+            await store?.close()
             rmSync(dir, { recursive: true, force: true })
         }
     })

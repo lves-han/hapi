@@ -26,14 +26,14 @@ function message(seq: number, content: unknown, invokedAt: number | null = 1): S
     }
 }
 
-function makeStore(): { store: Store; sessionId: string } {
+async function makeStore(): Promise<{ store: Store; sessionId: string }> {
     const store = new Store(':memory:')
-    const session = store.sessions.getOrCreateSession(
+    const session = (await store.sessions.getOrCreateSession(
         'title-test',
         { path: '/tmp/title-test', host: 'localhost' },
         null,
         'default'
-    )
+    ))
     return { store, sessionId: session.id }
 }
 
@@ -86,7 +86,7 @@ describe('OpenAI-compatible title provider', () => {
             }
         )
 
-        await expect(provider.suggest('Recent conversation')).resolves.toBe('Deployment guide')
+        await expect((provider.suggest('Recent conversation'))).resolves.toBe('Deployment guide')
         expect(request).toBeDefined()
         if (!request) throw new Error('request was not captured')
         expect(request.url).toBe('https://example.test/v1/chat/completions')
@@ -152,12 +152,12 @@ describe('OpenAI-compatible title provider', () => {
 
 describe('TitleSuggestionService', () => {
     it('uses the recent store messages and returns a normalized title', async () => {
-        const { store, sessionId } = makeStore()
-        store.messages.addMessage(sessionId, {
+        const { store, sessionId } = (await makeStore())
+        await store.messages.addMessage(sessionId, {
             role: 'user',
             content: { type: 'text', text: 'Explain the release process' }
         })
-        store.messages.addMessage(sessionId, {
+        await store.messages.addMessage(sessionId, {
             role: 'agent',
             content: { type: 'codex', data: { type: 'message', message: 'Here is the release process.' } }
         })
@@ -172,27 +172,27 @@ describe('TitleSuggestionService', () => {
             }
         })
 
-        await expect(service.suggestTitle(sessionId)).resolves.toBe('Release process overview')
+        await expect((service.suggestTitle(sessionId))).resolves.toBe('Release process overview')
         expect(prompts[0]).toContain('Explain the release process')
     })
 
     it('uses display-position order when a queued prompt is invoked late', async () => {
-        const { store, sessionId } = makeStore()
-        store.messages.addMessage(
+        const { store, sessionId } = (await makeStore())
+        await store.messages.addMessage(
             sessionId,
             { role: 'user', content: { type: 'text', text: 'The late queued prompt is the current topic' } },
             'queued-local-id'
         )
         for (let index = 0; index < 201; index += 1) {
-            store.messages.addMessage(
+            await store.messages.addMessage(
                 sessionId,
                 { role: 'user', content: { type: 'text', text: `Older stored message ${index}` } }
             )
         }
 
-        const latestStoredMessage = store.messages.getMessages(sessionId).at(-1)
+        const latestStoredMessage = (await store.messages.getMessages(sessionId)).at(-1)
         if (!latestStoredMessage) throw new Error('Expected test messages')
-        store.messages.markMessagesInvoked(
+        await store.messages.markMessagesInvoked(
             sessionId,
             ['queued-local-id'],
             latestStoredMessage.createdAt + 1
@@ -208,19 +208,19 @@ describe('TitleSuggestionService', () => {
             }
         })
 
-        await expect(service.suggestTitle(sessionId)).resolves.toBe('Current topic')
+        await expect((service.suggestTitle(sessionId))).resolves.toBe('Current topic')
         expect(prompt).toContain('The late queued prompt is the current topic')
     })
 
     it('reports unavailable configuration and enforces the per-session request limit', async () => {
-        const { store, sessionId } = makeStore()
+        const { store, sessionId } = (await makeStore())
         const unavailable = createTitleSuggestionService(store)
         await expect(unavailable.suggestTitle(sessionId)).rejects.toMatchObject({
             code: 'unavailable',
             status: 503
         })
 
-        store.messages.addMessage(sessionId, {
+        await store.messages.addMessage(sessionId, {
             role: 'user',
             content: { type: 'text', text: 'Title this' }
         })
@@ -230,7 +230,7 @@ describe('TitleSuggestionService', () => {
             rateLimit: 1,
             rateWindowMs: 1_000
         })
-        await expect(service.suggestTitle(sessionId)).resolves.toBe('Title')
+        await expect((service.suggestTitle(sessionId))).resolves.toBe('Title')
         await expect(service.suggestTitle(sessionId)).rejects.toMatchObject({
             code: 'rate-limited',
             status: 429

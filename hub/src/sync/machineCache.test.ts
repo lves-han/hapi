@@ -14,8 +14,8 @@ function createCache() {
     return { store, publisher, cache, broadcast }
 }
 
-function seedMachine(store: Store, metadata: unknown) {
-    store.machines.getOrCreateMachine('machine-1', metadata, null, 'ns')
+async function seedMachine(store: Store, metadata: unknown) {
+    await store.machines.getOrCreateMachine('machine-1', metadata, null, 'ns')
 }
 
 const BASE_METADATA = {
@@ -28,12 +28,12 @@ const BASE_METADATA = {
 describe('MachineCache.renameMachine', () => {
     it('sets displayName without touching CLI-reported fields', async () => {
         const { store, cache } = createCache()
-        seedMachine(store, BASE_METADATA)
-        cache.reloadAll()
+        await seedMachine(store, BASE_METADATA)
+        await cache.reloadAll()
 
         await cache.renameMachine('machine-1', 'Workstation')
 
-        expect(store.machines.getMachine('machine-1')?.metadata).toEqual({
+        expect((await store.machines.getMachine('machine-1'))?.metadata).toEqual({
             ...BASE_METADATA,
             displayName: 'Workstation'
         })
@@ -41,43 +41,43 @@ describe('MachineCache.renameMachine', () => {
 
     it('replaces an existing displayName', async () => {
         const { store, cache } = createCache()
-        seedMachine(store, { ...BASE_METADATA, displayName: 'Old' })
-        cache.reloadAll()
+        await seedMachine(store, { ...BASE_METADATA, displayName: 'Old' })
+        await cache.reloadAll()
 
         await cache.renameMachine('machine-1', 'New')
 
-        expect((store.machines.getMachine('machine-1')?.metadata as { displayName?: string })?.displayName).toBe('New')
+        expect(((await store.machines.getMachine('machine-1'))?.metadata as { displayName?: string })?.displayName).toBe('New')
     })
 
     it('removes the key when given an empty name rather than storing an empty string', async () => {
         const { store, cache } = createCache()
-        seedMachine(store, { ...BASE_METADATA, displayName: 'Workstation' })
-        cache.reloadAll()
+        await seedMachine(store, { ...BASE_METADATA, displayName: 'Workstation' })
+        await cache.reloadAll()
 
         await cache.renameMachine('machine-1', '')
 
-        const metadata = store.machines.getMachine('machine-1')?.metadata as Record<string, unknown>
+        const metadata = (await store.machines.getMachine('machine-1'))?.metadata as Record<string, unknown>
         expect(metadata).toEqual(BASE_METADATA)
         expect('displayName' in metadata).toBe(false)
     })
 
     it('survives a CLI re-registration afterwards', async () => {
         const { store, cache } = createCache()
-        seedMachine(store, BASE_METADATA)
-        cache.reloadAll()
+        await seedMachine(store, BASE_METADATA)
+        await cache.reloadAll()
 
         await cache.renameMachine('machine-1', 'Workstation')
-        store.machines.getOrCreateMachine('machine-1', { ...BASE_METADATA, host: 'renamed-host' }, null, 'ns')
+        await store.machines.getOrCreateMachine('machine-1', { ...BASE_METADATA, host: 'renamed-host' }, null, 'ns')
 
-        const metadata = store.machines.getMachine('machine-1')?.metadata as Record<string, unknown>
+        const metadata = (await store.machines.getMachine('machine-1'))?.metadata as Record<string, unknown>
         expect(metadata.displayName).toBe('Workstation')
         expect(metadata.host).toBe('renamed-host')
     })
 
     it('publishes machine-updated so clients refetch', async () => {
         const { store, publisher, cache } = createCache()
-        seedMachine(store, BASE_METADATA)
-        cache.reloadAll()
+        await seedMachine(store, BASE_METADATA)
+        await cache.reloadAll()
 
         const seen: string[] = []
         publisher.subscribe((event) => {
@@ -99,12 +99,12 @@ describe('MachineCache.renameMachine', () => {
 
     it('preserves fields the metadata schema does not recognise', async () => {
         const { store, cache } = createCache()
-        seedMachine(store, { ...BASE_METADATA, futureField: 'keep me' })
-        cache.reloadAll()
+        await seedMachine(store, { ...BASE_METADATA, futureField: 'keep me' })
+        await cache.reloadAll()
 
         await cache.renameMachine('machine-1', 'Workstation')
 
-        expect(store.machines.getMachine('machine-1')?.metadata).toEqual({
+        expect((await store.machines.getMachine('machine-1'))?.metadata).toEqual({
             ...BASE_METADATA,
             futureField: 'keep me',
             displayName: 'Workstation'
@@ -115,12 +115,12 @@ describe('MachineCache.renameMachine', () => {
         const { store, cache } = createCache()
         // A CLI can write metadata the hub never validates (machineHandlers takes
         // z.unknown()), so a row missing required fields is reachable in practice.
-        seedMachine(store, { host: 'workstation.local' })
-        cache.reloadAll()
+        await seedMachine(store, { host: 'workstation.local' })
+        await cache.reloadAll()
 
         await cache.renameMachine('machine-1', 'Workstation')
 
-        expect(store.machines.getMachine('machine-1')?.metadata).toEqual({
+        expect((await store.machines.getMachine('machine-1'))?.metadata).toEqual({
             host: 'workstation.local',
             displayName: 'Workstation'
         })
@@ -128,24 +128,24 @@ describe('MachineCache.renameMachine', () => {
 
     it('renames a machine that has no metadata at all', async () => {
         const { store, cache } = createCache()
-        seedMachine(store, null)
-        cache.reloadAll()
+        await seedMachine(store, null)
+        await cache.reloadAll()
 
         await cache.renameMachine('machine-1', 'Workstation')
 
-        expect(store.machines.getMachine('machine-1')?.metadata).toEqual({ displayName: 'Workstation' })
+        expect((await store.machines.getMachine('machine-1'))?.metadata).toEqual({ displayName: 'Workstation' })
     })
 
     it('writes against the stored version even when the cache is stale', async () => {
         const { store, cache } = createCache()
-        seedMachine(store, BASE_METADATA)
-        cache.reloadAll()
+        await seedMachine(store, BASE_METADATA)
+        await cache.reloadAll()
 
         // Another writer bumps the version behind the cache's back.
-        store.machines.getOrCreateMachine('machine-1', { ...BASE_METADATA, host: 'other-writer' }, null, 'ns')
+        await store.machines.getOrCreateMachine('machine-1', { ...BASE_METADATA, host: 'other-writer' }, null, 'ns')
 
         await cache.renameMachine('machine-1', 'Workstation')
 
-        expect((store.machines.getMachine('machine-1')?.metadata as { displayName?: string })?.displayName).toBe('Workstation')
+        expect(((await store.machines.getMachine('machine-1'))?.metadata as { displayName?: string })?.displayName).toBe('Workstation')
     })
 })

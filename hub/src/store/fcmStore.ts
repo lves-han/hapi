@@ -1,4 +1,4 @@
-import type { Database } from 'bun:sqlite'
+import type { Database } from './database'
 
 import type { NativeDevicePlatform, StoredFcmDevice } from './types'
 import { getFcmDevicesByNamespace, removeFcmDeviceByToken, upsertFcmDevice } from './fcmDevices'
@@ -13,26 +13,32 @@ import { getFcmDevicesByNamespace, removeFcmDeviceByToken, upsertFcmDevice } fro
 export class FcmStore {
     constructor(private readonly db: Database) {}
 
-    upsertDevice(
+    async upsertDevice(
         namespace: string,
         device: { token: string; platform: NativeDevicePlatform; deviceId: string; pushKey?: string }
-    ): void {
-        upsertFcmDevice(this.db, namespace, device)
+    ): Promise<void> {
+        return this.db.operation(async () => {
+            await upsertFcmDevice(this.db, namespace, device)
+
+}, true)
     }
 
-    removeDeviceByToken(namespace: string, token: string): void {
-        removeFcmDeviceByToken(this.db, namespace, token)
+    async removeDeviceByToken(namespace: string, token: string): Promise<void> {
+        return this.db.operation(async () => {
+            await removeFcmDeviceByToken(this.db, namespace, token)
+
+}, true)
     }
 
-    getDevicesByNamespace(namespace: string): StoredFcmDevice[]
+    getDevicesByNamespace(namespace: string): Promise<StoredFcmDevice[]>
     getDevicesByNamespace<P extends NativeDevicePlatform>(
         namespace: string,
         platforms: readonly P[]
-    ): Array<StoredFcmDevice & { platform: P }>
-    getDevicesByNamespace(
+    ): Promise<Array<StoredFcmDevice & { platform: P }>>
+    async getDevicesByNamespace(
         namespace: string,
         platforms?: readonly NativeDevicePlatform[]
-    ): StoredFcmDevice[] {
-        return getFcmDevicesByNamespace(this.db, namespace, platforms)
+    ): Promise<StoredFcmDevice[]> {
+        return this.db.operation(() => getFcmDevicesByNamespace(this.db, namespace, platforms), false)
     }
 }

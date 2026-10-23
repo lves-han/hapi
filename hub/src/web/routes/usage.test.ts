@@ -27,7 +27,7 @@ describe('GET /api/usage/summary', () => {
             expect(typeof body.range.to).toBe('number')
             expect(body.totals.requests).toBe(0)
         } finally {
-            store.close()
+            await store.close()
         }
     })
 
@@ -39,7 +39,7 @@ describe('GET /api/usage/summary', () => {
             expect(response.status).toBe(403)
             expect(await response.json()).toEqual({ error: 'Usage summary is only available to the hub owner' })
         } finally {
-            store.close()
+            await store.close()
         }
     })
 
@@ -55,7 +55,7 @@ describe('GET /api/usage/summary', () => {
                 expect(response.status).toBe(400)
             }
         } finally {
-            store.close()
+            await store.close()
         }
     })
 })

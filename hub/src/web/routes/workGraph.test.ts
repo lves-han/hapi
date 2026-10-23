@@ -202,7 +202,7 @@ describe('work-graph routes', () => {
         expect(response.status).toBe(400)
         const body = await response.json() as { error: string }
         expect(body.error).toBe('Reserved provenance')
-        expect(store.workGraph.listByRelatedSession('default', 'sess-1')).toHaveLength(0)
+        expect((await store.workGraph.listByRelatedSession('default', 'sess-1'))).toHaveLength(0)
     })
 
     it('rejects fractional list limit with 400 (not SQLite 500)', async () => {

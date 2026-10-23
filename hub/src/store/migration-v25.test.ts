@@ -14,12 +14,12 @@ afterEach(() => {
 })
 
 describe('schema migration v25 to v26', () => {
-    it('adds an index used by immediate queued-message replay', () => {
+    it('adds an index used by immediate queued-message replay', async () => {
         const dir = mkdtempSync(join(tmpdir(), 'hapi-migration-v25-'))
         tempDirs.push(dir)
         const dbPath = join(dir, 'hapi.db')
 
-        new Store(dbPath).close()
+        await new Store(dbPath).close()
         const legacy = new Database(dbPath)
         legacy.exec(`
             DROP INDEX idx_messages_immediate_queued;
@@ -43,6 +43,6 @@ describe('schema migration v25 to v26', () => {
 
         expect(version.user_version).toBe(26)
         expect(plan.some((row) => row.detail.includes('idx_messages_immediate_queued'))).toBe(true)
-        migrated.close()
+        await migrated.close()
     })
 })

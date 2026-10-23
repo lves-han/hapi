@@ -7,14 +7,14 @@ import { RpcRegistry } from '../../socket/rpcRegistry'
 import { SyncEngine } from '../../sync/syncEngine'
 import { createCliRoutes } from './cli'
 
-function createEngine(store: Store): SyncEngine {
-    const engine = new SyncEngine(
+async function createEngine(store: Store): Promise<SyncEngine> {
+    const engine = await SyncEngine.create(
         store,
         {} as never,
         new RpcRegistry(),
         { broadcast() {} } as never
     )
-    engine.stop()
+    await engine.stop()
     return engine
 }
 
@@ -37,19 +37,19 @@ beforeAll(async () => {
 describe('CLI GET /sessions/:id with null active_at', () => {
     it('returns numeric activeAt coerced from createdAt', async () => {
         const store = new Store(':memory:')
-        const engine = createEngine(store)
-        const created = engine.getOrCreateSession(
+        const engine = (await createEngine(store))
+        const created = (await engine.getOrCreateSession(
             'null-active-at-cli',
             { path: '/tmp/project', host: 'localhost', flavor: 'claude' },
             { requests: {}, completedRequests: {} },
             'default'
-        )
+        ))
 
         nullOutActiveAt(store, created.id)
-        expect(store.sessions.getSession(created.id)?.activeAt).toBeNull()
+        expect((await store.sessions.getSession(created.id))?.activeAt).toBeNull()
 
         // Simulate hub restart so cache reloads from the NULL row.
-        const reloaded = createEngine(store)
+        const reloaded = (await createEngine(store))
         const app = new Hono()
         app.route('/cli', createCliRoutes(() => reloaded))
 
@@ -63,6 +63,6 @@ describe('CLI GET /sessions/:id with null active_at', () => {
         }
         expect(typeof body.session.activeAt).toBe('number')
         expect(body.session.activeAt).toBe(created.createdAt)
-        store.close()
+        await store.close()
     })
 })

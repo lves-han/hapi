@@ -1,4 +1,4 @@
-import type { Database } from 'bun:sqlite'
+import type { Database } from './database'
 
 import type { StoredScratchlistEntry } from './types'
 import {
@@ -20,19 +20,19 @@ export class ScratchlistStore {
         this.db = db
     }
 
-    list(sessionId: string): StoredScratchlistEntry[] {
-        return listScratchlistEntries(this.db, sessionId)
+    async list(sessionId: string): Promise<StoredScratchlistEntry[]> {
+        return this.db.operation(() => listScratchlistEntries(this.db, sessionId), false)
     }
 
-    count(sessionId: string): number {
-        return countScratchlistEntries(this.db, sessionId)
+    async count(sessionId: string): Promise<number> {
+        return this.db.operation(() => countScratchlistEntries(this.db, sessionId), false)
     }
 
-    get(sessionId: string, entryId: string): StoredScratchlistEntry | null {
-        return getScratchlistEntry(this.db, sessionId, entryId)
+    async get(sessionId: string, entryId: string): Promise<StoredScratchlistEntry | null> {
+        return this.db.operation(() => getScratchlistEntry(this.db, sessionId, entryId), false)
     }
 
-    create(
+    async create(
         sessionId: string,
         text: string,
         options?: {
@@ -40,27 +40,27 @@ export class ScratchlistStore {
             createdAt?: number
             attachments?: import('@hapi/protocol').ScratchlistAttachmentMetadata[]
         }
-    ): CreateScratchlistResult {
-        return createScratchlistEntry(this.db, sessionId, text, options)
+    ): Promise<CreateScratchlistResult> {
+        return this.db.operation(() => createScratchlistEntry(this.db, sessionId, text, options), true)
     }
 
-    update(
+    async update(
         sessionId: string,
         entryId: string,
         patch: {
             text?: string
             attachments?: import('@hapi/protocol').ScratchlistAttachmentMetadata[]
         }
-    ): StoredScratchlistEntry | null {
-        return updateScratchlistEntry(this.db, sessionId, entryId, patch)
+    ): Promise<StoredScratchlistEntry | null> {
+        return this.db.operation(() => updateScratchlistEntry(this.db, sessionId, entryId, patch), true)
     }
 
-    sumAttachmentBytes(sessionId: string): number {
-        return sumScratchlistAttachmentBytesForSession(this.db, sessionId)
+    async sumAttachmentBytes(sessionId: string): Promise<number> {
+        return this.db.operation(() => sumScratchlistAttachmentBytesForSession(this.db, sessionId), true)
     }
 
-    delete(sessionId: string, entryId: string): boolean {
-        return deleteScratchlistEntry(this.db, sessionId, entryId)
+    async delete(sessionId: string, entryId: string): Promise<boolean> {
+        return this.db.operation(() => deleteScratchlistEntry(this.db, sessionId, entryId), true)
     }
 
     /**
@@ -70,7 +70,7 @@ export class ScratchlistStore {
      * `ON DELETE CASCADE` on `session_scratchlist.session_id` doesn't
      * race the migration. Required by tiann/hapi#920.
      */
-    transfer(fromSessionId: string, toSessionId: string): { moved: number; collided: number } {
-        return transferScratchlistEntries(this.db, fromSessionId, toSessionId)
+    async transfer(fromSessionId: string, toSessionId: string): Promise<{ moved: number; collided: number }> {
+        return this.db.operation(() => transferScratchlistEntries(this.db, fromSessionId, toSessionId), true)
     }
 }

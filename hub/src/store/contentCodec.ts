@@ -97,3 +97,11 @@ export function decodeMessageContent(raw: string | Uint8Array | null): unknown |
         return null
     }
 }
+
+/** Migration must surface corrupt rows instead of carrying a reader's display fallback forward. */
+export function validateMessageContent(raw: string | Uint8Array): unknown {
+    const json = typeof raw === 'string'
+        ? raw
+        : new TextDecoder('utf-8', { fatal: true }).decode(zstdDecompressSync(raw))
+    return JSON.parse(json) as unknown
+}

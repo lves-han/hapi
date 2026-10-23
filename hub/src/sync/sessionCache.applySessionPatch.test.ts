@@ -20,17 +20,17 @@ function createPublisher(events: SyncEvent[]): EventPublisher {
 // cache-vs-DB divergence would manifest as ghost notifications, stale
 // pendingRequestsCount, or wrong todos progress in the session list.
 describe('SessionCache.applySessionPatch', () => {
-    it('applies a todos patch in place when the session is cached', () => {
+    it('applies a todos patch in place when the session is cached', async () => {
         const store = new Store(':memory:')
         const events: SyncEvent[] = []
         const cache = new SessionCache(store, createPublisher(events))
 
-        const created = cache.getOrCreateSession(
+        const created = (await cache.getOrCreateSession(
             'todos-patch-session',
             { path: '/tmp', host: 'h' },
             null,
             'default'
-        )
+        ))
 
         const todos = [
             { content: 'one', status: 'pending' as const, priority: 'medium' as const, id: '1' }
@@ -44,17 +44,17 @@ describe('SessionCache.applySessionPatch', () => {
         expect(cache.getSession(created.id)?.todosUpdatedAt).toBe(100)
     })
 
-    it('applies a versioned metadata patch by unwrapping value + version', () => {
+    it('applies a versioned metadata patch by unwrapping value + version', async () => {
         const store = new Store(':memory:')
         const events: SyncEvent[] = []
         const cache = new SessionCache(store, createPublisher(events))
 
-        const created = cache.getOrCreateSession(
+        const created = (await cache.getOrCreateSession(
             'meta-patch-session',
             { path: '/tmp', host: 'h' },
             null,
             'default'
-        )
+        ))
 
         const nextVersion = created.metadataVersion + 1
         const applied = cache.applySessionPatch(created.id, {
@@ -70,17 +70,17 @@ describe('SessionCache.applySessionPatch', () => {
         expect(after?.metadataVersion).toBe(nextVersion)
     })
 
-    it('applies a versioned agentState patch with null value', () => {
+    it('applies a versioned agentState patch with null value', async () => {
         const store = new Store(':memory:')
         const events: SyncEvent[] = []
         const cache = new SessionCache(store, createPublisher(events))
 
-        const created = cache.getOrCreateSession(
+        const created = (await cache.getOrCreateSession(
             'agent-patch-session',
             { path: '/tmp', host: 'h' },
             { controlledByUser: true },
             'default'
-        )
+        ))
         expect(created.agentState).not.toBeNull()
 
         const nextVersion = created.agentStateVersion + 1
@@ -103,17 +103,17 @@ describe('SessionCache.applySessionPatch', () => {
         expect(applied).toBe(false)
     })
 
-    it('returns false when patch data fails SessionPatchSchema', () => {
+    it('returns false when patch data fails SessionPatchSchema', async () => {
         const store = new Store(':memory:')
         const events: SyncEvent[] = []
         const cache = new SessionCache(store, createPublisher(events))
 
-        const created = cache.getOrCreateSession(
+        const created = (await cache.getOrCreateSession(
             'bad-patch-session',
             { path: '/tmp', host: 'h' },
             null,
             'default'
-        )
+        ))
 
         // Bogus shape: { metadata: { value: ... } } is missing the required version.
         const applied = cache.applySessionPatch(created.id, {
@@ -122,7 +122,7 @@ describe('SessionCache.applySessionPatch', () => {
         expect(applied).toBe(false)
     })
 
-    it('refuses an empty patch ({}) so the caller falls back to refreshSession', () => {
+    it('refuses an empty patch ({}) so the caller falls back to refreshSession', async () => {
         // Web-side getSessionPatch rejects empty payloads (Object.keys length 0)
         // and would fall through to REST invalidation — exactly the storm we
         // are closing. The empty-patch guard keeps the syncEngine on the safe
@@ -131,17 +131,17 @@ describe('SessionCache.applySessionPatch', () => {
         const events: SyncEvent[] = []
         const cache = new SessionCache(store, createPublisher(events))
 
-        const created = cache.getOrCreateSession(
+        const created = (await cache.getOrCreateSession(
             'empty-patch-session',
             { path: '/tmp', host: 'h' },
             null,
             'default'
-        )
+        ))
 
         expect(cache.applySessionPatch(created.id, {})).toBe(false)
     })
 
-    it('clears cached teamState when a null teamState patch lands (TeamDelete)', () => {
+    it('clears cached teamState when a null teamState patch lands (TeamDelete)', async () => {
         // PR #897 review (HAPI Bot, 2026-06-13 Major): TeamDelete events
         // drive applyTeamStateDelta to return null; the emit-site sends
         // { teamState: null } as the explicit clear signal. Without
@@ -153,12 +153,12 @@ describe('SessionCache.applySessionPatch', () => {
         const events: SyncEvent[] = []
         const cache = new SessionCache(store, createPublisher(events))
 
-        const created = cache.getOrCreateSession(
+        const created = (await cache.getOrCreateSession(
             'teamstate-clear-session',
             { path: '/tmp', host: 'h' },
             null,
             'default'
-        )
+        ))
         // Seed cached teamState (the pre-delete state).
         const seedApplied = cache.applySessionPatch(created.id, {
             teamState: { version: 10, value: { teamName: 'crew', members: [{ name: 'a' }] } }
@@ -172,7 +172,7 @@ describe('SessionCache.applySessionPatch', () => {
         expect(cache.getSession(created.id)?.teamState).toBeUndefined()
     })
 
-    it('leaves teamState untouched when the patch does not carry the key', () => {
+    it('leaves teamState untouched when the patch does not carry the key', async () => {
         // Guard the hasOwnProperty discriminator against a refactor back to
         // `if (patch.teamState !== undefined)` — a todos-only patch must
         // NOT clear teamState, which a naive `?? undefined` assignment on
@@ -181,12 +181,12 @@ describe('SessionCache.applySessionPatch', () => {
         const events: SyncEvent[] = []
         const cache = new SessionCache(store, createPublisher(events))
 
-        const created = cache.getOrCreateSession(
+        const created = (await cache.getOrCreateSession(
             'teamstate-untouched-session',
             { path: '/tmp', host: 'h' },
             null,
             'default'
-        )
+        ))
         cache.applySessionPatch(created.id, {
             teamState: { version: 10, value: { teamName: 'crew', members: [{ name: 'a' }] } }
         })
@@ -202,17 +202,17 @@ describe('SessionCache.applySessionPatch', () => {
         expect(cache.getSession(created.id)?.teamState?.teamName).toBe('crew')
     })
 
-    it('refuses cross-namespace patches even if the session exists', () => {
+    it('refuses cross-namespace patches even if the session exists', async () => {
         const store = new Store(':memory:')
         const events: SyncEvent[] = []
         const cache = new SessionCache(store, createPublisher(events))
 
-        const created = cache.getOrCreateSession(
+        const created = (await cache.getOrCreateSession(
             'ns-guard-session',
             { path: '/tmp', host: 'h' },
             null,
             'tenant-a'
-        )
+        ))
 
         const applied = cache.applySessionPatch(created.id, { todos: { version: 1, value: [] } }, 'tenant-b')
         expect(applied).toBe(false)

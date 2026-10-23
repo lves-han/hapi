@@ -1,0 +1,31 @@
+name: PostgreSQL compatibility
+on:
+  push:
+  pull_request:
+jobs:
+  storage:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-bookworm
+        env:
+          POSTGRES_USER: hapi_test
+          POSTGRES_PASSWORD: hapi_test
+          POSTGRES_DB: hapi_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U hapi_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      HAPI_TEST_DATABASE_URL: postgresql://hapi_test:hapi_test@127.0.0.1:5432/hapi_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.0
+      - run: bun install --frozen-lockfile
+      - run: bun run typecheck:hub
+      - run: bun run test:hub

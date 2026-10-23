@@ -43,16 +43,16 @@ export type CliHandlersDeps = {
     store: Store
     rpcRegistry: RpcRegistry
     terminalRegistry: TerminalRegistry
-    onSessionAlive?: (payload: SessionAlivePayload) => void
-    onSessionReady?: (payload: SessionReadyPayload) => void
-    onSessionEnd?: (payload: SessionEndPayload) => void
-    onMachineAlive?: (payload: MachineAlivePayload) => void
-    onWebappEvent?: (event: SyncEvent) => void
-    onBackgroundTaskDelta?: (sessionId: string, delta: { started: number; completed: number }) => void
-    onSessionActivity?: (sessionId: string, updatedAt: number) => void
-    onAgentProgress?: (sessionId: string, at: number) => void
-    onSweepImmediateQueued?: (sessionId: string, now: number) => void
-    onMessagesConsumed?: (sessionId: string) => void
+    onSessionAlive?: (payload: SessionAlivePayload) => unknown
+    onSessionReady?: (payload: SessionReadyPayload) => unknown
+    onSessionEnd?: (payload: SessionEndPayload) => unknown
+    onMachineAlive?: (payload: MachineAlivePayload) => unknown
+    onWebappEvent?: (event: SyncEvent) => unknown
+    onBackgroundTaskDelta?: (sessionId: string, delta: { started: number; completed: number }) => unknown
+    onSessionActivity?: (sessionId: string, updatedAt: number) => unknown
+    onAgentProgress?: (sessionId: string, at: number) => unknown
+    onSweepImmediateQueued?: (sessionId: string, now: number) => unknown
+    onMessagesConsumed?: (sessionId: string) => unknown
 }
 
 // resolveSessionAccess runs on EVERY cli socket event (message stream deltas,
@@ -83,14 +83,14 @@ export type CliHandlersDeps = {
 const SESSION_ACCESS_CACHE_TTL_MS = 1_000
 const SESSION_ACCESS_CACHE_MAX_SESSIONS = 64
 
-export function registerCliHandlers(socket: CliSocketWithData, deps: CliHandlersDeps): void {
+export async function registerCliHandlers(socket: CliSocketWithData, deps: CliHandlersDeps): Promise<void> {
     const { io, store, rpcRegistry, terminalRegistry, onSessionAlive, onSessionReady, onSessionEnd, onMachineAlive, onWebappEvent, onBackgroundTaskDelta, onSessionActivity, onAgentProgress, onSweepImmediateQueued, onMessagesConsumed } = deps
     const terminalNamespace = io.of('/terminal')
     const namespace = typeof socket.data.namespace === 'string' ? socket.data.namespace : null
 
     const sessionAccessCache = new Map<string, { access: AccessResult<StoredSession>; expiresAt: number; epoch: number }>()
 
-    const resolveSessionAccess = (sessionId: string, opts?: { fresh?: boolean }): AccessResult<StoredSession> => {
+    const lookupSessionAccess = async (sessionId: string, opts?: { fresh?: boolean }): Promise<AccessResult<StoredSession>> => {
         if (!namespace) {
             return { ok: false, reason: 'namespace-missing' }
         }
@@ -107,7 +107,7 @@ export function registerCliHandlers(socket: CliSocketWithData, deps: CliHandlers
                 return cached.access
             }
         }
-        const session = store.sessions.getSessionByNamespace(sessionId, namespace)
+        const session = (await store.sessions.getSessionByNamespace(sessionId, namespace))
         let access: AccessResult<StoredSession>
         if (session) {
             access = { ok: true, value: session }
@@ -126,7 +126,7 @@ export function registerCliHandlers(socket: CliSocketWithData, deps: CliHandlers
             }
         } else {
             sessionAccessCache.delete(sessionId)
-            if (store.sessions.getSession(sessionId)) {
+            if ((await store.sessions.getSession(sessionId))) {
                 access = { ok: false, reason: 'access-denied' }
             } else {
                 access = { ok: false, reason: 'not-found' }
@@ -135,29 +135,30 @@ export function registerCliHandlers(socket: CliSocketWithData, deps: CliHandlers
         return access
     }
 
-    const resolveMachineAccess = (machineId: string): AccessResult<StoredMachine> => {
+    const lookupMachineAccess = async (machineId: string): Promise<AccessResult<StoredMachine>> => {
         if (!namespace) {
             return { ok: false, reason: 'namespace-missing' }
         }
-        const machine = store.machines.getMachineByNamespace(machineId, namespace)
+        const machine = (await store.machines.getMachineByNamespace(machineId, namespace))
         if (machine) {
             return { ok: true, value: machine }
         }
-        if (store.machines.getMachine(machineId)) {
+        if ((await store.machines.getMachine(machineId))) {
             return { ok: false, reason: 'access-denied' }
         }
         return { ok: false, reason: 'not-found' }
     }
 
-    const auth = socket.handshake.auth as Record<string, unknown> | undefined
-    const sessionId = typeof auth?.sessionId === 'string' ? auth.sessionId : null
-    if (sessionId && resolveSessionAccess(sessionId).ok) {
-        socket.join(`session:${sessionId}`)
+    // Install listeners before the first database await: old clients send RPCs
+    // immediately after connecting. Access-dependent packets wait for room setup.
+    let ready = Promise.resolve()
+    const resolveSessionAccess = async (sessionId: string, opts?: { fresh?: boolean }) => {
+        await ready
+        return lookupSessionAccess(sessionId, opts)
     }
-
-    const machineId = typeof auth?.machineId === 'string' ? auth.machineId : null
-    if (machineId && resolveMachineAccess(machineId).ok) {
-        socket.join(`machine:${machineId}`)
+    const resolveMachineAccess = async (machineId: string) => {
+        await ready
+        return lookupMachineAccess(machineId)
     }
 
     const emitAccessError = (scope: 'session' | 'machine', id: string, reason: AccessErrorReason) => {
@@ -206,4 +207,17 @@ export function registerCliHandlers(socket: CliSocketWithData, deps: CliHandlers
         rpcRegistry.unregisterAll(socket)
         cleanupTerminalHandlers(socket, { terminalRegistry, terminalNamespace })
     })
+
+    ready = (async () => {
+        const auth = socket.handshake.auth as Record<string, unknown> | undefined
+        const sessionId = typeof auth?.sessionId === 'string' ? auth.sessionId : null
+        if (sessionId && (await lookupSessionAccess(sessionId)).ok) {
+            await socket.join(`session:${sessionId}`)
+        }
+        const machineId = typeof auth?.machineId === 'string' ? auth.machineId : null
+        if (machineId && (await lookupMachineAccess(machineId)).ok) {
+            await socket.join(`machine:${machineId}`)
+        }
+    })()
+    await ready
 }

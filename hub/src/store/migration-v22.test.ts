@@ -14,12 +14,12 @@ afterEach(() => {
 })
 
 describe('schema migration v21 to v22', () => {
-    it('adds pinned and global_pinned columns with unpinned defaults', () => {
+    it('adds pinned and global_pinned columns with unpinned defaults', async () => {
         const dir = mkdtempSync(join(tmpdir(), 'hapi-migration-v22-'))
         tempDirs.push(dir)
         const dbPath = join(dir, 'hapi.db')
 
-        new Store(dbPath).close()
+        await new Store(dbPath).close()
         const legacy = new Database(dbPath)
         legacy.exec('ALTER TABLE sessions DROP COLUMN pinned')
         legacy.exec('ALTER TABLE sessions DROP COLUMN global_pinned')
@@ -27,9 +27,9 @@ describe('schema migration v21 to v22', () => {
         legacy.close()
 
         const migrated = new Store(dbPath)
-        const session = migrated.sessions.getOrCreateSession('migration-pin', {}, null, 'default')
+        const session = (await migrated.sessions.getOrCreateSession('migration-pin', {}, null, 'default'))
         expect(session.pinned).toBe(false)
         expect(session.globalPinned).toBe(false)
-        migrated.close()
+        await migrated.close()
     })
 })

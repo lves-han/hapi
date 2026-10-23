@@ -17,7 +17,7 @@
         "dev": "bun --watch run src/index.ts",
         "test": "bun test",
         "typecheck": "tsc --noEmit",
-        "build": "bun build src/index.ts --outdir dist --target bun",
+        "build": "bun build src/index.ts --outdir dist --target bun && bun build scripts/export-postgres-to-sqlite.ts --outfile dist/export-postgres-to-sqlite.js --target bun",
         "generate:embedded-web-assets": "bun run scripts/generate-embedded-web-assets.ts"
     },
     "dependencies": {

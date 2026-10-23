@@ -7,9 +7,9 @@ import { registerSessionHandlers } from './sessionHandlers'
 
 class FakeSocket {
     readonly roomEvents: Array<{ room: string; event: string; data: unknown }> = []
-    private readonly handlers = new Map<string, (data: unknown, ack?: (response: unknown) => void) => void>()
+    private readonly handlers = new Map<string, (data: unknown, ack?: (response: unknown) => void) => unknown>()
 
-    on(event: string, handler: (data: unknown, ack?: (response: unknown) => void) => void): this {
+    on(event: string, handler: (data: unknown, ack?: (response: unknown) => void) => unknown): this {
         this.handlers.set(event, handler)
         return this
     }
@@ -22,8 +22,8 @@ class FakeSocket {
         }
     }
 
-    trigger(event: string, data: unknown, ack?: (response: unknown) => void): void {
-        this.handlers.get(event)?.(data, ack)
+    async trigger(event: string, data: unknown, ack?: (response: unknown) => void): Promise<void> {
+        await this.handlers.get(event)?.(data, ack)
     }
 }
 
@@ -53,46 +53,46 @@ function reasoningTextOf(message: { content: unknown }): string {
 }
 
 describe('cli session handlers', () => {
-    it.each([undefined, 'terminated', 'error'] as const)('preserves shared Codex pending input on execution exit (%s)', reason => {
+    it.each([undefined, 'terminated', 'error'] as const)('preserves shared Codex pending input on execution exit (%s)', async reason => {
         const store = new Store(':memory:')
-        const session = store.sessions.getOrCreateSession('shared-end', { flavor: 'codex', capabilities: { concurrentClients: true } }, null, 'default')
-        store.messages.addMessage(session.id, { text: 'pending' }, 'pending')
+        const session = (await store.sessions.getOrCreateSession('shared-end', { flavor: 'codex', capabilities: { concurrentClients: true } }, null, 'default'))
+        await store.messages.addMessage(session.id, { text: 'pending' }, 'pending')
         const socket = new FakeSocket(); const sweep = mock(); const end = mock()
         registerSessionHandlers(socket as unknown as CliSocketWithData, {
             store, resolveSessionAccess: () => ({ ok: true, value: session }), emitAccessError() {},
             onSweepImmediateQueued: sweep, onSessionEnd: end
         })
-        socket.trigger('session-end', { sid: session.id, time: Date.now(), reason })
+        await socket.trigger('session-end', { sid: session.id, time: Date.now(), reason })
         expect(sweep).not.toHaveBeenCalled(); expect(end).toHaveBeenCalledTimes(1)
-        expect(store.messages.getAllMessages(session.id)[0]).toMatchObject({ localId: 'pending', invokedAt: null })
-        store.close()
+        expect((await store.messages.getAllMessages(session.id))[0]).toMatchObject({ localId: 'pending', invokedAt: null })
+        await store.close()
     })
-    it('mirrors native queued edits/removal without overwriting or deleting a consumed row', () => {
+    it('mirrors native queued edits/removal without overwriting or deleting a consumed row', async () => {
         const store = new Store(':memory:')
-        const session = store.sessions.getOrCreateSession('shared-queue', { capabilities: { concurrentClients: true } }, null, 'default')
+        const session = (await store.sessions.getOrCreateSession('shared-queue', { capabilities: { concurrentClients: true } }, null, 'default'))
         const socket = new FakeSocket(); const events: SyncEvent[] = []
         registerSessionHandlers(socket as unknown as CliSocketWithData, {
             store, resolveSessionAccess: () => ({ ok: true, value: session }), emitAccessError() {}, onWebappEvent: event => events.push(event)
         })
-        const sync = (localId: string, text: string | null) => socket.trigger('native-queue-message', { sid: session.id, localId, text })
-        sync('queued', 'one'); sync('queued', 'edited')
-        expect(store.messages.getAllMessages(session.id)).toHaveLength(1)
-        expect(store.messages.getAllMessages(session.id)[0]).toMatchObject({ invokedAt: null, content: {
+        const sync = async (localId: string, text: string | null) => (await socket.trigger('native-queue-message', { sid: session.id, localId, text }))
+        await sync('queued', 'one'); await sync('queued', 'edited')
+        expect((await store.messages.getAllMessages(session.id))).toHaveLength(1)
+        expect((await store.messages.getAllMessages(session.id))[0]).toMatchObject({ invokedAt: null, content: {
             content: { text: 'edited' }, meta: { sentFrom: 'cli', isNativeQueuedMessage: true }
         } })
-        sync('queued', null); expect(events.at(-1)).toMatchObject({ type: 'message-cancelled', localId: 'queued' })
-        store.messages.addMessage(session.id, { role: 'user', content: { type: 'text', text: 'original', attachments: [{ name: 'image.png' }] }, meta: { sentFrom: 'web' } }, 'attachment')
-        sync('attachment', 'edited')
-        expect(store.messages.getAllMessages(session.id)[0]).toMatchObject({ content: { content: { attachments: [{ name: 'image.png' }], text: 'edited' }, meta: { sentFrom: 'web' } } })
-        sync('attachment', null)
-        sync('consumed', 'executed'); store.messages.markMessagesInvoked(session.id, ['consumed'], Date.now())
-        sync('consumed', 'stale'); sync('consumed', null)
-        expect(store.messages.getAllMessages(session.id)[0]).toMatchObject({ content: { content: { text: 'executed' } } })
+        await sync('queued', null); expect(events.at(-1)).toMatchObject({ type: 'message-cancelled', localId: 'queued' })
+        await store.messages.addMessage(session.id, { role: 'user', content: { type: 'text', text: 'original', attachments: [{ name: 'image.png' }] }, meta: { sentFrom: 'web' } }, 'attachment')
+        await sync('attachment', 'edited')
+        expect((await store.messages.getAllMessages(session.id))[0]).toMatchObject({ content: { content: { attachments: [{ name: 'image.png' }], text: 'edited' }, meta: { sentFrom: 'web' } } })
+        await sync('attachment', null)
+        await sync('consumed', 'executed'); await store.messages.markMessagesInvoked(session.id, ['consumed'], Date.now())
+        await sync('consumed', 'stale'); await sync('consumed', null)
+        expect((await store.messages.getAllMessages(session.id))[0]).toMatchObject({ content: { content: { text: 'executed' } } })
     })
-    it('preserves immediate queued rows for cleared handoff transfer', () => {
+    it('preserves immediate queued rows for cleared handoff transfer', async () => {
         const store = new Store(':memory:')
-        const session = store.sessions.getOrCreateSession('clear-end', {}, null, 'default')
-        store.messages.addMessage(session.id, { text: 'held' }, 'held-local')
+        const session = (await store.sessions.getOrCreateSession('clear-end', {}, null, 'default'))
+        await store.messages.addMessage(session.id, { text: 'held' }, 'held-local')
         const socket = new FakeSocket()
         let swept = false
         registerSessionHandlers(socket as unknown as CliSocketWithData, {
@@ -101,16 +101,16 @@ describe('cli session handlers', () => {
             emitAccessError: () => {},
             onSweepImmediateQueued: () => { swept = true }
         })
-        socket.trigger('session-end', { sid: session.id, time: Date.now(), reason: 'cleared' })
+        await socket.trigger('session-end', { sid: session.id, time: Date.now(), reason: 'cleared' })
         expect(swept).toBe(false)
-        expect(store.messages.getAllMessages(session.id)).toEqual([
+        expect((await store.messages.getAllMessages(session.id))).toEqual([
             expect.objectContaining({ localId: 'held-local', invokedAt: null })
         ])
     })
 
-    it('collapses a live reasoning stream into its settled message', () => {
+    it('collapses a live reasoning stream into its settled message', async () => {
         const store = new Store(':memory:')
-        const session = store.sessions.getOrCreateSession('reasoning-stream-session', {}, null, 'default')
+        const session = (await store.sessions.getOrCreateSession('reasoning-stream-session', {}, null, 'default'))
         const socket = new FakeSocket()
 
         registerSessionHandlers(socket as unknown as CliSocketWithData, {
@@ -122,18 +122,18 @@ describe('cli session handlers', () => {
         })
 
         for (const text of ['th', 'thin', 'think']) {
-            socket.trigger('message', { sid: session.id, message: reasoningContent('stream-1', text, true) })
+            await socket.trigger('message', { sid: session.id, message: reasoningContent('stream-1', text, true) })
         }
-        socket.trigger('message', { sid: session.id, message: reasoningContent('stream-1', 'thinking', false) })
+        await socket.trigger('message', { sid: session.id, message: reasoningContent('stream-1', 'thinking', false) })
         // A second stream in the same turn must survive the first one's cleanup.
-        socket.trigger('message', { sid: session.id, message: reasoningContent('stream-2', 'more', true) })
+        await socket.trigger('message', { sid: session.id, message: reasoningContent('stream-2', 'more', true) })
 
-        expect(store.messages.getAllMessages(session.id).map(reasoningTextOf)).toEqual(['thinking', 'more'])
+        expect((await store.messages.getAllMessages(session.id)).map(reasoningTextOf)).toEqual(['thinking', 'more'])
     })
 
-    it('keeps every reasoning snapshot that carries no stream id', () => {
+    it('keeps every reasoning snapshot that carries no stream id', async () => {
         const store = new Store(':memory:')
-        const session = store.sessions.getOrCreateSession('reasoning-idless-session', {}, null, 'default')
+        const session = (await store.sessions.getOrCreateSession('reasoning-idless-session', {}, null, 'default'))
         const socket = new FakeSocket()
 
         registerSessionHandlers(socket as unknown as CliSocketWithData, {
@@ -145,18 +145,18 @@ describe('cli session handlers', () => {
         })
 
         for (const text of ['one', 'two']) {
-            socket.trigger('message', {
+            await socket.trigger('message', {
                 sid: session.id,
                 message: { role: 'agent', content: { type: AGENT_MESSAGE_PAYLOAD_TYPE, data: { type: 'reasoning', message: text } } }
             })
         }
 
-        expect(store.messages.getAllMessages(session.id)).toHaveLength(2)
+        expect((await store.messages.getAllMessages(session.id))).toHaveLength(2)
     })
 
-    it('drops redundant goal status events before persistence and broadcast', () => {
+    it('drops redundant goal status events before persistence and broadcast', async () => {
         const store = new Store(':memory:')
-        const session = store.sessions.getOrCreateSession('goal-status-session', {}, null, 'default')
+        const session = (await store.sessions.getOrCreateSession('goal-status-session', {}, null, 'default'))
         const socket = new FakeSocket()
         const webEvents: SyncEvent[] = []
 
@@ -176,20 +176,20 @@ describe('cli session handlers', () => {
             'Goal blocked',
             'Goal limited by usage · 8016 tokens'
         ]) {
-            socket.trigger('message', {
+            await socket.trigger('message', {
                 sid: session.id,
                 message: redundantGoalStatusContent(message)
             })
         }
 
-        expect(store.messages.getMessages(session.id)).toHaveLength(0)
+        expect((await store.messages.getMessages(session.id))).toHaveLength(0)
         expect(socket.roomEvents).toHaveLength(0)
         expect(webEvents).toHaveLength(0)
     })
 
-    it('emits a structured todos patch when a TodoWrite message lands (closes second half of #884)', () => {
+    it('emits a structured todos patch when a TodoWrite message lands (closes second half of #884)', async () => {
         const store = new Store(':memory:')
-        const session = store.sessions.getOrCreateSession('todos-session', { path: '/tmp', host: 'h' }, null, 'default')
+        const session = (await store.sessions.getOrCreateSession('todos-session', { path: '/tmp', host: 'h' }, null, 'default'))
         const socket = new FakeSocket()
         const webEvents: SyncEvent[] = []
 
@@ -204,7 +204,7 @@ describe('cli session handlers', () => {
             }
         })
 
-        socket.trigger('message', {
+        await socket.trigger('message', {
             sid: session.id,
             message: {
                 role: 'agent',
@@ -247,14 +247,14 @@ describe('cli session handlers', () => {
         expect((sessionUpdated.data as { updatedAt?: number }).updatedAt).toBeGreaterThan(0)
     })
 
-    it('emits a structured metadata patch on update-metadata RPC (closes second half of #884)', () => {
+    it('emits a structured metadata patch on update-metadata RPC (closes second half of #884)', async () => {
         const store = new Store(':memory:')
-        const session = store.sessions.getOrCreateSession(
+        const session = (await store.sessions.getOrCreateSession(
             'metadata-patch-session',
             { path: '/tmp/project', host: 'example' },
             null,
             'default'
-        )
+        ))
         const socket = new FakeSocket()
         const webEvents: SyncEvent[] = []
 
@@ -269,7 +269,7 @@ describe('cli session handlers', () => {
             }
         })
 
-        socket.trigger(
+        await socket.trigger(
             'update-metadata',
             {
                 sid: session.id,
@@ -295,14 +295,14 @@ describe('cli session handlers', () => {
         expect(data?.updatedAt).toBeGreaterThanOrEqual(session.updatedAt)
     })
 
-    it('emits a structured agentState patch on update-state RPC (closes second half of #884)', () => {
+    it('emits a structured agentState patch on update-state RPC (closes second half of #884)', async () => {
         const store = new Store(':memory:')
-        const session = store.sessions.getOrCreateSession(
+        const session = (await store.sessions.getOrCreateSession(
             'agent-state-patch-session',
             { path: '/tmp', host: 'h' },
             null,
             'default'
-        )
+        ))
         const socket = new FakeSocket()
         const webEvents: SyncEvent[] = []
 
@@ -317,7 +317,7 @@ describe('cli session handlers', () => {
             }
         })
 
-        socket.trigger(
+        await socket.trigger(
             'update-state',
             {
                 sid: session.id,
@@ -341,9 +341,9 @@ describe('cli session handlers', () => {
         expect(data?.updatedAt).toBeGreaterThanOrEqual(session.updatedAt)
     })
 
-    it('update-metadata broadcasts the merged value, not the pre-merge payload', () => {
+    it('update-metadata broadcasts the merged value, not the pre-merge payload', async () => {
         const store = new Store(':memory:')
-        const session = store.sessions.getOrCreateSession(
+        const session = (await store.sessions.getOrCreateSession(
             'broadcast-merged',
             {
                 path: '/tmp/project',
@@ -352,7 +352,7 @@ describe('cli session handlers', () => {
             },
             null,
             'default'
-        )
+        ))
         const socket = new FakeSocket()
 
         registerSessionHandlers(socket as unknown as CliSocketWithData, {
@@ -364,7 +364,7 @@ describe('cli session handlers', () => {
         })
 
         let ackResponse: unknown = null
-        socket.trigger(
+        await socket.trigger(
             'update-metadata',
             {
                 sid: session.id,
@@ -407,9 +407,9 @@ describe('cli session handlers', () => {
     // transcript entry's own timestamp) for BOTH created_at and invoked_at, so
     // getMessagesByPosition's existing COALESCE(invoked_at, created_at) sort
     // reproduces jsonl order regardless of arrival order.
-    it('agent messages: display order follows client-provided createdAt (jsonl order), not hub arrival order', () => {
+    it('agent messages: display order follows client-provided createdAt (jsonl order), not hub arrival order', async () => {
         const store = new Store(':memory:')
-        const session = store.sessions.getOrCreateSession('order-drift', {}, null, 'default')
+        const session = (await store.sessions.getOrCreateSession('order-drift', {}, null, 'default'))
         const socket = new FakeSocket()
 
         registerSessionHandlers(socket as unknown as CliSocketWithData, {
@@ -422,34 +422,34 @@ describe('cli session handlers', () => {
 
         // jsonl SSOT order is msg-1 (createdAt=1000) then msg-2 (createdAt=2000).
         // Simulate the burst/resume drift by having the hub receive msg-2 FIRST.
-        socket.trigger('message', {
+        await socket.trigger('message', {
             sid: session.id,
             message: { role: 'agent', content: { type: 'output', data: { uuid: 'msg-2' } } },
             createdAt: 2000
         })
-        socket.trigger('message', {
+        await socket.trigger('message', {
             sid: session.id,
             message: { role: 'agent', content: { type: 'output', data: { uuid: 'msg-1' } } },
             createdAt: 1000
         })
 
-        const ordered = store.messages.getMessagesByPosition(session.id, 10)
+        const ordered = (await store.messages.getMessagesByPosition(session.id, 10))
         const uuids = ordered.map((m) => (m.content as { content: { data: { uuid: string } } }).content.data.uuid)
         expect(uuids).toEqual(['msg-1', 'msg-2'])
     })
 
     it.each(['supersededBySessionId', 'opencodeClearOperation'] as const)(
         'ignores a forged hub-owned %s addition from CLI metadata',
-        (field) => {
+        async (field) => {
             const store = new Store(':memory:')
-            const session = store.sessions.getOrCreateSession('forged-clear-link', { path: '/tmp/project' }, null, 'default')
+            const session = (await store.sessions.getOrCreateSession('forged-clear-link', { path: '/tmp/project' }, null, 'default'))
             const socket = new FakeSocket()
             registerSessionHandlers(socket as unknown as CliSocketWithData, {
                 store,
                 resolveSessionAccess: () => ({ ok: true, value: session as StoredSession }),
                 emitAccessError: () => { throw new Error('unexpected access error') }
             })
-            socket.trigger('update-metadata', {
+            await socket.trigger('update-metadata', {
                 sid: session.id,
                 expectedVersion: session.metadataVersion,
                 metadata: {
@@ -459,23 +459,23 @@ describe('cli session handlers', () => {
                         : { replacementSessionId: 'foreign-session', state: 'reserved', updatedAt: Date.now() }
                 }
             }, () => {})
-            expect(store.sessions.getSessionByNamespace(session.id, 'default')?.metadata).not.toHaveProperty(field)
+            expect((await store.sessions.getSessionByNamespace(session.id, 'default'))?.metadata).not.toHaveProperty(field)
         }
     )
 
-    it('preserves existing hub-owned clear metadata across CLI metadata updates', () => {
+    it('preserves existing hub-owned clear metadata across CLI metadata updates', async () => {
         const store = new Store(':memory:')
         const operation = { replacementSessionId: 'owned-target', state: 'completed', updatedAt: Date.now() }
-        const session = store.sessions.getOrCreateSession('preserve-clear-link', {
+        const session = (await store.sessions.getOrCreateSession('preserve-clear-link', {
             supersededBySessionId: 'owned-target', opencodeClearOperation: operation
-        }, null, 'default')
+        }, null, 'default'))
         const socket = new FakeSocket()
         registerSessionHandlers(socket as unknown as CliSocketWithData, {
             store,
             resolveSessionAccess: () => ({ ok: true, value: session as StoredSession }),
             emitAccessError: () => { throw new Error('unexpected access error') }
         })
-        socket.trigger('update-metadata', {
+        await socket.trigger('update-metadata', {
             sid: session.id,
             expectedVersion: session.metadataVersion,
             metadata: {
@@ -484,7 +484,7 @@ describe('cli session handlers', () => {
                 opencodeClearOperation: { replacementSessionId: 'forged-target', state: 'reserved', updatedAt: 0 }
             }
         }, () => {})
-        expect(store.sessions.getSessionByNamespace(session.id, 'default')?.metadata).toMatchObject({
+        expect((await store.sessions.getSessionByNamespace(session.id, 'default'))?.metadata).toMatchObject({
             supersededBySessionId: 'owned-target', opencodeClearOperation: operation, lifecycleState: 'archived'
         })
     })

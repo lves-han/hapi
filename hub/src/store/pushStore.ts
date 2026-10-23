@@ -1,4 +1,4 @@
-import type { Database } from 'bun:sqlite'
+import type { Database } from './database'
 
 import type { StoredPushSubscription } from './types'
 import { addPushSubscription, getPushSubscriptionsByNamespace, removePushSubscription } from './pushSubscriptions'
@@ -10,15 +10,21 @@ export class PushStore {
         this.db = db
     }
 
-    addPushSubscription(namespace: string, subscription: { endpoint: string; p256dh: string; auth: string }): void {
-        addPushSubscription(this.db, namespace, subscription)
+    async addPushSubscription(namespace: string, subscription: { endpoint: string; p256dh: string; auth: string }): Promise<void> {
+        return this.db.operation(async () => {
+            await addPushSubscription(this.db, namespace, subscription)
+
+}, true)
     }
 
-    removePushSubscription(namespace: string, endpoint: string): void {
-        removePushSubscription(this.db, namespace, endpoint)
+    async removePushSubscription(namespace: string, endpoint: string): Promise<void> {
+        return this.db.operation(async () => {
+            await removePushSubscription(this.db, namespace, endpoint)
+
+}, true)
     }
 
-    getPushSubscriptionsByNamespace(namespace: string): StoredPushSubscription[] {
-        return getPushSubscriptionsByNamespace(this.db, namespace)
+    async getPushSubscriptionsByNamespace(namespace: string): Promise<StoredPushSubscription[]> {
+        return this.db.operation(() => getPushSubscriptionsByNamespace(this.db, namespace), false)
     }
 }

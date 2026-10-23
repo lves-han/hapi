@@ -20,14 +20,14 @@ describe('SyncEngine.archiveSession runner reaping (#1910)', () => {
         return (engine as unknown as { sessionCache: SessionCache }).sessionCache
     }
 
-    function insertActiveSession(
+    async function insertActiveSession(
         tag: string,
         machineId?: string,
         hostPid?: number,
         opts?: { startedBy?: 'runner' | 'terminal'; startedFromRunner?: boolean }
-    ): string {
+    ): Promise<string> {
         const startedBy = opts?.startedBy ?? 'runner'
-        const created = cache().getOrCreateSession(
+        const created = (await cache().getOrCreateSession(
             tag,
             {
                 path: '/tmp/proj',
@@ -42,8 +42,8 @@ describe('SyncEngine.archiveSession runner reaping (#1910)', () => {
             },
             null,
             NAMESPACE
-        )
-        cache().markSessionActive(created.id)
+        ))
+        await cache().markSessionActive(created.id)
         return created.id
     }
 
@@ -60,13 +60,13 @@ describe('SyncEngine.archiveSession runner reaping (#1910)', () => {
             })
     }
 
-    beforeEach(() => {
+    beforeEach(async () => {
         store = new Store(':memory:')
-        engine = new SyncEngine(store, {} as never, new RpcRegistry(), { broadcast() {} } as never)
+        engine = await SyncEngine.create(store, {} as never, new RpcRegistry(), { broadcast() {} } as never)
     })
 
     it('does not archive when the runner confirms still_alive after KillSession miss', async () => {
-        const sessionId = insertActiveSession('sess-still-alive', 'machine-x')
+        const sessionId = (await insertActiveSession('sess-still-alive', 'machine-x'))
         setKillSessionMissingTarget()
         ;(engine as unknown as { rpcGateway: { stopRunnerSession: unknown } }).rpcGateway.stopRunnerSession =
             async () => 'still_alive'
@@ -79,7 +79,7 @@ describe('SyncEngine.archiveSession runner reaping (#1910)', () => {
     })
 
     it('always calls stopRunnerSession after a successful KillSession', async () => {
-        const sessionId = insertActiveSession('sess-kill-ok', 'machine-x')
+        const sessionId = (await insertActiveSession('sess-kill-ok', 'machine-x'))
         setKillSessionOk()
         let calledWith: [string, string] | undefined
         ;(engine as unknown as { rpcGateway: { stopRunnerSession: unknown } }).rpcGateway.stopRunnerSession =
@@ -98,7 +98,7 @@ describe('SyncEngine.archiveSession runner reaping (#1910)', () => {
     })
 
     it('archives once the runner confirms the process is gone', async () => {
-        const sessionId = insertActiveSession('sess-confirmed-gone', 'machine-x')
+        const sessionId = (await insertActiveSession('sess-confirmed-gone', 'machine-x'))
         setKillSessionMissingTarget()
         let calledWith: [string, string] | undefined
         ;(engine as unknown as { rpcGateway: { stopRunnerSession: unknown } }).rpcGateway.stopRunnerSession =
@@ -116,7 +116,7 @@ describe('SyncEngine.archiveSession runner reaping (#1910)', () => {
     })
 
     it('falls back to archiving when the session has no known machine', async () => {
-        const sessionId = insertActiveSession('sess-no-machine')
+        const sessionId = (await insertActiveSession('sess-no-machine'))
         setKillSessionMissingTarget()
         let stopRunnerSessionCalled = false
         ;(engine as unknown as { rpcGateway: { stopRunnerSession: unknown } }).rpcGateway.stopRunnerSession =
@@ -143,8 +143,8 @@ describe('SyncEngine.archiveSession runner reaping (#1910)', () => {
                 })
             })
         }
-        engine = new SyncEngine(store, io as never, new RpcRegistry(), { broadcast() {} } as never)
-        const sessionId = insertActiveSession('sess-hub-archive-socket')
+        engine = await SyncEngine.create(store, io as never, new RpcRegistry(), { broadcast() {} } as never)
+        const sessionId = (await insertActiveSession('sess-hub-archive-socket'))
         setKillSessionMissingTarget()
 
         await engine.archiveSession(sessionId)
@@ -163,7 +163,7 @@ describe('SyncEngine.archiveSession runner reaping (#1910)', () => {
         // #1911 bot Major: both RPC targets missing is not proof the detached
         // CLI exited (KillMode=process orphans survive). Keep the row
         // unconfirmed until StopSession can run after the runner reconnects.
-        const sessionId = insertActiveSession('sess-machine-unreachable', 'machine-x')
+        const sessionId = (await insertActiveSession('sess-machine-unreachable', 'machine-x'))
         setKillSessionMissingTarget()
         ;(engine as unknown as { rpcGateway: { stopRunnerSession: unknown } }).rpcGateway.stopRunnerSession =
             async () => { throw new RpcTargetMissingError('StopSession', 'handler-not-registered') }
@@ -178,7 +178,7 @@ describe('SyncEngine.archiveSession runner reaping (#1910)', () => {
     it('does NOT archive when machine StopSession is missing but KillSession was reachable', async () => {
         // Machine socket alone missing is not proof the detached child is gone
         // (KillMode=process). KillSession succeeded → refuse without confirm.
-        const sessionId = insertActiveSession('sess-machine-only-missing', 'machine-x')
+        const sessionId = (await insertActiveSession('sess-machine-only-missing', 'machine-x'))
         setKillSessionOk()
         ;(engine as unknown as { rpcGateway: { stopRunnerSession: unknown } }).rpcGateway.stopRunnerSession =
             async () => { throw new RpcTargetMissingError('StopSession', 'handler-not-registered') }
@@ -191,7 +191,7 @@ describe('SyncEngine.archiveSession runner reaping (#1910)', () => {
     })
 
     it('does NOT archive when the runner reports unknown after KillSession miss', async () => {
-        const sessionId = insertActiveSession('sess-unknown-to-runner', 'machine-x')
+        const sessionId = (await insertActiveSession('sess-unknown-to-runner', 'machine-x'))
         setKillSessionMissingTarget()
         ;(engine as unknown as { rpcGateway: { stopRunnerSession: unknown } }).rpcGateway.stopRunnerSession =
             async () => 'unknown'
@@ -206,7 +206,7 @@ describe('SyncEngine.archiveSession runner reaping (#1910)', () => {
     it('does NOT archive when KillSession succeeded but StopSession stays unknown without a confirmable pid', async () => {
         // KillSession ack alone is not exit proof; without a pid the runner
         // cannot confirm termination of an untracked CLI (#1910).
-        const sessionId = insertActiveSession('sess-kill-ok-unknown-no-pid', 'machine-x')
+        const sessionId = (await insertActiveSession('sess-kill-ok-unknown-no-pid', 'machine-x'))
         setKillSessionOk()
         ;(engine as unknown as { rpcGateway: { stopRunnerSession: unknown } }).rpcGateway.stopRunnerSession =
             async () => 'unknown'
@@ -219,7 +219,7 @@ describe('SyncEngine.archiveSession runner reaping (#1910)', () => {
     })
 
     it('does NOT archive when KillSession pid confirm lacks a start marker (PID reuse guard)', async () => {
-        const sessionId = insertActiveSession('sess-kill-ok-pid-no-marker', 'machine-x')
+        const sessionId = (await insertActiveSession('sess-kill-ok-pid-no-marker', 'machine-x'))
         setKillSessionOk({ pid: 4242 })
         const stopCalls: Array<{ sid: string; marker?: string }> = []
         ;(engine as unknown as { rpcGateway: { stopRunnerSession: unknown } }).rpcGateway.stopRunnerSession =
@@ -236,7 +236,7 @@ describe('SyncEngine.archiveSession runner reaping (#1910)', () => {
     })
 
     it('does NOT archive when KillSession pid confirm still reports unknown (socket drop is not exit)', async () => {
-        const sessionId = insertActiveSession('sess-kill-ok-pid-unknown', 'machine-x')
+        const sessionId = (await insertActiveSession('sess-kill-ok-pid-unknown', 'machine-x'))
         setKillSessionOk({ pid: 4242, processStartMarker: 'started-at-1' })
         const stopCalls: Array<{ sid: string; marker?: string }> = []
         ;(engine as unknown as { rpcGateway: { stopRunnerSession: unknown } }).rpcGateway.stopRunnerSession =
@@ -257,7 +257,7 @@ describe('SyncEngine.archiveSession runner reaping (#1910)', () => {
     })
 
     it('archives when KillSession pid confirm returns already_gone after session-id unknown', async () => {
-        const sessionId = insertActiveSession('sess-kill-ok-pid-gone', 'machine-x')
+        const sessionId = (await insertActiveSession('sess-kill-ok-pid-gone', 'machine-x'))
         setKillSessionOk({ pid: 4242, processStartMarker: 'started-at-1' })
         const stopCalls: Array<{ sid: string; marker?: string }> = []
         ;(engine as unknown as { rpcGateway: { stopRunnerSession: unknown } }).rpcGateway.stopRunnerSession =
@@ -278,7 +278,7 @@ describe('SyncEngine.archiveSession runner reaping (#1910)', () => {
     it('archives via metadata.hostPid tombstone when KillSession supplies no confirmable pid (#1911 dogfood)', async () => {
         // Peer #1820 estate gap: StopSession(hapiId)=unknown, process already dead,
         // KillSession missed — hub must check metadata.hostPid before 409.
-        const sessionId = insertActiveSession('sess-hostpid-tombstone', 'machine-x', 3704400)
+        const sessionId = (await insertActiveSession('sess-hostpid-tombstone', 'machine-x', 3704400))
         setKillSessionMissingTarget()
         const stopCalls: Array<{ sid: string; marker?: string }> = []
         ;(engine as unknown as { rpcGateway: { stopRunnerSession: unknown } }).rpcGateway.stopRunnerSession =
@@ -298,7 +298,7 @@ describe('SyncEngine.archiveSession runner reaping (#1910)', () => {
     })
 
     it('does NOT archive when metadata.hostPid confirm reports still_alive', async () => {
-        const sessionId = insertActiveSession('sess-hostpid-alive', 'machine-x', 3704400)
+        const sessionId = (await insertActiveSession('sess-hostpid-alive', 'machine-x', 3704400))
         setKillSessionMissingTarget()
         const stopCalls: string[] = []
         ;(engine as unknown as { rpcGateway: { stopRunnerSession: unknown } }).rpcGateway.stopRunnerSession =
@@ -315,7 +315,7 @@ describe('SyncEngine.archiveSession runner reaping (#1910)', () => {
     })
 
     it('does NOT archive when StopSession fails ambiguously', async () => {
-        const sessionId = insertActiveSession('sess-machine-ambiguous-failure', 'machine-x')
+        const sessionId = (await insertActiveSession('sess-machine-ambiguous-failure', 'machine-x'))
         setKillSessionMissingTarget()
         ;(engine as unknown as { rpcGateway: { stopRunnerSession: unknown } }).rpcGateway.stopRunnerSession =
             async () => { throw new Error('ack timeout') }
@@ -328,9 +328,9 @@ describe('SyncEngine.archiveSession runner reaping (#1910)', () => {
     })
 
     it('archives a terminal session when no runner is connected', async () => {
-        const sessionId = insertActiveSession('sess-terminal-no-runner', 'machine-x', undefined, {
+        const sessionId = (await insertActiveSession('sess-terminal-no-runner', 'machine-x', undefined, {
             startedBy: 'terminal',
-        })
+        }))
         setKillSessionOk()
         ;(engine as unknown as { rpcGateway: { stopRunnerSession: unknown } }).rpcGateway.stopRunnerSession =
             async () => { throw new Error('machine offline') }
@@ -345,7 +345,7 @@ describe('SyncEngine.archiveSession runner reaping (#1910)', () => {
         // #1911 Opus Major: keep-stub after ambiguous spawn has startedBy=runner,
         // no hostPid → StopSession unknown forever while runner online.
         const stubId = crypto.randomUUID()
-        const created = cache().getOrCreateSession(
+        const created = (await cache().getOrCreateSession(
             `machine-spawn:${stubId}`,
             {
                 path: '/tmp/proj',
@@ -361,10 +361,10 @@ describe('SyncEngine.archiveSession runner reaping (#1910)', () => {
             undefined,
             undefined,
             stubId
-        )
-        cache().markSessionActive(created.id)
+        ))
+        await cache().markSessionActive(created.id)
         expect(created.id).toBe(stubId)
-        expect(store.sessions.getSession(stubId)?.tag).toBe(`machine-spawn:${stubId}`)
+        expect((await store.sessions.getSession(stubId))?.tag).toBe(`machine-spawn:${stubId}`)
 
         setKillSessionMissingTarget()
         ;(engine as unknown as { rpcGateway: { stopRunnerSession: unknown } }).rpcGateway.stopRunnerSession =
@@ -377,7 +377,7 @@ describe('SyncEngine.archiveSession runner reaping (#1910)', () => {
     })
 
     it('does NOT archive a non-stub runner session on unknown without hostPid', async () => {
-        const sessionId = insertActiveSession('sess-live-unknown-no-pid', 'machine-x')
+        const sessionId = (await insertActiveSession('sess-live-unknown-no-pid', 'machine-x'))
         setKillSessionMissingTarget()
         ;(engine as unknown as { rpcGateway: { stopRunnerSession: unknown } }).rpcGateway.stopRunnerSession =
             async () => 'unknown'

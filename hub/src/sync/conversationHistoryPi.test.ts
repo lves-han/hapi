@@ -3,23 +3,23 @@ import { Store } from '../store'
 import { RpcRegistry } from '../socket/rpcRegistry'
 import { SyncEngine } from './syncEngine'
 
-function createEngine() {
+async function createEngine() {
     const store = new Store(':memory:')
-    const engine = new SyncEngine(store, {} as never, new RpcRegistry(), { broadcast() {} } as never)
+    const engine = await SyncEngine.create(store, {} as never, new RpcRegistry(), { broadcast() {} } as never)
     return { store, engine }
 }
 
 describe('Pi conversation-history hub integration', () => {
     it('returns 409-style deterministic rewind rejection without marking history diverged', async () => {
-        const { store, engine } = createEngine()
+        const { store, engine } = (await createEngine())
         try {
-            const session = engine.getOrCreateSession('pi-rewind-rejected', {
+            const session = (await engine.getOrCreateSession('pi-rewind-rejected', {
                 path: '/tmp/project', host: 'localhost', flavor: 'pi',
                 capabilities: { conversationHistory: { rewindToMessage: true } },
-            }, null, 'default')
-            engine.handleSessionAlive({ sid: session.id, time: Date.now(), mode: 'remote' })
-            store.messages.addMessage(session.id, { role: 'user', content: 'boundary' }, 'local-boundary')
-            store.messages.markMessagesInvoked(session.id, ['local-boundary'], Date.now())
+            }, null, 'default'))
+            await engine.handleSessionAlive({ sid: session.id, time: Date.now(), mode: 'remote' })
+            await store.messages.addMessage(session.id, { role: 'user', content: 'boundary' }, 'local-boundary')
+            await store.messages.markMessagesInvoked(session.id, ['local-boundary'], Date.now())
             ;(engine as any).rpcGateway.rewindConversation = async () => ({
                 success: false,
                 error: 'Codex native boundary is ambiguous',
@@ -27,24 +27,24 @@ describe('Pi conversation-history hub integration', () => {
                 outcome: 'rejected',
             })
 
-            await expect(engine.rewindConversation(session.id, 'default', 'local-boundary')).resolves.toEqual({
+            await expect((engine.rewindConversation(session.id, 'default', 'local-boundary'))).resolves.toEqual({
                 type: 'error', message: 'Codex native boundary is ambiguous', code: 'ambiguous_native_boundary',
             })
-            expect(engine.getSession(session.id)?.metadata?.conversationHistoryDiverged).not.toBe(true)
+            expect((await engine.getSession(session.id))?.metadata?.conversationHistoryDiverged).not.toBe(true)
         } finally {
-            engine.stop()
+            await engine.stop()
         }
     })
 
     it('shares exact-native bind logic while requiring Pi native-ready but not Grok ready', async () => {
-        const { engine } = createEngine()
+        const { engine } = (await createEngine())
         try {
-            const pi = engine.getOrCreateSession('pi-child', {
+            const pi = (await engine.getOrCreateSession('pi-child', {
                 path: '/tmp/project', host: 'localhost', flavor: 'pi', piSessionId: 'pi-native',
-            }, null, 'default')
-            const grok = engine.getOrCreateSession('grok-child', {
+            }, null, 'default'))
+            const grok = (await engine.getOrCreateSession('grok-child', {
                 path: '/tmp/project', host: 'localhost', flavor: 'grok', grokSessionId: 'grok-native',
-            }, null, 'default')
+            }, null, 'default'))
 
             const piWait = (engine as any).waitForExactNativeForkBound(
                 pi.id, 'pi-native', 'piSessionId', true
@@ -53,17 +53,17 @@ describe('Pi conversation-history hub integration', () => {
                 grok.id, 'grok-native', 'grokSessionId', false
             )).toBe(true)
 
-            engine.handleSessionReady({ sid: pi.id, time: Date.now() })
+            await engine.handleSessionReady({ sid: pi.id, time: Date.now() })
             expect(await piWait).toBe(true)
         } finally {
-            engine.stop()
+            await engine.stop()
         }
     })
 
     it('copies Pi entry-id locators into a fork child and requires exact native-ready binding', async () => {
-        const { store, engine } = createEngine()
+        const { store, engine } = (await createEngine())
         try {
-            const source = engine.getOrCreateSession('pi-source', {
+            const source = (await engine.getOrCreateSession('pi-source', {
                 path: '/tmp/project',
                 host: 'localhost',
                 machineId: 'machine-1',
@@ -73,22 +73,22 @@ describe('Pi conversation-history hub integration', () => {
                 capabilities: { conversationHistory: { forkCurrent: true, forkAtMessage: true, rewindToMessage: true } },
                 conversationHistoryPoints: { local1: true, local2: true },
                 conversationHistoryEntryIds: { local1: 'entry-1', local2: 'entry-2' },
-            }, null, 'default', 'source-model', 'high')
-            engine.handleSessionAlive({ sid: source.id, time: Date.now(), mode: 'remote' })
-            store.messages.addMessage(source.id, { role: 'user', content: 'one' }, 'local1')
-            store.messages.addMessage(source.id, { role: 'user', content: 'two' }, 'local2')
-            store.messages.markMessagesInvoked(source.id, ['local1', 'local2'], Date.now())
+            }, null, 'default', 'source-model', 'high'))
+            await engine.handleSessionAlive({ sid: source.id, time: Date.now(), mode: 'remote' })
+            await store.messages.addMessage(source.id, { role: 'user', content: 'one' }, 'local1')
+            await store.messages.addMessage(source.id, { role: 'user', content: 'two' }, 'local2')
+            await store.messages.markMessagesInvoked(source.id, ['local1', 'local2'], Date.now())
             // Keep the cache fixture explicit; this is the source used by the
             // fork prefix copy path after metadata normalization.
-            ;(engine.getSession(source.id)!.metadata as any).conversationHistoryEntryIds = {
+            ;((await engine.getSession(source.id))!.metadata as any).conversationHistoryEntryIds = {
                 local1: 'entry-1', local2: 'entry-2',
             }
 
             ;(engine as any).rpcGateway.forkConversation = async () => {
-                store.messages.addMessage(source.id, { role: 'user', content: 'latest' }, 'local3')
-                store.messages.markMessagesInvoked(source.id, ['local3'], Date.now())
-                const current = store.sessions.getSession(source.id)!
-                store.sessions.updateSessionMetadata(
+                await store.messages.addMessage(source.id, { role: 'user', content: 'latest' }, 'local3')
+                await store.messages.markMessagesInvoked(source.id, ['local3'], Date.now())
+                const current = (await store.sessions.getSession(source.id))!
+                await store.sessions.updateSessionMetadata(
                     source.id,
                     {
                         ...(current.metadata as Record<string, unknown>),
@@ -131,31 +131,31 @@ describe('Pi conversation-history hub integration', () => {
                 conversationHistoryEntryIds: { local1: 'entry-1', local2: 'entry-2', local3: 'entry-3' },
                 conversationHistoryPoints: { local1: true, local2: true, local3: true },
             })
-            expect(store.messages.getAllMessages(result.sessionId).map((message) => message.localId)).toContain('local3')
-            expect(engine.getSession(result.sessionId)?.metadata?.summary).toMatchObject({
+            expect((await store.messages.getAllMessages(result.sessionId)).map((message) => message.localId)).toContain('local3')
+            expect((await engine.getSession(result.sessionId))?.metadata?.summary).toMatchObject({
                 text: 'Fork: Pi source title',
                 updatedAt: expect.any(Number),
             })
             expect(exactBinds).toEqual([[result.sessionId, 'pi-clone-native', 'piSessionId', true]])
             expect(spawnArgs[3]).toBeUndefined()
             expect(spawnArgs[9]).toBeUndefined()
-            expect(engine.getSession(result.sessionId)?.model).toBeNull()
-            expect(engine.getSession(result.sessionId)?.effort).toBeNull()
+            expect((await engine.getSession(result.sessionId))?.model).toBeNull()
+            expect((await engine.getSession(result.sessionId))?.effort).toBeNull()
         } finally {
-            engine.stop()
+            await engine.stop()
         }
     })
 
-    it('scrubs Pi entry-id locators when rewind truncates their HAPI messages', () => {
-        const { store, engine } = createEngine()
+    it('scrubs Pi entry-id locators when rewind truncates their HAPI messages', async () => {
+        const { store, engine } = (await createEngine())
         try {
-            const session = engine.getOrCreateSession('pi-scrub', {
+            const session = (await engine.getOrCreateSession('pi-scrub', {
                 path: '/tmp/project', host: 'localhost', flavor: 'pi',
                 conversationHistoryEntryIds: { keep: 'entry-keep', remove: 'entry-remove' },
                 conversationHistoryPoints: { keep: true, remove: true },
-            }, null, 'default')
-            store.messages.addMessage(session.id, { role: 'user', content: 'keep' }, 'keep')
-            ;(engine.getSession(session.id)!.metadata as any).conversationHistoryEntryIds = {
+            }, null, 'default'))
+            await store.messages.addMessage(session.id, { role: 'user', content: 'keep' }, 'keep')
+            ;((await engine.getSession(session.id))!.metadata as any).conversationHistoryEntryIds = {
                 keep: 'entry-keep', remove: 'entry-remove',
             }
             let capturedMetadata: Record<string, unknown> | undefined
@@ -164,7 +164,7 @@ describe('Pi conversation-history hub integration', () => {
                 capturedMetadata = args[1] as Record<string, unknown>
                 return { result: 'success' }
             }
-            ;(engine as any).scrubHistoryLocators(session.id, 'default')
+            await (engine as any).scrubHistoryLocators(session.id, 'default')
             ;(store.sessions as any).updateSessionMetadata = originalUpdate
 
             expect(capturedMetadata).toMatchObject({
@@ -172,7 +172,7 @@ describe('Pi conversation-history hub integration', () => {
                 conversationHistoryPoints: { keep: true },
             })
         } finally {
-            engine.stop()
+            await engine.stop()
         }
     })
 })

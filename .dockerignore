@@ -1,0 +1,10 @@
+.git
+**/node_modules
+**/dist
+**/.vitepress
+**/.env*
+**/*.db*
+**/*.sqlite*
+**/*.log
+ios
+android

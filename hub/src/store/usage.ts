@@ -1,4 +1,4 @@
-import type { Database } from 'bun:sqlite'
+import type { Database } from './database'
 
 export type UsageEventKind = 'delta' | 'cumulative'
 
@@ -63,17 +63,17 @@ function toUsageEvent(row: UsageEventRow): UsageEvent {
     }
 }
 
-export function recordUsageScan(
+export async function recordUsageScan(
     db: Database,
     sessionId: string,
     messageEpoch: number,
     lastSeq: number,
     events: UsageEvent[],
     replaceEvents: boolean
-): void {
-    db.transaction(() => {
+): Promise<void> {
+    await db.transaction(async () => {
         if (replaceEvents) {
-            db.prepare('DELETE FROM usage_events WHERE session_id = ?').run(sessionId)
+            await db.prepare('DELETE FROM usage_events WHERE session_id = ?').run(sessionId)
         }
 
         if (events.length > 0) {
@@ -137,7 +137,7 @@ export function recordUsageScan(
             `)
 
             for (const event of events) {
-                statement.run({
+                await statement.run({
                     session_id: event.sessionId,
                     source_key: event.sourceKey,
                     source_seq: event.sourceSeq,
@@ -155,12 +155,12 @@ export function recordUsageScan(
                     last_cache_creation_tokens: event.lastCacheCreationTokens
                 })
                 if (event.kind === 'cumulative' && event.model !== null) {
-                    updateCumulativeModel.run(event.model, event.sessionId, event.sourceKey)
+                    await updateCumulativeModel.run(event.model, event.sessionId, event.sourceKey)
                 }
             }
         }
 
-        db.prepare(`
+        await db.prepare(`
             INSERT INTO usage_scan_state (session_id, message_epoch, last_seq)
             VALUES (?, ?, ?)
             ON CONFLICT(session_id) DO UPDATE SET
@@ -175,11 +175,11 @@ export function recordUsageScan(
     })()
 }
 
-export function getUsageEvents(db: Database, sessionIds: string[]): UsageEvent[] {
+export async function getUsageEvents(db: Database, sessionIds: string[]): Promise<UsageEvent[]> {
     if (sessionIds.length === 0) return []
 
     const placeholders = sessionIds.map(() => '?').join(', ')
-    const rows = db.prepare(`
+    const rows = (await db.prepare(`
         SELECT
             session_id,
             source_key,
@@ -199,20 +199,20 @@ export function getUsageEvents(db: Database, sessionIds: string[]): UsageEvent[]
         FROM usage_events
         WHERE session_id IN (${placeholders})
         ORDER BY created_at ASC, source_seq ASC
-    `).all(...sessionIds) as UsageEventRow[]
+    `).all(...sessionIds)) as UsageEventRow[]
 
     return rows.map(toUsageEvent)
 }
 
-export function getUsageScanStates(db: Database, sessionIds: string[]): Map<string, UsageScanState> {
+export async function getUsageScanStates(db: Database, sessionIds: string[]): Promise<Map<string, UsageScanState>> {
     if (sessionIds.length === 0) return new Map()
 
     const placeholders = sessionIds.map(() => '?').join(', ')
-    const rows = db.prepare(`
+    const rows = (await db.prepare(`
         SELECT session_id, message_epoch, last_seq
         FROM usage_scan_state
         WHERE session_id IN (${placeholders})
-    `).all(...sessionIds) as Array<{ session_id: string; message_epoch: number; last_seq: number }>
+    `).all(...sessionIds)) as Array<{ session_id: string; message_epoch: number; last_seq: number }>
 
     return new Map(rows.map((row) => [row.session_id, {
         messageEpoch: row.message_epoch,
@@ -220,11 +220,11 @@ export function getUsageScanStates(db: Database, sessionIds: string[]): Map<stri
     }]))
 }
 
-export function transferUsageSession(db: Database, fromSessionId: string, toSessionId: string): void {
+export async function transferUsageSession(db: Database, fromSessionId: string, toSessionId: string): Promise<void> {
     if (fromSessionId === toSessionId) return
 
-    db.transaction(() => {
-        db.prepare(`
+    await db.transaction(async () => {
+        await db.prepare(`
             INSERT OR IGNORE INTO usage_events (
                 session_id,
                 source_key,
@@ -261,7 +261,7 @@ export function transferUsageSession(db: Database, fromSessionId: string, toSess
             FROM usage_events
             WHERE session_id = ?
         `).run(toSessionId, fromSessionId)
-        db.prepare('DELETE FROM usage_events WHERE session_id = ?').run(fromSessionId)
-        db.prepare('DELETE FROM usage_scan_state WHERE session_id IN (?, ?)').run(fromSessionId, toSessionId)
+        await db.prepare('DELETE FROM usage_events WHERE session_id = ?').run(fromSessionId)
+        await db.prepare('DELETE FROM usage_scan_state WHERE session_id IN (?, ?)').run(fromSessionId, toSessionId)
     })()
 }

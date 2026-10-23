@@ -185,6 +185,7 @@ export class SyncEngine {
     private readonly titleSuggestionService: TitleSuggestionService
     private readonly rpcGateway: RpcGateway
     private inactivityTimer: NodeJS.Timeout | null = null
+    private inactivityWork: Promise<void> | null = null
     /** Sessions that emitted `session-ready` (Cursor ACP or validated Pi get_state). */
     private readonly sessionReadyIds = new Set<string>()
     /** Same-ID PTY rows with a resume currently in flight. */
@@ -215,16 +216,16 @@ export class SyncEngine {
         rpcRegistry: RpcRegistry,
         sseManager: SSEManager,
     ) {
-        this.eventPublisher = new EventPublisher(sseManager, (event) => this.resolveNamespace(event))
+        this.eventPublisher = new EventPublisher(sseManager, async (event) => (await this.resolveNamespace(event)))
         this.sessionCache = new SessionCache(store, this.eventPublisher)
-        this.eventPublisher.subscribe((event) => {
+        this.eventPublisher.subscribe(async (event) => {
             if (event.type === 'message-received') {
                 if (!this.sessionCache.getSession(event.sessionId)?.hasConversationContent
                     && hasConversationMessageContent(event.message.content)) {
-                    this.sessionCache.refreshConversationContent(event.sessionId)
+                    await this.sessionCache.refreshConversationContent(event.sessionId)
                 }
             } else if (event.type === 'message-cancelled' || event.type === 'messages-invalidated') {
-                this.sessionCache.refreshConversationContent(event.sessionId)
+                await this.sessionCache.refreshConversationContent(event.sessionId)
             }
         })
         this.machineCache = new MachineCache(store, this.eventPublisher)
@@ -232,35 +233,46 @@ export class SyncEngine {
             store,
             io,
             this.eventPublisher,
-            (sessionId, updatedAt) => this.recordSessionActivity(sessionId, updatedAt)
+            async (sessionId, updatedAt) => (await this.recordSessionActivity(sessionId, updatedAt))
         )
         this.titleSuggestionService = createTitleSuggestionService(store)
         this.rpcGateway = new RpcGateway(io, rpcRegistry)
-        this.reloadAll()
-        this.inactivityTimer = setInterval(() => this.expireInactive(), 5_000)
+    }
+
+    static async create(store: Store, io: Server, registry: RpcRegistry, sse: SSEManager): Promise<SyncEngine> {
+        const engine = new SyncEngine(store, io, registry, sse)
+        await engine.reloadAll()
+        engine.inactivityTimer = setInterval(() => {
+            if (engine.inactivityWork) return
+            engine.inactivityWork = engine.expireInactive()
+                .catch(error => console.error('[SyncEngine] Expiry failed:', error))
+                .finally(() => { engine.inactivityWork = null })
+        }, 5_000)
+        return engine
     }
 
     setHubOwnerUserId(ownerUserId: string | number): void {
         this.hubOwnerUserId = String(ownerUserId)
     }
 
-    stop(): void {
+    async stop(): Promise<void> {
         if (this.inactivityTimer) {
             clearInterval(this.inactivityTimer)
             this.inactivityTimer = null
         }
+        await this.inactivityWork
     }
 
     subscribe(listener: SyncEventListener): () => void {
         return this.eventPublisher.subscribe(listener)
     }
 
-    private resolveNamespace(event: SyncEvent): string | undefined {
+    private async resolveNamespace(event: SyncEvent): Promise<string | undefined> {
         if (event.namespace) {
             return event.namespace
         }
         if ('sessionId' in event) {
-            return this.getSession(event.sessionId)?.namespace
+            return (await this.getSession(event.sessionId))?.namespace
         }
         if ('machineId' in event) {
             return this.machineCache.getMachine(event.machineId)?.namespace
@@ -291,7 +303,7 @@ export class SyncEngine {
     }
 
     async getCursorChatStoreStatus(sessionId: string, namespace: string): Promise<CursorChatStoreStatusResult> {
-        const access = this.sessionCache.resolveSessionAccess(sessionId, namespace)
+        const access = (await this.sessionCache.resolveSessionAccess(sessionId, namespace))
         if (!access.ok) {
             return {
                 type: 'error',
@@ -339,40 +351,40 @@ export class SyncEngine {
         return this.sessionCache.getSessionsByNamespace(namespace)
     }
 
-    setSessionPinned(sessionId: string, pinned: boolean): void {
-        this.sessionCache.setSessionPinned(sessionId, pinned)
+    async setSessionPinned(sessionId: string, pinned: boolean): Promise<void> {
+        await this.sessionCache.setSessionPinned(sessionId, pinned)
     }
 
-    setSessionPinMode(sessionId: string, mode: 'none' | 'project' | 'global'): void {
-        this.sessionCache.setSessionPinMode(sessionId, mode)
+    async setSessionPinMode(sessionId: string, mode: 'none' | 'project' | 'global'): Promise<void> {
+        await this.sessionCache.setSessionPinMode(sessionId, mode)
     }
 
-    getFutureScheduledMessageCounts(sessionIds: string[], now: number = Date.now()): Map<string, number> {
-        return this.store.messages.countFutureScheduledBySessionIds(sessionIds, now)
+    async getFutureScheduledMessageCounts(sessionIds: string[], now: number = Date.now()): Promise<Map<string, number>> {
+        return (await this.store.messages.countFutureScheduledBySessionIds(sessionIds, now))
     }
 
-    getNextScheduledAtBySessionIds(sessionIds: string[], now: number = Date.now()): Map<string, number> {
-        return this.store.messages.minFutureScheduledAtBySessionIds(sessionIds, now)
+    async getNextScheduledAtBySessionIds(sessionIds: string[], now: number = Date.now()): Promise<Map<string, number>> {
+        return (await this.store.messages.minFutureScheduledAtBySessionIds(sessionIds, now))
     }
 
-    getSession(sessionId: string): Session | undefined {
-        return this.sessionCache.getSession(sessionId) ?? this.sessionCache.refreshSession(sessionId) ?? undefined
+    async getSession(sessionId: string): Promise<Session | undefined> {
+        return this.sessionCache.getSession(sessionId) ?? (await this.sessionCache.refreshSession(sessionId)) ?? undefined
     }
 
-    getSessionByNamespace(sessionId: string, namespace: string): Session | undefined {
+    async getSessionByNamespace(sessionId: string, namespace: string): Promise<Session | undefined> {
         const session = this.sessionCache.getSessionByNamespace(sessionId, namespace)
-            ?? this.sessionCache.refreshSession(sessionId)
+            ?? (await this.sessionCache.refreshSession(sessionId))
         if (!session || session.namespace !== namespace) {
             return undefined
         }
         return session
     }
 
-    resolveSessionAccess(
+    async resolveSessionAccess(
         sessionId: string,
         namespace: string
-    ): { ok: true; sessionId: string; session: Session } | { ok: false; reason: 'not-found' | 'access-denied' } {
-        return this.sessionCache.resolveSessionAccess(sessionId, namespace)
+    ): Promise<{ ok: true; sessionId: string; session: Session } | { ok: false; reason: 'not-found' | 'access-denied' }> {
+        return (await this.sessionCache.resolveSessionAccess(sessionId, namespace))
     }
 
     getActiveSessions(): Session[] {
@@ -404,10 +416,10 @@ export class SyncEngine {
     }
 
     async renameMachine(machineId: string, displayName: string): Promise<void> {
-        return this.machineCache.renameMachine(machineId, displayName)
+        return (this.machineCache.renameMachine(machineId, displayName))
     }
 
-    getMessagesPage(
+    async getMessagesPage(
         sessionId: string,
         options: {
             limit: number
@@ -416,23 +428,23 @@ export class SyncEngine {
             until?: { at: number; seq: number } | null
             epoch?: number | null
         }
-    ): MessagesResponse {
-        return this.messageService.getMessagesPage(sessionId, options)
+    ): Promise<MessagesResponse> {
+        return (await this.messageService.getMessagesPage(sessionId, options))
     }
 
-    getQueuedState(sessionId: string, localIds: string[]): QueuedStateResponse {
-        return this.messageService.getQueuedState(sessionId, localIds)
+    async getQueuedState(sessionId: string, localIds: string[]): Promise<QueuedStateResponse> {
+        return (await this.messageService.getQueuedState(sessionId, localIds))
     }
 
-    getSessionExport(sessionId: string, session: Session, options?: { force?: boolean }): HapiSessionExportResult {
-        return this.messageService.getSessionExport(sessionId, session, options)
+    async getSessionExport(sessionId: string, session: Session, options?: { force?: boolean }): Promise<HapiSessionExportResult> {
+        return (await this.messageService.getSessionExport(sessionId, session, options))
     }
 
-    getDeliverableMessagesAfter(sessionId: string, options: { afterSeq: number; limit: number; now: number }): DecryptedMessage[] {
-        return this.messageService.getDeliverableMessagesAfter(sessionId, options)
+    async getDeliverableMessagesAfter(sessionId: string, options: { afterSeq: number; limit: number; now: number }): Promise<DecryptedMessage[]> {
+        return (await this.messageService.getDeliverableMessagesAfter(sessionId, options))
     }
 
-    handleRealtimeEvent(event: SyncEvent): void {
+    async handleRealtimeEvent(event: SyncEvent): Promise<void> {
         if (event.type === 'session-updated' && event.sessionId) {
             // Closes the second half of #884: when a CLI handler emits a
             // structured patch (todos / teamState / metadata / agentState),
@@ -460,13 +472,13 @@ export class SyncEngine {
                 : false
 
             if (patchApplied) {
-                this.eventPublisher.emit(event)
+                await this.eventPublisher.emit(event)
                 const after = this.sessionCache.getSession(event.sessionId)
                 if (after?.metadata && !this.hasSameAgentSessionIds(beforeMetadata, after.metadata)) {
                     if (!this.canRunCursorDedup(after)) {
                         return
                     }
-                    void this.sessionCache.deduplicateByAgentSessionId(event.sessionId).catch(() => {
+                    await this.sessionCache.deduplicateByAgentSessionId(event.sessionId).catch(() => {
                         // best-effort: dedup failure is harmless, web-side safety net hides remaining duplicates
                     })
                 }
@@ -476,13 +488,13 @@ export class SyncEngine {
             // No-data event (or data we can't apply directly, e.g. full
             // Session payload from a different emitter): fall back to the
             // legacy refresh-from-DB-and-broadcast path.
-            this.sessionCache.refreshSession(event.sessionId)
+            await this.sessionCache.refreshSession(event.sessionId)
             const after = this.sessionCache.getSession(event.sessionId)
             if (after?.metadata && !this.hasSameAgentSessionIds(beforeMetadata, after.metadata)) {
                 if (!this.canRunCursorDedup(after)) {
                     return
                 }
-                void this.sessionCache.deduplicateByAgentSessionId(event.sessionId).catch(() => {
+                await this.sessionCache.deduplicateByAgentSessionId(event.sessionId).catch(() => {
                     // best-effort: dedup failure is harmless, web-side safety net hides remaining duplicates
                 })
             }
@@ -490,27 +502,27 @@ export class SyncEngine {
         }
 
         if (event.type === 'machine-updated' && event.machineId) {
-            this.machineCache.refreshMachine(event.machineId)
+            await this.machineCache.refreshMachine(event.machineId)
             return
         }
 
         if (event.type === 'message-received' && event.sessionId) {
-            if (!this.getSession(event.sessionId)) {
-                this.sessionCache.refreshSession(event.sessionId)
+            if (!(await this.getSession(event.sessionId))) {
+                await this.sessionCache.refreshSession(event.sessionId)
             }
         }
 
         // Emit chat updates before ledger capture so SSE is not blocked on
         // synchronous SQLite ingest (cold review m5).
-        this.eventPublisher.emit(event)
+        await this.eventPublisher.emit(event)
 
         if (event.type === 'message-received' && event.sessionId && 'message' in event && event.message) {
             // A2A P3: well-formed AGENT_NOTIFY_SUMMARY → work-graph work_ad.
             // Capture is independent of chat display settings (#1462/#1464).
-            const session = this.getSession(event.sessionId)
+            const session = (await this.getSession(event.sessionId))
             if (session) {
                 try {
-                    ingestNotifySummaryFromMessage({
+                    await ingestNotifySummaryFromMessage({
                         store: this.store,
                         namespace: session.namespace,
                         sessionId: session.id,
@@ -527,7 +539,7 @@ export class SyncEngine {
         }
     }
 
-    handleSessionAlive(payload: {
+    async handleSessionAlive(payload: {
         sid: string
         time: number
         thinking?: boolean
@@ -538,36 +550,36 @@ export class SyncEngine {
         effort?: string | null
         serviceTier?: string | null
         collaborationMode?: CodexCollaborationMode
-    }): void {
-        this.sessionCache.handleSessionAlive(payload)
-        this.messageService.replayImmediateQueuedMessages(payload.sid)
-        this.triggerDedupIfNeeded(payload.sid)
+    }): Promise<void> {
+        await this.sessionCache.handleSessionAlive(payload)
+        await this.messageService.replayImmediateQueuedMessages(payload.sid)
+        await this.triggerDedupIfNeeded(payload.sid)
     }
 
-    handleSessionReady(payload: { sid: string; time: number }): void {
+    async handleSessionReady(payload: { sid: string; time: number }): Promise<void> {
         this.sessionReadyIds.add(payload.sid)
         const session = this.sessionCache.getSession(payload.sid)
         if (session?.metadata?.piResumeAttempt) {
             void this.writePiResumeAttempt(payload.sid, session.namespace, null)
-                .then(() => {
+                .then(async () => {
                     this.piResumeQuarantinedIds.delete(payload.sid)
-                    this.triggerDedupIfNeeded(payload.sid)
+                    await this.triggerDedupIfNeeded(payload.sid)
                 })
                 .catch(() => {})
         }
-        this.triggerDedupIfNeeded(payload.sid)
+        await this.triggerDedupIfNeeded(payload.sid)
     }
 
     clearQueuedThinkingGrace(sessionId: string): void {
         this.sessionCache.clearQueuedThinkingGrace(sessionId)
     }
 
-    handleSessionEnd(payload: { sid: string; time: number; reason?: SessionEndReason }): void {
+    async handleSessionEnd(payload: { sid: string; time: number; reason?: SessionEndReason }): Promise<void> {
         const before = this.sessionCache.getSession(payload.sid)
         if (before?.metadata?.opencodeClearOperation?.state === 'reserved' && payload.reason !== 'cleared') {
             const operation = before.metadata.opencodeClearOperation
-            if (this.transitionClearOperation(payload.sid, before.namespace, operation, 'abort-needed')) {
-                this.abortOpenCodeClearSession(payload.sid, before.namespace, operation.replacementSessionId, 'abort-needed')
+            if ((await this.transitionClearOperation(payload.sid, before.namespace, operation, 'abort-needed'))) {
+                await this.abortOpenCodeClearSession(payload.sid, before.namespace, operation.replacementSessionId, 'abort-needed')
             }
         }
         const ownsPiAttempt = before?.metadata?.piResumeAttempt !== undefined
@@ -581,8 +593,8 @@ export class SyncEngine {
             && before.metadata.cursorSessionProtocol === 'acp'
         const shouldRetryDedup = !ownsPiAttempt && !isPiAttemptChild && (!isCursorAcp || this.sessionReadyIds.has(payload.sid))
 
-        this.sessionCache.handleSessionEnd(payload)
-        this.eventPublisher.emit({
+        await this.sessionCache.handleSessionEnd(payload)
+        await this.eventPublisher.emit({
             type: 'session-ended',
             sessionId: payload.sid,
             reason: payload.reason
@@ -591,7 +603,7 @@ export class SyncEngine {
         // skipped it because it was still active at the time. Cursor ACP rows that
         // never reached session-ready must not dedup-merge the original on failure.
         if (shouldRetryDedup) {
-            this.triggerDedupIfNeeded(payload.sid)
+            await this.triggerDedupIfNeeded(payload.sid)
         }
         this.sessionReadyIds.delete(payload.sid)
         this.piResumeQuarantinedIds.delete(payload.sid)
@@ -615,12 +627,12 @@ export class SyncEngine {
         clearAgentTerminalBuffer(payload.sid)
     }
 
-    handleBackgroundTaskDelta(sessionId: string, delta: { started: number; completed: number }): void {
-        this.sessionCache.applyBackgroundTaskDelta(sessionId, delta)
+    async handleBackgroundTaskDelta(sessionId: string, delta: { started: number; completed: number }): Promise<void> {
+        await this.sessionCache.applyBackgroundTaskDelta(sessionId, delta)
     }
 
-    recordSessionActivity(sessionId: string, updatedAt: number): void {
-        this.sessionCache.recordSessionActivity(sessionId, updatedAt)
+    async recordSessionActivity(sessionId: string, updatedAt: number): Promise<void> {
+        await this.sessionCache.recordSessionActivity(sessionId, updatedAt)
     }
 
     /**
@@ -639,14 +651,14 @@ export class SyncEngine {
      * `requireSessionFromParam`); by the time we get here the caller
      * already proved access.
      */
-    listScratchlistEntries(sessionId: string): Array<{
+    async listScratchlistEntries(sessionId: string): Promise<Array<{
         entryId: string
         text: string
         createdAt: number
         updatedAt: number
         attachments: import('@hapi/protocol').ScratchlistAttachmentMetadata[]
-    }> {
-        return this.store.scratchlist.list(sessionId).map((row) => ({
+    }>> {
+        return (await this.store.scratchlist.list(sessionId)).map((row) => ({
             entryId: row.entryId,
             text: row.text,
             createdAt: row.createdAt,
@@ -655,12 +667,12 @@ export class SyncEngine {
         }))
     }
 
-    countScratchlistEntries(sessionId: string): number {
-        return this.store.scratchlist.count(sessionId)
+    async countScratchlistEntries(sessionId: string): Promise<number> {
+        return (await this.store.scratchlist.count(sessionId))
     }
 
-    sumScratchlistAttachmentBytes(sessionId: string): number {
-        return this.store.scratchlist.sumAttachmentBytes(sessionId)
+    async sumScratchlistAttachmentBytes(sessionId: string): Promise<number> {
+        return (await this.store.scratchlist.sumAttachmentBytes(sessionId))
     }
 
     /**
@@ -670,17 +682,17 @@ export class SyncEngine {
      * session that has hit `SCRATCHLIST_MAX_ENTRIES` would 409 when it
      * should 200 with the existing row.
      */
-    getScratchlistEntry(
+    async getScratchlistEntry(
         sessionId: string,
         entryId: string
-    ): {
+    ): Promise<{
         entryId: string
         text: string
         createdAt: number
         updatedAt: number
         attachments: import('@hapi/protocol').ScratchlistAttachmentMetadata[]
-    } | null {
-        const row = this.store.scratchlist.get(sessionId, entryId)
+    } | null> {
+        const row = (await this.store.scratchlist.get(sessionId, entryId))
         if (!row) return null
         return {
             entryId: row.entryId,
@@ -703,7 +715,7 @@ export class SyncEngine {
      * a hard error. Route layer maps duplicate → 200/conflict per its
      * own contract; this layer just reports it.
      */
-    createScratchlistEntry(
+    async createScratchlistEntry(
         sessionId: string,
         text: string,
         options?: {
@@ -711,7 +723,7 @@ export class SyncEngine {
             createdAt?: number
             attachments?: import('@hapi/protocol').ScratchlistAttachmentMetadata[]
         }
-    ): {
+    ): Promise<{
         outcome: 'created' | 'duplicate'
         entry: {
             entryId: string
@@ -720,13 +732,13 @@ export class SyncEngine {
             updatedAt: number
             attachments: import('@hapi/protocol').ScratchlistAttachmentMetadata[]
         }
-    } | { outcome: 'session-not-found' } {
-        const result = this.store.scratchlist.create(sessionId, text, options)
+    } | { outcome: 'session-not-found' }> {
+        const result = (await this.store.scratchlist.create(sessionId, text, options))
         if (result.outcome === 'session-not-found') {
             return result
         }
         if (result.outcome === 'created') {
-            this.sessionCache.emitScratchlistChanged(sessionId, result.entry.updatedAt)
+            await this.sessionCache.emitScratchlistChanged(sessionId, result.entry.updatedAt)
         }
         return {
             outcome: result.outcome,
@@ -740,23 +752,23 @@ export class SyncEngine {
         }
     }
 
-    updateScratchlistEntry(
+    async updateScratchlistEntry(
         sessionId: string,
         entryId: string,
         patch: {
             text?: string
             attachments?: import('@hapi/protocol').ScratchlistAttachmentMetadata[]
         }
-    ): {
+    ): Promise<{
         entryId: string
         text: string
         createdAt: number
         updatedAt: number
         attachments: import('@hapi/protocol').ScratchlistAttachmentMetadata[]
-    } | null {
-        const updated = this.store.scratchlist.update(sessionId, entryId, patch)
+    } | null> {
+        const updated = (await this.store.scratchlist.update(sessionId, entryId, patch))
         if (!updated) return null
-        this.sessionCache.emitScratchlistChanged(sessionId, updated.updatedAt)
+        await this.sessionCache.emitScratchlistChanged(sessionId, updated.updatedAt)
         return {
             entryId: updated.entryId,
             text: updated.text,
@@ -766,15 +778,15 @@ export class SyncEngine {
         }
     }
 
-    deleteScratchlistEntry(sessionId: string, entryId: string): boolean {
-        const existing = this.store.scratchlist.get(sessionId, entryId)
-        const removed = this.store.scratchlist.delete(sessionId, entryId)
+    async deleteScratchlistEntry(sessionId: string, entryId: string): Promise<boolean> {
+        const existing = (await this.store.scratchlist.get(sessionId, entryId))
+        const removed = (await this.store.scratchlist.delete(sessionId, entryId))
         if (removed && existing) {
             // Attachment ids may be shared across entries (direct REST).
             // Only delete blobs that no remaining entry still references.
             const remainingIds = new Set(
-                this.store.scratchlist
-                    .list(sessionId)
+                (await this.store.scratchlist
+                    .list(sessionId))
                     .flatMap((entry) => entry.attachments.map((att) => att.id))
             )
             const orphaned = existing.attachments.filter((att) => !remainingIds.has(att.id))
@@ -783,7 +795,7 @@ export class SyncEngine {
                     deleteScratchlistAttachmentFiles(getHapiHomeDir(), orphaned)
                 )
             }
-            this.sessionCache.emitScratchlistChanged(sessionId, Date.now())
+            await this.sessionCache.emitScratchlistChanged(sessionId, Date.now())
         }
         return removed
     }
@@ -909,8 +921,8 @@ export class SyncEngine {
         return { buffer: read.buffer, mimeType: 'application/octet-stream', filename: 'attachment' }
     }
 
-    handleMachineAlive(payload: { machineId: string; time: number; health?: unknown }): void {
-        this.machineCache.handleMachineAlive(payload)
+    async handleMachineAlive(payload: { machineId: string; time: number; health?: unknown }): Promise<void> {
+        await this.machineCache.handleMachineAlive(payload)
     }
 
     /**
@@ -923,7 +935,7 @@ export class SyncEngine {
         | { type: 'error'; message: string; code: 'machine_not_found' | 'machine_offline' | 'restart_unsupported' | 'restart_failed' }
     > {
         const machine = this.machineCache.getMachineByNamespace(machineId, namespace)
-            ?? this.machineCache.refreshMachine(machineId)
+            ?? (await this.machineCache.refreshMachine(machineId))
         if (!machine || machine.namespace !== namespace) {
             return { type: 'error', message: 'Machine not found', code: 'machine_not_found' }
         }
@@ -949,8 +961,8 @@ export class SyncEngine {
         }
     }
 
-    private expireInactive(): void {
-        const expired = this.sessionCache.expireInactive()
+    private async expireInactive(): Promise<void> {
+        const expired = (await this.sessionCache.expireInactive())
         // Sort by most recent first so dedup keeps the newest session when multiple
         // duplicates for the same agent thread expire in the same sweep.
         const sorted = expired
@@ -958,16 +970,16 @@ export class SyncEngine {
             .filter((s): s is NonNullable<typeof s> => s != null)
             .sort((a, b) => (b.activeAt - a.activeAt) || (b.updatedAt - a.updatedAt))
         for (const session of sorted) {
-            this.triggerDedupIfNeeded(session.id)
+            await this.triggerDedupIfNeeded(session.id)
         }
-        this.machineCache.expireInactive?.()
+        await this.machineCache.expireInactive?.()
         // tiann/hapi#1820: `activeAt` expiry above only catches sessions whose
         // socket went quiet. Keepalive-only zombies keep `activeAt` fresh
         // forever, so reconcile their agent-health signal separately.
-        this.sessionCache.reconcileKeepaliveIdle()
+        await this.sessionCache.reconcileKeepaliveIdle()
         // Piggybacked on the inactivity tick; not a logical part of expireInactive
         // but shares its 5s cadence (avoids a second timer).
-        this.messageService.releaseMatureScheduledMessages(Date.now(), this.historyActionsInFlight)
+        await this.messageService.releaseMatureScheduledMessages(Date.now(), this.historyActionsInFlight)
         void this.reconcileOpenCodeClears()
     }
 
@@ -977,30 +989,30 @@ export class SyncEngine {
             if (session.active || !operation) continue
             if (operation.state === 'reserved') continue
             if (operation.state === 'abort-needed') {
-                this.abortOpenCodeClearSession(session.id, session.namespace, operation.replacementSessionId, 'abort-needed')
+                await this.abortOpenCodeClearSession(session.id, session.namespace, operation.replacementSessionId, 'abort-needed')
                 continue
             }
             if (!['cleanup-confirmed', 'finalizing', 'pending', 'failed'].includes(operation.state)) continue
             if (session.metadata?.lifecycleState !== 'archived' || session.metadata.archiveReason !== 'Cleared by /clear') {
-                const result = this.store.sessions.updateSessionMetadata(session.id, {
+                const result = (await this.store.sessions.updateSessionMetadata(session.id, {
                     ...session.metadata,
                     lifecycleState: 'archived',
                     lifecycleStateSince: Date.now(),
                     archiveReason: 'Cleared by /clear'
-                }, session.metadataVersion, session.namespace, { touchUpdatedAt: false })
+                }, session.metadataVersion, session.namespace, { touchUpdatedAt: false }))
                 if (result.result !== 'success') continue
-                session = this.sessionCache.refreshSession(session.id) ?? session
+                session = (await this.sessionCache.refreshSession(session.id)) ?? session
             }
             await this.clearOpenCodeSession(session.id, session.namespace).catch(() => {})
         }
     }
 
-    private reloadAll(): void {
-        this.sessionCache.reloadAll()
-        this.machineCache.reloadAll()
+    private async reloadAll(): Promise<void> {
+        await this.sessionCache.reloadAll()
+        await this.machineCache.reloadAll()
     }
 
-    getOrCreateSession(
+    async getOrCreateSession(
         tag: string,
         metadata: unknown,
         agentState: unknown,
@@ -1009,8 +1021,8 @@ export class SyncEngine {
         effort?: string,
         modelReasoningEffort?: string,
         requestedId?: string
-    ): Session {
-        return this.sessionCache.getOrCreateSession(
+    ): Promise<Session> {
+        return (await this.sessionCache.getOrCreateSession(
             tag,
             metadata,
             agentState,
@@ -1019,10 +1031,10 @@ export class SyncEngine {
             effort,
             modelReasoningEffort,
             requestedId
-        )
+        ))
     }
 
-    adoptPreallocatedSession(
+    async adoptPreallocatedSession(
         id: string,
         tag: string,
         metadata: unknown,
@@ -1031,8 +1043,8 @@ export class SyncEngine {
         model?: string,
         effort?: string,
         modelReasoningEffort?: string
-    ): Session {
-        return this.sessionCache.adoptPreallocatedSession(
+    ): Promise<Session> {
+        return (await this.sessionCache.adoptPreallocatedSession(
             id,
             tag,
             metadata,
@@ -1041,11 +1053,11 @@ export class SyncEngine {
             model,
             effort,
             modelReasoningEffort
-        )
+        ))
     }
 
-    getOrCreateMachine(id: string, metadata: unknown, runnerState: unknown, namespace: string): Machine {
-        return this.machineCache.getOrCreateMachine(id, metadata, runnerState, namespace)
+    async getOrCreateMachine(id: string, metadata: unknown, runnerState: unknown, namespace: string): Promise<Machine> {
+        return (await this.machineCache.getOrCreateMachine(id, metadata, runnerState, namespace))
     }
 
     async sendMessage(
@@ -1070,22 +1082,22 @@ export class SyncEngine {
             throw new Error('Conversation history action already in progress')
         }
         const { actualSessionId, createdAt: activeTurnStartedAt } = await this.messageService.sendMessage(sessionId, payload)
-        this.sessionCache.markMessageQueued(actualSessionId, Date.now(), activeTurnStartedAt)
-        this.sessionCache.recordSessionActivity(actualSessionId, Date.now())
+        await this.sessionCache.markMessageQueued(actualSessionId, Date.now(), activeTurnStartedAt)
+        await this.sessionCache.recordSessionActivity(actualSessionId, Date.now())
     }
 
     async cancelQueuedMessage(
         sessionId: string,
         messageId: string
     ): Promise<CancelQueuedMessageResult> {
-        return this.messageService.cancelQueuedMessage(sessionId, messageId)
+        return (this.messageService.cancelQueuedMessage(sessionId, messageId))
     }
 
     async retryIndeterminateMessage(
         sessionId: string,
         messageId: string
     ): Promise<RetryIndeterminateMessageResult> {
-        return this.messageService.retryIndeterminateMessage(sessionId, messageId)
+        return (this.messageService.retryIndeterminateMessage(sessionId, messageId))
     }
 
     /**
@@ -1099,7 +1111,7 @@ export class SyncEngine {
         sessionId: string,
         messageId: string
     ): Promise<SteerQueuedMessageResponse> {
-        const session = this.getSession(sessionId)
+        const session = (await this.getSession(sessionId))
         if (!session) {
             return { status: 'failed', error: 'Session not found', localId: null }
         }
@@ -1110,7 +1122,7 @@ export class SyncEngine {
             return { status: 'failed', error: 'Steering is only available for remote sessions', localId: null }
         }
 
-        const lookup = this.store.messages.lookupQueuedMessage(sessionId, messageId)
+        const lookup = (await this.store.messages.lookupQueuedMessage(sessionId, messageId))
         if (lookup.status === 'absent') {
             return { status: 'failed', error: 'Message not found', localId: null }
         }
@@ -1156,8 +1168,8 @@ export class SyncEngine {
         }
     }
 
-    sweepImmediateQueuedOnSessionEnd(sessionId: string, invokedAt: number): void {
-        this.messageService.sweepImmediateQueuedOnSessionEnd(sessionId, invokedAt)
+    async sweepImmediateQueuedOnSessionEnd(sessionId: string, invokedAt: number): Promise<void> {
+        await this.messageService.sweepImmediateQueuedOnSessionEnd(sessionId, invokedAt)
     }
 
     async approvePermission(
@@ -1183,7 +1195,7 @@ export class SyncEngine {
         await this.rpcGateway.abortSession(sessionId)
     }
 
-    private assertConversationHistoryIdle(session: Session): void {
+    private async assertConversationHistoryIdle(session: Session): Promise<void> {
         if (!session.active) {
             throw new Error('Session must be active')
         }
@@ -1196,15 +1208,15 @@ export class SyncEngine {
         if (session.metadata?.conversationHistoryDiverged === true) {
             throw new Error('Conversation history is diverged; refuse further fork/rewind')
         }
-        const queued = this.store.messages.getUninvokedLocalMessages(session.id)
+        const queued = (await this.store.messages.getUninvokedLocalMessages(session.id))
         if (queued.length > 0) {
             throw new Error('Session has queued messages')
         }
     }
 
     /** Stale localIds must fail before native fork/rewind mutates agent history. */
-    private assertInvokedHistoryBoundary(sessionId: string, messageLocalId: string): void {
-        const boundary = this.store.messages.getAllMessages(sessionId).find(
+    private async assertInvokedHistoryBoundary(sessionId: string, messageLocalId: string): Promise<void> {
+        const boundary = (await this.store.messages.getAllMessages(sessionId)).find(
             (message) => message.localId === messageLocalId && message.invokedAt != null
         )
         if (!boundary) {
@@ -1223,7 +1235,7 @@ export class SyncEngine {
     ): Promise<boolean> {
         const startedAt = Date.now()
         while (Date.now() - startedAt < timeoutMs) {
-            this.sessionCache.refreshSession(childId)
+            await this.sessionCache.refreshSession(childId)
             const child = this.sessionCache.getSession(childId)
             const boundId = child?.metadata?.claudeSessionId
             if (
@@ -1256,7 +1268,7 @@ export class SyncEngine {
     ): Promise<boolean> {
         const startedAt = Date.now()
         while (Date.now() - startedAt < timeoutMs) {
-            this.sessionCache.refreshSession(childId)
+            await this.sessionCache.refreshSession(childId)
             const child = this.sessionCache.getSession(childId)
             const boundId = child?.metadata?.[metadataKey]
             if (typeof boundId === 'string' && boundId.length > 0) {
@@ -1272,14 +1284,14 @@ export class SyncEngine {
     }
 
     /** Drop history locators that no longer have a corresponding message row. */
-    private scrubHistoryLocators(sessionId: string, namespace: string): void {
+    private async scrubHistoryLocators(sessionId: string, namespace: string): Promise<void> {
         const remainingLocalIds = new Set(
-            this.store.messages.getAllMessages(sessionId)
+            (await this.store.messages.getAllMessages(sessionId))
                 .flatMap((message) => (message.localId ? [message.localId] : []))
         )
         for (let attempt = 0; attempt < 3; attempt += 1) {
             const session = this.sessionCache.getSessionByNamespace(sessionId, namespace)
-                ?? this.sessionCache.refreshSession(sessionId)
+                ?? (await this.sessionCache.refreshSession(sessionId))
             if (!session?.metadata) return
 
             const nextMetadata: Record<string, unknown> = { ...session.metadata }
@@ -1347,42 +1359,42 @@ export class SyncEngine {
 
             if (!changed) return
 
-            const result = this.store.sessions.updateSessionMetadata(
+            const result = (await this.store.sessions.updateSessionMetadata(
                 sessionId,
                 nextMetadata,
                 session.metadataVersion,
                 namespace,
                 { touchUpdatedAt: false }
-            )
+            ))
             if (result.result === 'success') {
-                this.sessionCache.refreshSession(sessionId)
+                await this.sessionCache.refreshSession(sessionId)
                 return
             }
             if (result.result !== 'version-mismatch') return
-            this.sessionCache.refreshSession(sessionId)
+            await this.sessionCache.refreshSession(sessionId)
         }
     }
 
-    private markConversationHistoryDiverged(sessionId: string, namespace: string): void {
+    private async markConversationHistoryDiverged(sessionId: string, namespace: string): Promise<void> {
         for (let attempt = 0; attempt < 3; attempt += 1) {
             const session = this.sessionCache.getSessionByNamespace(sessionId, namespace)
-                ?? this.sessionCache.refreshSession(sessionId)
+                ?? (await this.sessionCache.refreshSession(sessionId))
             if (!session?.metadata) return
             if (session.metadata.conversationHistoryDiverged === true) return
 
-            const result = this.store.sessions.updateSessionMetadata(
+            const result = (await this.store.sessions.updateSessionMetadata(
                 sessionId,
                 { ...session.metadata, conversationHistoryDiverged: true },
                 session.metadataVersion,
                 namespace,
                 { touchUpdatedAt: false }
-            )
+            ))
             if (result.result === 'success') {
-                this.sessionCache.refreshSession(sessionId)
+                await this.sessionCache.refreshSession(sessionId)
                 return
             }
             if (result.result !== 'version-mismatch') return
-            this.sessionCache.refreshSession(sessionId)
+            await this.sessionCache.refreshSession(sessionId)
         }
     }
 
@@ -1407,13 +1419,13 @@ export class SyncEngine {
         namespace: string,
         messageLocalId?: string
     ): Promise<{ type: 'success'; sessionId: string } | { type: 'error'; message: string }> {
-        const access = this.resolveSessionAccess(sessionId, namespace)
+        const access = (await this.resolveSessionAccess(sessionId, namespace))
         if (!access.ok) {
             return { type: 'error', message: access.reason === 'not-found' ? 'Session not found' : 'Access denied' }
         }
         let source = access.session
         try {
-            this.assertConversationHistoryIdle(source)
+            await this.assertConversationHistoryIdle(source)
         } catch (error) {
             return { type: 'error', message: error instanceof Error ? error.message : String(error) }
         }
@@ -1424,7 +1436,7 @@ export class SyncEngine {
                 return { type: 'error', message: 'Historical fork is not supported for this session' }
             }
             try {
-                this.assertInvokedHistoryBoundary(sessionId, messageLocalId)
+                await this.assertInvokedHistoryBoundary(sessionId, messageLocalId)
             } catch (error) {
                 return { type: 'error', message: error instanceof Error ? error.message : String(error) }
             }
@@ -1459,7 +1471,7 @@ export class SyncEngine {
 
         // Native fork RPC can race CLI metadata/transcript updates. Construct
         // the child only from a fresh source snapshot, never the pre-RPC row.
-        const refreshedSource = this.sessionCache.refreshSession(sessionId)
+        const refreshedSource = (await this.sessionCache.refreshSession(sessionId))
         if (!refreshedSource || refreshedSource.namespace !== namespace) {
             return { type: 'error', message: 'Source session disappeared after native fork' }
         }
@@ -1469,7 +1481,7 @@ export class SyncEngine {
         const childId = randomUUID()
         let prefix
         try {
-            prefix = selectForkTranscriptPrefix(this.store.messages.getAllMessages(sessionId), messageLocalId)
+            prefix = selectForkTranscriptPrefix((await this.store.messages.getAllMessages(sessionId)), messageLocalId)
         } catch (error) {
             return { type: 'error', message: error instanceof Error ? error.message : String(error) }
         }
@@ -1523,7 +1535,7 @@ export class SyncEngine {
         let childCreated = false
         let spawnAttempted = false
         try {
-            this.sessionCache.getOrCreateSession(
+            await this.sessionCache.getOrCreateSession(
                 `fork:${childId}`,
                 childMetadata,
                 null,
@@ -1537,7 +1549,7 @@ export class SyncEngine {
 
             // Native fork keeps agent context, but the new HAPI row starts empty.
             // Hydrate the transcript prefix so web navigation is not a blank thread.
-            this.store.messages.copyMessagesToSession(
+            await this.store.messages.copyMessagesToSession(
                 childId,
                 prefix.map((message) => ({
                     content: message.content,
@@ -1547,8 +1559,8 @@ export class SyncEngine {
                     scheduledAt: message.scheduledAt
                 }))
             )
-            this.sessionCache.rebuildTodosFromTranscript(childId)
-            this.sessionCache.refreshSession(childId)
+            await this.sessionCache.rebuildTodosFromTranscript(childId)
+            await this.sessionCache.refreshSession(childId)
 
             spawnAttempted = true
             const spawn = await this.rpcGateway.spawnSession(
@@ -1632,9 +1644,9 @@ export class SyncEngine {
                 throw new Error('Fork child termination was not confirmed')
             }
         }
-        const child = this.sessionCache.refreshSession(childId)
+        const child = (await this.sessionCache.refreshSession(childId))
         if (child?.active) {
-            this.handleSessionEnd({ sid: childId, time: Date.now(), reason: 'error' })
+            await this.handleSessionEnd({ sid: childId, time: Date.now(), reason: 'error' })
         }
         await this.deleteSession(childId)
     }
@@ -1660,13 +1672,13 @@ export class SyncEngine {
         namespace: string,
         messageLocalId: string
     ): Promise<{ type: 'success' } | { type: 'error'; message: string; code?: RewindConversationErrorCode; hydrateFailed?: boolean }> {
-        const access = this.resolveSessionAccess(sessionId, namespace)
+        const access = (await this.resolveSessionAccess(sessionId, namespace))
         if (!access.ok) {
             return { type: 'error', message: access.reason === 'not-found' ? 'Session not found' : 'Access denied' }
         }
         const session = access.session
         try {
-            this.assertConversationHistoryIdle(session)
+            await this.assertConversationHistoryIdle(session)
         } catch (error) {
             return { type: 'error', message: error instanceof Error ? error.message : String(error) }
         }
@@ -1674,7 +1686,7 @@ export class SyncEngine {
             return { type: 'error', message: 'Rewind is not supported for this session' }
         }
         try {
-            this.assertInvokedHistoryBoundary(sessionId, messageLocalId)
+            await this.assertInvokedHistoryBoundary(sessionId, messageLocalId)
         } catch (error) {
             return { type: 'error', message: error instanceof Error ? error.message : String(error) }
         }
@@ -1684,7 +1696,7 @@ export class SyncEngine {
             rpcResult = await this.rpcGateway.rewindConversation(sessionId, { messageLocalId })
         } catch (error) {
             if (!(error instanceof RpcTargetMissingError)) {
-                this.markConversationHistoryDiverged(sessionId, namespace)
+                await this.markConversationHistoryDiverged(sessionId, namespace)
                 return {
                     type: 'error',
                     hydrateFailed: true,
@@ -1703,25 +1715,25 @@ export class SyncEngine {
         }
 
         try {
-            this.store.messages.truncateMessagesFromLocalId(
+            await this.store.messages.truncateMessagesFromLocalId(
                 sessionId,
                 rpcResult.truncateFromLocalId ?? messageLocalId,
                 rpcResult.messages ?? []
             )
-            this.scrubHistoryLocators(sessionId, namespace)
-            this.sessionCache.rebuildTodosFromTranscript(sessionId)
-            this.eventPublisher.emit({
+            await this.scrubHistoryLocators(sessionId, namespace)
+            await this.sessionCache.rebuildTodosFromTranscript(sessionId)
+            await this.eventPublisher.emit({
                 type: 'messages-invalidated',
                 sessionId,
                 namespace,
                 reason: 'rewind',
                 truncateFromLocalId: rpcResult.truncateFromLocalId ?? messageLocalId
             })
-            this.sessionCache.refreshSession(sessionId)
+            await this.sessionCache.refreshSession(sessionId)
             return { type: 'success' }
         } catch (error) {
             // Native history already changed; refuse further history actions until repaired.
-            this.markConversationHistoryDiverged(sessionId, namespace)
+            await this.markConversationHistoryDiverged(sessionId, namespace)
             return {
                 type: 'error',
                 message: error instanceof Error ? error.message : String(error),
@@ -1812,7 +1824,7 @@ export class SyncEngine {
             // A late-booting child that later hits reopen must not resurrect: CLI
             // bootstrapExistingSession refuses archived rows (#1911 cold-read M1).
             if (status === 'unknown') {
-                const stored = this.store.sessions.getSession(sessionId)
+                const stored = (await this.store.sessions.getSession(sessionId))
                 if (
                     stored
                     && isMachineSpawnPreallocatedStub(stored)
@@ -1840,7 +1852,7 @@ export class SyncEngine {
         // hub-author the metadata so we do not leave lifecycleState=running.
         const lifecycleState = this.sessionCache.getSession(sessionId)?.metadata?.lifecycleState
         if (lifecycleState !== 'archived') {
-            this.sessionCache.markSessionArchivedFromHub(
+            await this.sessionCache.markSessionArchivedFromHub(
                 sessionId,
                 cliUnreachable
                     ? 'Archived from hub (CLI unreachable)'
@@ -1848,7 +1860,7 @@ export class SyncEngine {
             )
             this.emitCliSessionMetadataUpdate(sessionId)
         }
-        this.handleSessionEnd({ sid: sessionId, time: Date.now() })
+        await this.handleSessionEnd({ sid: sessionId, time: Date.now() })
     }
 
     /**
@@ -1887,14 +1899,14 @@ export class SyncEngine {
      * succeeds. Kept on the engine (not on the migrator) so that all hapi.db
      * writes funnel through the existing cache-refresh path.
      */
-    flipCursorSessionProtocolToAcp(
+    async flipCursorSessionProtocolToAcp(
         sessionId: string,
         namespace: string,
         lastUsedModel: string | null
-    ): { result: 'success' | 'version-mismatch' | 'not-found' | 'session-active' } {
+    ): Promise<{ result: 'success' | 'version-mismatch' | 'not-found' | 'session-active' }> {
         for (let attempt = 0; attempt < 2; attempt += 1) {
             const latest = this.sessionCache.getSessionByNamespace(sessionId, namespace)
-                ?? this.sessionCache.refreshSession(sessionId)
+                ?? (await this.sessionCache.refreshSession(sessionId))
             if (!latest?.metadata) {
                 return { result: 'not-found' }
             }
@@ -1947,24 +1959,24 @@ export class SyncEngine {
             if (carriedMigrationState !== undefined) {
                 delete nextMetadata.cursorMigrationState
             }
-            const result = this.store.sessions.updateSessionMetadata(
+            const result = (await this.store.sessions.updateSessionMetadata(
                 sessionId,
                 nextMetadata,
                 latest.metadataVersion,
                 namespace,
                 { touchUpdatedAt: false }
-            )
+            ))
             if (result.result === 'version-mismatch') {
-                this.sessionCache.refreshSession(sessionId)
+                await this.sessionCache.refreshSession(sessionId)
                 continue
             }
             if (result.result !== 'success') {
                 return { result: 'not-found' }
             }
-            this.sessionCache.refreshSession(sessionId)
+            await this.sessionCache.refreshSession(sessionId)
             if (lastUsedModel && lastUsedModel.trim().length > 0) {
-                this.store.sessions.setSessionModel(sessionId, lastUsedModel.trim(), namespace, { touchUpdatedAt: false })
-                this.sessionCache.refreshSession(sessionId)
+                await this.store.sessions.setSessionModel(sessionId, lastUsedModel.trim(), namespace, { touchUpdatedAt: false })
+                await this.sessionCache.refreshSession(sessionId)
             }
             return { result: 'success' }
         }
@@ -1982,7 +1994,7 @@ export class SyncEngine {
         request: CursorMigrateToAcpRequest
     ): Promise<CursorMigrateOutcome> {
         const session = this.sessionCache.getSessionByNamespace(sessionId, namespace)
-            ?? this.sessionCache.refreshSession(sessionId)
+            ?? (await this.sessionCache.refreshSession(sessionId))
         if (!session) {
             return { ok: false, sessionId, reason: 'internal_error', message: 'session not found in namespace', durationMs: 0 }
         }
@@ -2015,8 +2027,8 @@ export class SyncEngine {
                     cursorSessionProtocol: typeof s.metadata?.cursorSessionProtocol === 'string' ? s.metadata.cursorSessionProtocol : undefined
                 }
             },
-            updateSessionAfterMigrate: (sessionId, namespace, lastUsedModel) => {
-                const result = this.flipCursorSessionProtocolToAcp(sessionId, namespace, lastUsedModel)
+            updateSessionAfterMigrate: async (sessionId, namespace, lastUsedModel) => {
+                const result = (await this.flipCursorSessionProtocolToAcp(sessionId, namespace, lastUsedModel))
                 if (result.result === 'success') return { ok: true }
                 if (result.result === 'session-active') return { ok: false, reason: 'session_active' as const }
                 return { ok: false, reason: 'version_mismatch_or_missing' as const }
@@ -2026,9 +2038,9 @@ export class SyncEngine {
             // count. The store-handle stays on the engine; we only thread
             // the count through so the migrator stays free of a direct
             // hub.Store dependency.
-            getHapiMessageCount: (sessionId, _namespace) => {
+            getHapiMessageCount: async (sessionId, _namespace) => {
                 try {
-                    return this.store.messages.countMessages(sessionId)
+                    return (await this.store.messages.countMessages(sessionId))
                 } catch (err) {
                     // tiann/hapi#873 cold review: a silent 0 here trips
                     // the migrator's "skip sanity" branch and chronically
@@ -2049,7 +2061,7 @@ export class SyncEngine {
         if (!source.metadata?.capabilities?.concurrentClients || id === source.id) return null
         const deadline = Date.now() + 5_000
         do {
-            const child = this.sessionCache.refreshSession(id)
+            const child = (await this.sessionCache.refreshSession(id))
             if (child && child.namespace === source.namespace
                 && child.metadata?.machineId === source.metadata.machineId
                 && child.metadata?.hostPid === source.metadata.hostPid
@@ -2061,7 +2073,7 @@ export class SyncEngine {
     }
 
     async clearConversation(sessionId: string, namespace: string): Promise<{ sessionId: string }> {
-        const access = this.sessionCache.resolveSessionAccess(sessionId, namespace)
+        const access = (await this.sessionCache.resolveSessionAccess(sessionId, namespace))
         if (!access.ok || !access.session.active || !access.session.metadata?.capabilities?.concurrentClients) {
             throw new Error('Clear requires an active shared session')
         }
@@ -2073,7 +2085,7 @@ export class SyncEngine {
     }
 
     async implementCodexPlan(sessionId: string, namespace: string, planId: string): Promise<ImplementCodexPlanResult> {
-        const access = this.sessionCache.resolveSessionAccess(sessionId, namespace)
+        const access = (await this.sessionCache.resolveSessionAccess(sessionId, namespace))
         if (!access.ok || !access.session.active || access.session.metadata?.flavor !== 'codex'
             || !access.session.metadata.capabilities?.concurrentClients) {
             return { ok: false, code: 'unavailable', error: 'Plan implementation requires an active shared Codex session' }
@@ -2084,7 +2096,7 @@ export class SyncEngine {
     }
 
     async switchSession(sessionId: string, to: 'remote' | 'local'): Promise<void> {
-        if (this.getSession(sessionId)?.metadata?.capabilities?.concurrentClients) throw new Error('control_mode_not_applicable')
+        if ((await this.getSession(sessionId))?.metadata?.capabilities?.concurrentClients) throw new Error('control_mode_not_applicable')
         if (this.historyActionsInFlight.has(sessionId)) {
             throw new Error('Conversation history action already in progress')
         }
@@ -2124,7 +2136,7 @@ export class SyncEngine {
             // For inactive sessions, update the in-memory cache directly without
             // an RPC call — the CLI is not running yet. The updated value will be
             // passed to the spawned process when the session is resumed.
-            this.sessionCache.applySessionConfig(sessionId, config)
+            await this.sessionCache.applySessionConfig(sessionId, config)
             return
         }
 
@@ -2159,7 +2171,7 @@ export class SyncEngine {
             }
         }
 
-        this.sessionCache.applySessionConfig(sessionId, applied)
+        await this.sessionCache.applySessionConfig(sessionId, applied)
     }
 
     async spawnSession(
@@ -2194,7 +2206,7 @@ export class SyncEngine {
             const machine = this.getMachineByNamespace(machineId, namespace)
                 ?? this.getMachine(machineId)
             allocatedSessionId = randomUUID()
-            this.sessionCache.getOrCreateSession(
+            await this.sessionCache.getOrCreateSession(
                 `machine-spawn:${allocatedSessionId}`,
                 {
                     path: directory,
@@ -2253,12 +2265,12 @@ export class SyncEngine {
             const deleteStubIfStillPrealloc = async (): Promise<void> => {
                 try {
                     // Session wire type has no tag — read the store row for stub check.
-                    const stored = this.store.sessions.getSession(allocatedSessionId!)
+                    const stored = (await this.store.sessions.getSession(allocatedSessionId!))
                     if (!stored || !isMachineSpawnPreallocatedStub(stored)) return
-                    const row = this.sessionCache.refreshSession(allocatedSessionId!)
+                    const row = (await this.sessionCache.refreshSession(allocatedSessionId!))
                     if (!row) return
                     if (row.active) {
-                        this.handleSessionEnd({ sid: allocatedSessionId!, time: Date.now(), reason: 'error' })
+                        await this.handleSessionEnd({ sid: allocatedSessionId!, time: Date.now(), reason: 'error' })
                     }
                     await this.deleteSession(allocatedSessionId!)
                 } catch {
@@ -2314,7 +2326,7 @@ export class SyncEngine {
             return await existing
         }
 
-        const task = this.clearOpenCodeSessionOnce(sessionId, namespace)
+        const task = (this.clearOpenCodeSessionOnce(sessionId, namespace))
         this.opencodeClearTails.set(clearTailKey, task)
         try {
             return await task
@@ -2325,8 +2337,8 @@ export class SyncEngine {
         }
     }
 
-    reserveOpenCodeClearSession(sessionId: string, namespace: string): ClearOpencodeSessionResult {
-        const access = this.sessionCache.resolveSessionAccess(sessionId, namespace)
+    async reserveOpenCodeClearSession(sessionId: string, namespace: string): Promise<ClearOpencodeSessionResult> {
+        const access = (await this.sessionCache.resolveSessionAccess(sessionId, namespace))
         if (!access.ok) {
             return { type: 'error', message: access.reason === 'access-denied' ? 'Session access denied' : 'Session not found', code: access.reason === 'access-denied' ? 'access_denied' : 'session_not_found' }
         }
@@ -2339,7 +2351,7 @@ export class SyncEngine {
         const operation = !existing || existing.state === 'aborted'
             ? { replacementSessionId: randomUUID(), state: 'reserved' as const, updatedAt: Date.now() }
             : existing
-        if (operation !== existing && !this.persistClearOperation(sessionId, namespace, operation)) {
+        if (operation !== existing && !(await this.persistClearOperation(sessionId, namespace, operation))) {
             return { type: 'error', message: 'Could not persist the OpenCode clear reservation', code: 'replacement_link_failed' }
         }
         const replacementMetadata = { ...metadata }
@@ -2352,19 +2364,19 @@ export class SyncEngine {
         delete replacementMetadata.archiveReason
         replacementMetadata.startedFromRunner = true
         replacementMetadata.startedBy = 'runner'
-        this.getOrCreateSession(`opencode-clear-replacement:${operation.replacementSessionId}`, replacementMetadata, null, namespace,
+        await this.getOrCreateSession(`opencode-clear-replacement:${operation.replacementSessionId}`, replacementMetadata, null, namespace,
             source.model ?? undefined, source.effort ?? undefined, source.modelReasoningEffort ?? undefined, operation.replacementSessionId)
         return { type: 'success', sessionId: operation.replacementSessionId }
     }
 
-    abortOpenCodeClearSession(
+    async abortOpenCodeClearSession(
         sessionId: string,
         namespace: string,
         replacementSessionId: string,
         expectedState: 'reserved' | 'abort-needed' = 'reserved',
         requireInactive: boolean = false
-    ): ClearOpencodeSessionResult {
-        const access = this.sessionCache.resolveSessionAccess(sessionId, namespace)
+    ): Promise<ClearOpencodeSessionResult> {
+        const access = (await this.sessionCache.resolveSessionAccess(sessionId, namespace))
         if (!access.ok) return { type: 'error', message: 'Session not found', code: access.reason === 'access-denied' ? 'access_denied' : 'session_not_found' }
         const operation = access.session.metadata?.opencodeClearOperation
         if (!operation) return { type: 'error', message: 'Clear reservation not found', code: 'clear_unavailable' }
@@ -2372,39 +2384,39 @@ export class SyncEngine {
             if (replacementSessionId !== operation.replacementSessionId) {
                 return { type: 'error', message: 'Clear reservation not found', code: 'clear_unavailable' }
             }
-            this.sessionCache.refreshConversationContent(operation.replacementSessionId)
+            await this.sessionCache.refreshConversationContent(operation.replacementSessionId)
             return { type: 'success', sessionId }
         }
         const required = { replacementSessionId, state: expectedState, requireInactive }
         for (let attempt = 0; attempt < 3; attempt += 1) {
-            const latest = this.sessionCache.getSessionByNamespace(sessionId, namespace) ?? this.sessionCache.refreshSession(sessionId)
+            const latest = this.sessionCache.getSessionByNamespace(sessionId, namespace) ?? (await this.sessionCache.refreshSession(sessionId))
             if (!latest?.metadata) break
             const current = latest.metadata.opencodeClearOperation
             if (!current) break
             if (current.replacementSessionId === required.replacementSessionId && current.state === 'aborted') {
-                this.sessionCache.refreshConversationContent(current.replacementSessionId)
+                await this.sessionCache.refreshConversationContent(current.replacementSessionId)
                 return { type: 'success', sessionId }
             }
             if ((required.requireInactive && latest.active)
                 || current.replacementSessionId !== required.replacementSessionId
                 || current.state !== required.state) break
-            const result = this.store.abortOpenCodeClearOperation(sessionId, current.replacementSessionId, {
+            const result = (await this.store.abortOpenCodeClearOperation(sessionId, current.replacementSessionId, {
                 ...latest.metadata,
                 opencodeClearOperation: { ...current, state: 'aborted', updatedAt: Date.now(), error: undefined }
-            }, latest.metadataVersion, namespace, required)
+            }, latest.metadataVersion, namespace, required))
             if (result.result === 'success') {
-                this.sessionCache.refreshSession(sessionId)
-                this.sessionCache.refreshConversationContent(current.replacementSessionId)
+                await this.sessionCache.refreshSession(sessionId)
+                await this.sessionCache.refreshConversationContent(current.replacementSessionId)
                 return { type: 'success', sessionId }
             }
             if (result.result !== 'version-mismatch') break
-            this.sessionCache.refreshSession(sessionId)
+            await this.sessionCache.refreshSession(sessionId)
         }
         return { type: 'error', message: 'Could not abort clear reservation', code: 'replacement_link_failed' }
     }
 
-    confirmOpenCodeClearCleanup(sessionId: string, namespace: string, replacementSessionId: string): ClearOpencodeSessionResult {
-        const access = this.sessionCache.resolveSessionAccess(sessionId, namespace)
+    async confirmOpenCodeClearCleanup(sessionId: string, namespace: string, replacementSessionId: string): Promise<ClearOpencodeSessionResult> {
+        const access = (await this.sessionCache.resolveSessionAccess(sessionId, namespace))
         if (!access.ok) return { type: 'error', message: 'Session not found', code: access.reason === 'access-denied' ? 'access_denied' : 'session_not_found' }
         const operation = access.session.metadata?.opencodeClearOperation
         if (!operation) return { type: 'error', message: 'Clear reservation not found', code: 'clear_unavailable' }
@@ -2413,14 +2425,14 @@ export class SyncEngine {
         }
         if (operation.state !== 'reserved') return { type: 'error', message: 'Clear reservation not found', code: 'clear_unavailable' }
         if (operation.replacementSessionId !== replacementSessionId) return { type: 'error', message: 'Clear reservation not found', code: 'clear_unavailable' }
-        if (!this.transitionClearOperation(sessionId, namespace, operation, 'cleanup-confirmed')) {
+        if (!(await this.transitionClearOperation(sessionId, namespace, operation, 'cleanup-confirmed'))) {
             return { type: 'error', message: 'Could not confirm native cleanup', code: 'replacement_link_failed' }
         }
         return { type: 'success', sessionId: operation.replacementSessionId }
     }
 
     private async clearOpenCodeSessionOnce(sessionId: string, namespace: string): Promise<ClearOpencodeSessionResult> {
-        const access = this.sessionCache.resolveSessionAccess(sessionId, namespace)
+        const access = (await this.sessionCache.resolveSessionAccess(sessionId, namespace))
         if (!access.ok) {
             return {
                 type: 'error',
@@ -2476,7 +2488,7 @@ export class SyncEngine {
                 state: 'pending' as const,
                 updatedAt: Date.now()
             }
-            if (!this.persistClearOperation(sessionId, namespace, operation)) {
+            if (!(await this.persistClearOperation(sessionId, namespace, operation))) {
                 return {
                     type: 'error',
                     message: 'Could not persist the OpenCode clear replacement operation',
@@ -2485,7 +2497,7 @@ export class SyncEngine {
             }
         } else if (operation.state === 'failed') {
             operation = { ...operation, state: 'pending', updatedAt: Date.now(), error: undefined }
-            if (!this.persistClearOperation(sessionId, namespace, operation)) {
+            if (!(await this.persistClearOperation(sessionId, namespace, operation))) {
                 return {
                     type: 'error',
                     message: 'Could not resume the OpenCode clear replacement operation',
@@ -2499,7 +2511,7 @@ export class SyncEngine {
         }
         if (operation.state === 'cleanup-confirmed') {
             operation = { ...operation, state: 'finalizing', updatedAt: Date.now() }
-            if (!this.persistClearOperation(sessionId, namespace, operation)) {
+            if (!(await this.persistClearOperation(sessionId, namespace, operation))) {
                 return { type: 'error', message: 'Could not finalize the OpenCode clear reservation', code: 'replacement_link_failed' }
             }
         }
@@ -2518,7 +2530,7 @@ export class SyncEngine {
         // bootstrapExistingSession requires an existing row. The stable id lets
         // a runner coalesce retries only while its spawned child remains alive;
         // replacement.active is the durable cross-runner reconciliation signal.
-        const replacement = this.getOrCreateSession(
+        const replacement = (await this.getOrCreateSession(
             `opencode-clear-replacement:${operation.replacementSessionId}`,
             replacementMetadata,
             null,
@@ -2527,12 +2539,12 @@ export class SyncEngine {
             source.effort ?? undefined,
             source.modelReasoningEffort ?? undefined,
             operation.replacementSessionId
-        )
+        ))
 
         // A previous request can have spawned the target but lost the source
         // link acknowledgement. Do not ask the runner again in that case.
         if (replacement.active) {
-            return this.finishOpenCodeClear(sessionId, namespace, operation.replacementSessionId, operation)
+            return (await this.finishOpenCodeClear(sessionId, namespace, operation.replacementSessionId, operation))
         }
 
         // Do not supply a native OpenCode resume id. existingSessionId is only
@@ -2554,24 +2566,24 @@ export class SyncEngine {
             source.collaborationMode
         )
         if (spawned.type === 'error') {
-            this.persistClearOperationState(sessionId, namespace, operation, spawned.message)
+            await this.persistClearOperationState(sessionId, namespace, operation, spawned.message)
             return { type: 'error', message: spawned.message, code: 'spawn_failed' }
         }
         if (spawned.sessionId !== operation.replacementSessionId) {
             const message = 'Runner returned an unexpected OpenCode clear replacement id'
-            this.persistClearOperationState(sessionId, namespace, operation, message)
+            await this.persistClearOperationState(sessionId, namespace, operation, message)
             return { type: 'error', message, code: 'spawn_failed' }
         }
 
-        return this.finishOpenCodeClear(sessionId, namespace, operation.replacementSessionId, operation)
+        return (await this.finishOpenCodeClear(sessionId, namespace, operation.replacementSessionId, operation))
     }
 
-    private finishOpenCodeClear(
+    private async finishOpenCodeClear(
         sessionId: string,
         namespace: string,
         replacementSessionId: string,
         operation: NonNullable<Session['metadata']>['opencodeClearOperation']
-    ): ClearOpencodeSessionResult {
+    ): Promise<ClearOpencodeSessionResult> {
         if (!operation) {
             return {
                 type: 'error',
@@ -2580,99 +2592,99 @@ export class SyncEngine {
             }
         }
         try {
-            const moved = this.store.messages.moveUninvokedMessages(sessionId, replacementSessionId)
+            const moved = (await this.store.messages.moveUninvokedMessages(sessionId, replacementSessionId))
             if (moved > 0) {
-                this.eventPublisher.emit({ type: 'messages-invalidated', sessionId })
-                this.eventPublisher.emit({ type: 'messages-invalidated', sessionId: replacementSessionId })
+                await this.eventPublisher.emit({ type: 'messages-invalidated', sessionId })
+                await this.eventPublisher.emit({ type: 'messages-invalidated', sessionId: replacementSessionId })
             }
         } catch (error) {
             const message = error instanceof Error ? error.message : 'Could not move scheduled prompts to the fresh OpenCode session'
-            this.persistClearOperationState(sessionId, namespace, operation, message)
+            await this.persistClearOperationState(sessionId, namespace, operation, message)
             return { type: 'error', message, code: 'replacement_link_failed' }
         }
-        if (!this.persistClearReplacement(sessionId, namespace, replacementSessionId, operation)) {
+        if (!(await this.persistClearReplacement(sessionId, namespace, replacementSessionId, operation))) {
             const message = 'Fresh OpenCode session started but the archived source could not be linked'
-            this.persistClearOperationState(sessionId, namespace, operation, message)
+            await this.persistClearOperationState(sessionId, namespace, operation, message)
             return {
                 type: 'error',
                 message,
                 code: 'replacement_link_failed'
             }
         }
-        this.messageService.releaseDeliverableQueuedMessages(replacementSessionId)
+        await this.messageService.releaseDeliverableQueuedMessages(replacementSessionId)
         return { type: 'success', sessionId: replacementSessionId }
     }
 
-    private transitionClearOperation(
+    private async transitionClearOperation(
         sessionId: string,
         namespace: string,
         expected: NonNullable<NonNullable<Session['metadata']>['opencodeClearOperation']>,
         state: 'abort-needed' | 'cleanup-confirmed'
-    ): boolean {
+    ): Promise<boolean> {
         for (let attempt = 0; attempt < 3; attempt += 1) {
             const latest = this.sessionCache.getSessionByNamespace(sessionId, namespace)
-                ?? this.sessionCache.refreshSession(sessionId)
+                ?? (await this.sessionCache.refreshSession(sessionId))
             if (!latest?.metadata) return false
             const current = latest.metadata.opencodeClearOperation
             if (current?.replacementSessionId === expected.replacementSessionId && current.state === state) return true
             if (current?.replacementSessionId !== expected.replacementSessionId || current.state !== expected.state) return false
-            const result = this.store.transitionOpenCodeClearOperation(sessionId, {
+            const result = (await this.store.transitionOpenCodeClearOperation(sessionId, {
                 ...latest.metadata,
                 opencodeClearOperation: { ...expected, state, updatedAt: Date.now(), error: undefined }
             }, latest.metadataVersion, namespace, {
                 replacementSessionId: expected.replacementSessionId,
                 state: expected.state
-            })
+            }))
             if (result.result === 'success') {
-                this.sessionCache.refreshSession(sessionId)
+                await this.sessionCache.refreshSession(sessionId)
                 return true
             }
             if (result.result !== 'version-mismatch') return false
-            this.sessionCache.refreshSession(sessionId)
+            await this.sessionCache.refreshSession(sessionId)
         }
         return false
     }
 
-    private persistClearOperation(
+    private async persistClearOperation(
         sessionId: string,
         namespace: string,
         operation: NonNullable<Session['metadata']>['opencodeClearOperation']
-    ): boolean {
+    ): Promise<boolean> {
         if (!operation) return false
         for (let attempt = 0; attempt < 3; attempt += 1) {
             const latest = this.sessionCache.getSessionByNamespace(sessionId, namespace)
-                ?? this.sessionCache.refreshSession(sessionId)
+                ?? (await this.sessionCache.refreshSession(sessionId))
             if (!latest?.metadata) return false
             if (latest.metadata.supersededBySessionId) {
                 return latest.metadata.supersededBySessionId === operation.replacementSessionId
             }
             const existing = latest.metadata.opencodeClearOperation
             if (existing && existing.replacementSessionId !== operation.replacementSessionId && existing.state !== 'aborted') return false
-            const result = this.store.sessions.updateSessionMetadata(
+            const result = (await this.store.sessions.updateSessionMetadata(
                 sessionId,
                 { ...latest.metadata, opencodeClearOperation: operation },
                 latest.metadataVersion,
                 namespace,
                 { touchUpdatedAt: false }
-            )
+            ))
             if (result.result === 'success') {
-                this.sessionCache.refreshSession(sessionId)
+                await this.sessionCache.refreshSession(sessionId)
                 return true
             }
             if (result.result !== 'version-mismatch') return false
-            this.sessionCache.refreshSession(sessionId)
+            await this.sessionCache.refreshSession(sessionId)
         }
         return false
     }
 
-    private persistClearOperationState(
+    private async persistClearOperationState(
         sessionId: string,
         namespace: string,
         operation: NonNullable<Session['metadata']>['opencodeClearOperation'],
         error: string
-    ): void {
+    ): Promise<void> {
         if (!operation) return
-        this.persistClearOperation(sessionId, namespace, {
+        await this.persistClearOperation(sessionId, namespace, {
             ...operation,
             state: 'failed',
             updatedAt: Date.now(),
@@ -2680,21 +2692,21 @@ export class SyncEngine {
         })
     }
 
-    private persistClearReplacement(
+    private async persistClearReplacement(
         sessionId: string,
         namespace: string,
         replacementSessionId: string,
         operation: NonNullable<Session['metadata']>['opencodeClearOperation']
-    ): boolean {
+    ): Promise<boolean> {
         if (!operation) return false
         for (let attempt = 0; attempt < 3; attempt += 1) {
             const latest = this.sessionCache.getSessionByNamespace(sessionId, namespace)
-                ?? this.sessionCache.refreshSession(sessionId)
+                ?? (await this.sessionCache.refreshSession(sessionId))
             if (!latest?.metadata) return false
             if (latest.metadata.supersededBySessionId) {
                 return latest.metadata.supersededBySessionId === replacementSessionId
             }
-            const result = this.store.sessions.updateSessionMetadata(
+            const result = (await this.store.sessions.updateSessionMetadata(
                 sessionId,
                 {
                     ...latest.metadata,
@@ -2709,13 +2721,13 @@ export class SyncEngine {
                 latest.metadataVersion,
                 namespace,
                 { touchUpdatedAt: false }
-            )
+            ))
             if (result.result === 'success') {
-                this.sessionCache.refreshSession(sessionId)
+                await this.sessionCache.refreshSession(sessionId)
                 return true
             }
             if (result.result !== 'version-mismatch') return false
-            this.sessionCache.refreshSession(sessionId)
+            await this.sessionCache.refreshSession(sessionId)
         }
         return false
     }
@@ -2725,7 +2737,7 @@ export class SyncEngine {
         return isKnownFlavor(flavor) ? flavor : 'claude'
     }
 
-    private resolveAgentResumeId(session: Session, namespace: string): string | null {
+    private async resolveAgentResumeId(session: Session, namespace: string): Promise<string | null> {
         const metadata = session.metadata
         if (!metadata) {
             return null
@@ -2733,7 +2745,7 @@ export class SyncEngine {
 
         const flavor = this.resolveFlavor(session)
         if (flavor === 'codex') {
-            return metadata.codexSessionId ?? this.recoverCodexSessionIdFromMessages(session.id, namespace)
+            return metadata.codexSessionId ?? (await this.recoverCodexSessionIdFromMessages(session.id, namespace))
         }
         if (flavor === 'gemini') return metadata.geminiSessionId ?? null
         if (flavor === 'opencode') return metadata.opencodeSessionId ?? null
@@ -2747,11 +2759,11 @@ export class SyncEngine {
         // through to a stale Claude id and advertise a false resume path.
         if (flavor === 'dsh') return null
 
-        return metadata.claudeSessionId ?? this.recoverClaudeSessionIdFromMessages(session.id, namespace)
+        return metadata.claudeSessionId ?? (await this.recoverClaudeSessionIdFromMessages(session.id, namespace))
     }
 
-    resolveLocalResumeTarget(sessionId: string, namespace: string): LocalResumeTargetResult {
-        const access = this.sessionCache.resolveSessionAccess(sessionId, namespace)
+    async resolveLocalResumeTarget(sessionId: string, namespace: string): Promise<LocalResumeTargetResult> {
+        const access = (await this.sessionCache.resolveSessionAccess(sessionId, namespace))
         if (!access.ok) {
             return {
                 type: 'error',
@@ -2766,7 +2778,7 @@ export class SyncEngine {
             return { type: 'error', message: 'Session metadata missing path', code: 'resume_unavailable' }
         }
 
-        const agentSessionId = this.resolveAgentResumeId(session, namespace)
+        const agentSessionId = (await this.resolveAgentResumeId(session, namespace))
         if (!agentSessionId) {
             return {
                 type: 'error',
@@ -2797,12 +2809,12 @@ export class SyncEngine {
         }
     }
 
-    listLocalResumableSessions(namespace: string, opts?: { machineId?: string }): ResumableSession[] {
-        return this.getSessionsByNamespace(namespace)
-            .map((session) => this.resolveLocalResumeTarget(session.id, namespace))
+    async listLocalResumableSessions(namespace: string, opts?: { machineId?: string }): Promise<ResumableSession[]> {
+        return (await Promise.all((await Promise.all(this.getSessionsByNamespace(namespace)
+            .map(async (session) => (await this.resolveLocalResumeTarget(session.id, namespace)))))
             .filter((result): result is { type: 'success'; target: LocalResumeTarget } => result.type === 'success')
-            .map(({ target }) => {
-                const session = this.getSessionByNamespace(target.sessionId, namespace)
+            .map(async ({ target }) => {
+                const session = (await this.getSessionByNamespace(target.sessionId, namespace))
                 return {
                     sessionId: target.sessionId,
                     flavor: target.flavor,
@@ -2822,15 +2834,15 @@ export class SyncEngine {
                     updatedAt: session?.updatedAt ?? 0,
                     name: session?.metadata?.name,
                     summary: session?.metadata?.summary?.text,
-                    firstUserMessage: this.resolveFirstUserMessage(target.sessionId)
+                    firstUserMessage: (await this.resolveFirstUserMessage(target.sessionId))
                 }
-            })
+            })))
             .filter((session) => !opts?.machineId || session.machineId === opts.machineId)
             .sort((a, b) => b.updatedAt - a.updatedAt)
     }
 
-    private resolveFirstUserMessage(sessionId: string): string | undefined {
-        for (const message of this.store.messages.getFirstMessages(sessionId, 50)) {
+    private async resolveFirstUserMessage(sessionId: string): Promise<string | undefined> {
+        for (const message of (await this.store.messages.getFirstMessages(sessionId, 50))) {
             const roleWrapped = unwrapRoleWrappedRecordEnvelope(message.content)
             const text = roleWrapped?.role === 'user'
                 ? extractUserMessageText(roleWrapped.content)
@@ -2899,7 +2911,7 @@ export class SyncEngine {
         // flipCursorSessionProtocolToAcp) so the banner disappears in the
         // same render tick the chat re-renders as ACP — no flicker. On
         // failure we clear the flag explicitly in the catch path below.
-        const flagSet = this.setCursorMigrationStateInProgress(session.id, namespace)
+        const flagSet = (await this.setCursorMigrationStateInProgress(session.id, namespace))
         let bannerCleanupNeeded = flagSet
         try {
             const migrator = this.buildMigratorForRequest({})
@@ -2946,7 +2958,7 @@ export class SyncEngine {
                     reason: outcome.reason,
                     message: outcome.message
                 })
-                const promoted = this.setCursorMigrationStateAmbiguous(session.id, namespace)
+                const promoted = (await this.setCursorMigrationStateAmbiguous(session.id, namespace))
                 if (promoted) {
                     // We replaced the in-progress flag with the
                     // ambiguous flag; the cleanup write below would
@@ -2983,7 +2995,7 @@ export class SyncEngine {
             // so the user isn't left with a permanent "Upgrading..." banner
             // even though we silently fell back to the legacy launcher.
             if (bannerCleanupNeeded) {
-                this.clearCursorMigrationState(session.id, namespace)
+                await this.clearCursorMigrationState(session.id, namespace)
             }
         }
         return session
@@ -2994,26 +3006,26 @@ export class SyncEngine {
      * the web banner can switch from "Upgrading..." to "Manual resolution
      * needed". Returns true if the new flag persisted. tiann/hapi#872.
      */
-    private setCursorMigrationStateAmbiguous(sessionId: string, namespace: string): boolean {
+    private async setCursorMigrationStateAmbiguous(sessionId: string, namespace: string): Promise<boolean> {
         for (let attempt = 0; attempt < 2; attempt += 1) {
             const latest = this.sessionCache.getSessionByNamespace(sessionId, namespace)
-                ?? this.sessionCache.refreshSession(sessionId)
+                ?? (await this.sessionCache.refreshSession(sessionId))
             if (!latest?.metadata) return false
             if (latest.metadata.cursorMigrationState === 'ambiguous') return true
             const nextMetadata = { ...latest.metadata, cursorMigrationState: 'ambiguous' as const }
-            const result = this.store.sessions.updateSessionMetadata(
+            const result = (await this.store.sessions.updateSessionMetadata(
                 sessionId,
                 nextMetadata,
                 latest.metadataVersion,
                 namespace,
                 { touchUpdatedAt: false }
-            )
+            ))
             if (result.result === 'success') {
-                this.sessionCache.refreshSession(sessionId)
+                await this.sessionCache.refreshSession(sessionId)
                 return true
             }
             if (result.result === 'version-mismatch') {
-                this.sessionCache.refreshSession(sessionId)
+                await this.sessionCache.refreshSession(sessionId)
                 continue
             }
             return false
@@ -3029,26 +3041,26 @@ export class SyncEngine {
      * and there's nothing to clean up. UX A++ helper for the auto-migrate
      * banner; see maybeAutoMigrateLegacyCursorSession.
      */
-    private setCursorMigrationStateInProgress(sessionId: string, namespace: string): boolean {
+    private async setCursorMigrationStateInProgress(sessionId: string, namespace: string): Promise<boolean> {
         for (let attempt = 0; attempt < 2; attempt += 1) {
             const latest = this.sessionCache.getSessionByNamespace(sessionId, namespace)
-                ?? this.sessionCache.refreshSession(sessionId)
+                ?? (await this.sessionCache.refreshSession(sessionId))
             if (!latest?.metadata) return false
             if (latest.metadata.cursorMigrationState === 'in_progress') return true
             const nextMetadata = { ...latest.metadata, cursorMigrationState: 'in_progress' as const }
-            const result = this.store.sessions.updateSessionMetadata(
+            const result = (await this.store.sessions.updateSessionMetadata(
                 sessionId,
                 nextMetadata,
                 latest.metadataVersion,
                 namespace,
                 { touchUpdatedAt: false }
-            )
+            ))
             if (result.result === 'success') {
-                this.sessionCache.refreshSession(sessionId)
+                await this.sessionCache.refreshSession(sessionId)
                 return true
             }
             if (result.result === 'version-mismatch') {
-                this.sessionCache.refreshSession(sessionId)
+                await this.sessionCache.refreshSession(sessionId)
                 continue
             }
             return false
@@ -3060,27 +3072,27 @@ export class SyncEngine {
      * Clear `metadata.cursorMigrationState` (failure / exception cleanup).
      * Idempotent; safe to call when the flag was never set. UX A++ helper.
      */
-    private clearCursorMigrationState(sessionId: string, namespace: string): void {
+    private async clearCursorMigrationState(sessionId: string, namespace: string): Promise<void> {
         for (let attempt = 0; attempt < 2; attempt += 1) {
             const latest = this.sessionCache.getSessionByNamespace(sessionId, namespace)
-                ?? this.sessionCache.refreshSession(sessionId)
+                ?? (await this.sessionCache.refreshSession(sessionId))
             if (!latest?.metadata) return
             if (latest.metadata.cursorMigrationState === undefined) return
             const nextMetadata: typeof latest.metadata = { ...latest.metadata }
             delete nextMetadata.cursorMigrationState
-            const result = this.store.sessions.updateSessionMetadata(
+            const result = (await this.store.sessions.updateSessionMetadata(
                 sessionId,
                 nextMetadata,
                 latest.metadataVersion,
                 namespace,
                 { touchUpdatedAt: false }
-            )
+            ))
             if (result.result === 'success') {
-                this.sessionCache.refreshSession(sessionId)
+                await this.sessionCache.refreshSession(sessionId)
                 return
             }
             if (result.result === 'version-mismatch') {
-                this.sessionCache.refreshSession(sessionId)
+                await this.sessionCache.refreshSession(sessionId)
                 continue
             }
             return
@@ -3088,15 +3100,15 @@ export class SyncEngine {
     }
 
     /** Inactive session with directory path but no agent thread and no prior user turn. */
-    private canFreshSpawnNeverStartedSession(session: Session, sessionId: string, namespace: string): boolean {
+    private async canFreshSpawnNeverStartedSession(session: Session, sessionId: string, namespace: string): Promise<boolean> {
         const metadata = session.metadata
         if (!metadata || typeof metadata.path !== 'string' || metadata.path.length === 0) {
             return false
         }
-        if (this.resolveAgentResumeId(session, namespace)) {
+        if ((await this.resolveAgentResumeId(session, namespace))) {
             return false
         }
-        return this.store.messages.getFirstMessages(sessionId, 1).length === 0
+        return (await this.store.messages.getFirstMessages(sessionId, 1)).length === 0
     }
 
     private isOpenCodeClearSource(session: Session): boolean {
@@ -3114,16 +3126,16 @@ export class SyncEngine {
         try {
             const status = await this.rpcGateway.stopRunnerSession(machineId, session.id)
             if (status === 'still_alive' || status === 'unknown') return false
-            return this.abortOpenCodeClearSession(
+            return (await this.abortOpenCodeClearSession(
                 session.id, namespace, operation.replacementSessionId, 'reserved', true
-            ).type === 'success'
+            )).type === 'success'
         } catch {
             return false
         }
     }
 
     async resumeSession(sessionId: string, namespace: string, opts?: { permissionMode?: PermissionMode }): Promise<ResumeSessionResult> {
-        const access = this.sessionCache.resolveSessionAccess(sessionId, namespace)
+        const access = (await this.sessionCache.resolveSessionAccess(sessionId, namespace))
         if (!access.ok) {
             return {
                 type: 'error',
@@ -3180,7 +3192,7 @@ export class SyncEngine {
         // loading state for ~3–5s longer; the session opens as ACP.
         const session = await this.maybeAutoMigrateLegacyCursorSession(initialSession, namespace)
 
-        const targetResult = this.resolveLocalResumeTarget(access.sessionId, namespace)
+        const targetResult = (await this.resolveLocalResumeTarget(access.sessionId, namespace))
         let flavor: AgentFlavor
         let resumeToken: string | undefined
         let directory: string
@@ -3191,7 +3203,7 @@ export class SyncEngine {
             directory = targetResult.target.directory
         } else if (
             targetResult.code === 'resume_unavailable'
-            && this.canFreshSpawnNeverStartedSession(session, access.sessionId, namespace)
+            && (await this.canFreshSpawnNeverStartedSession(session, access.sessionId, namespace))
         ) {
             const metadata = session.metadata!
             flavor = this.resolveFlavor(session)
@@ -3314,7 +3326,7 @@ export class SyncEngine {
             // CLI is not refused / cannot CAS-resurrect. Pi/PTY attempt rows
             // above already captured archiveSnapshot while the row was archived.
             const liveBeforeSpawn = this.sessionCache.getSessionByNamespace(access.sessionId, namespace)
-                ?? this.sessionCache.refreshSession(access.sessionId)
+                ?? (await this.sessionCache.refreshSession(access.sessionId))
             if (liveBeforeSpawn?.metadata?.lifecycleState === 'archived') {
                 try {
                     await this.sessionCache.clearSessionArchiveMetadata(access.sessionId)
@@ -3434,7 +3446,7 @@ export class SyncEngine {
                         if (status === 'already_gone') {
                             const current = this.sessionCache.getSession(spawnResult.sessionId)
                             if (current?.active) {
-                                this.handleSessionEnd({ sid: spawnResult.sessionId, time: Date.now(), reason: 'error' })
+                                await this.handleSessionEnd({ sid: spawnResult.sessionId, time: Date.now(), reason: 'error' })
                             }
                             inactive = true
                         } else if (status === 'stopped') {
@@ -3516,7 +3528,7 @@ export class SyncEngine {
                 }
             }
 
-            this.sessionCache.markSessionActive(spawnResult.sessionId)
+            await this.sessionCache.markSessionActive(spawnResult.sessionId)
             piResumeSucceeded = true
             if (requiresPiNativeReady) await this.writePiResumeAttempt(access.sessionId, namespace, null)
             if (resumedStartingMode === 'pty') {
@@ -3556,7 +3568,7 @@ export class SyncEngine {
                     await this.writePiResumeAttempt(access.sessionId, namespace, null, true).catch(() => {})
                 }
                 if (piResumeSucceeded) {
-                    this.triggerDedupIfNeeded(access.sessionId)
+                    await this.triggerDedupIfNeeded(access.sessionId)
                 }
             }
         }
@@ -3584,7 +3596,7 @@ export class SyncEngine {
      * needed to resume is missing.
      */
     async reopenSession(sessionId: string, namespace: string): Promise<ReopenSessionResult> {
-        const access = this.sessionCache.resolveSessionAccess(sessionId, namespace)
+        const access = (await this.sessionCache.resolveSessionAccess(sessionId, namespace))
         if (!access.ok) {
             return {
                 type: 'error',
@@ -3657,7 +3669,7 @@ export class SyncEngine {
 
         if (isArchived && metadata) {
             if (metadata.flavor === 'cursor' && !metadata.cursorSessionId) {
-                const hasMessages = this.store.messages.getFirstMessages(access.sessionId, 1).length > 0
+                const hasMessages = (await this.store.messages.getFirstMessages(access.sessionId, 1)).length > 0
                 if (hasMessages) {
                     return {
                         type: 'incomplete',
@@ -3719,7 +3731,7 @@ export class SyncEngine {
     }
 
     async handoffSessionToLocal(sessionId: string, namespace: string): Promise<LocalHandoffResult> {
-        const access = this.sessionCache.resolveSessionAccess(sessionId, namespace)
+        const access = (await this.sessionCache.resolveSessionAccess(sessionId, namespace))
         if (!access.ok) {
             return {
                 type: 'error',
@@ -3765,19 +3777,19 @@ export class SyncEngine {
         return { type: 'success' }
     }
 
-    private recoverClaudeSessionIdFromMessages(sessionId: string, namespace: string): string | null {
-        const messages = this.messageService.getMessages(sessionId, 200)
+    private async recoverClaudeSessionIdFromMessages(sessionId: string, namespace: string): Promise<string | null> {
+        const messages = (await this.messageService.getMessages(sessionId, 200))
         for (let i = messages.length - 1; i >= 0; i -= 1) {
             const found = this.extractClaudeSessionId(messages[i].content)
             if (!found) continue
 
-            return this.persistRecoveredAgentSessionId(sessionId, namespace, 'claudeSessionId', found)
+            return (await this.persistRecoveredAgentSessionId(sessionId, namespace, 'claudeSessionId', found))
         }
         return null
     }
 
-    private recoverCodexSessionIdFromMessages(sessionId: string, namespace: string): string | null {
-        const messages = this.messageService.getMessages(sessionId, 200)
+    private async recoverCodexSessionIdFromMessages(sessionId: string, namespace: string): Promise<string | null> {
+        const messages = (await this.messageService.getMessages(sessionId, 200))
         for (let i = messages.length - 1; i >= 0; i -= 1) {
             const content = messages[i].content
             if (this.isCodexContextResetMessage(content)) return null
@@ -3785,7 +3797,7 @@ export class SyncEngine {
             const found = this.extractCodexParentThreadId(content)
             if (!found) continue
 
-            return this.persistRecoveredAgentSessionId(sessionId, namespace, 'codexSessionId', found)
+            return (await this.persistRecoveredAgentSessionId(sessionId, namespace, 'codexSessionId', found))
         }
         return null
     }
@@ -3863,15 +3875,15 @@ export class SyncEngine {
             : null
     }
 
-    private persistRecoveredAgentSessionId(
+    private async persistRecoveredAgentSessionId(
         sessionId: string,
         namespace: string,
         field: 'claudeSessionId' | 'codexSessionId',
         agentSessionId: string
-    ): string {
+    ): Promise<string> {
         for (let attempt = 0; attempt < 2; attempt += 1) {
             const latest = this.sessionCache.getSessionByNamespace(sessionId, namespace)
-                ?? this.sessionCache.refreshSession(sessionId)
+                ?? (await this.sessionCache.refreshSession(sessionId))
             if (!latest?.metadata) return agentSessionId
 
             const existingAgentSessionId = latest.metadata[field]
@@ -3879,22 +3891,22 @@ export class SyncEngine {
                 return existingAgentSessionId
             }
 
-            const result = this.store.sessions.updateSessionMetadata(
+            const result = (await this.store.sessions.updateSessionMetadata(
                 sessionId,
                 { ...latest.metadata, [field]: agentSessionId },
                 latest.metadataVersion,
                 namespace,
                 { touchUpdatedAt: false }
-            )
+            ))
             if (result.result === 'success') {
-                this.sessionCache.refreshSession(sessionId)
+                await this.sessionCache.refreshSession(sessionId)
                 return agentSessionId
             }
             if (result.result !== 'version-mismatch') {
                 return agentSessionId
             }
 
-            this.sessionCache.refreshSession(sessionId)
+            await this.sessionCache.refreshSession(sessionId)
             const refreshed = this.sessionCache.getSessionByNamespace(sessionId, namespace)
             const authoritativeAgentSessionId = refreshed?.metadata?.[field]
             if (typeof authoritativeAgentSessionId === 'string') {
@@ -3960,13 +3972,13 @@ export class SyncEngine {
         }
 
         await new Promise((resolve) => setTimeout(resolve, 0))
-        const session = this.sessionCache.refreshSession(sessionId) ?? this.sessionCache.getSession(sessionId)
+        const session = (await this.sessionCache.refreshSession(sessionId)) ?? this.sessionCache.getSession(sessionId)
         const attemptClearedByEnd = session?.metadata?.piResumeAttempt === undefined
         if (status === 'still_alive' || status === 'unknown') {
             if (attemptClearedByEnd) return true
             return false
         }
-        if (session?.active) this.handleSessionEnd({ sid: sessionId, time: Date.now(), reason: 'error' })
+        if (session?.active) await this.handleSessionEnd({ sid: sessionId, time: Date.now(), reason: 'error' })
         await this.writePiResumeAttempt(sessionId, namespace, null, true).catch(() => {})
         return true
     }
@@ -3994,8 +4006,8 @@ export class SyncEngine {
         }
 
         await new Promise((resolve) => setTimeout(resolve, 0))
-        const session = this.sessionCache.refreshSession(sessionId) ?? this.sessionCache.getSession(sessionId)
-        const original = this.sessionCache.refreshSession(originalSessionId) ?? this.sessionCache.getSession(originalSessionId)
+        const session = (await this.sessionCache.refreshSession(sessionId)) ?? this.sessionCache.getSession(sessionId)
+        const original = (await this.sessionCache.refreshSession(originalSessionId)) ?? this.sessionCache.getSession(originalSessionId)
         const attemptClearedByEnd = original?.metadata?.piResumeAttempt === undefined
         if ((status === 'still_alive' || status === 'unknown') && !attemptClearedByEnd) {
             await this.writePiResumeAttempt(originalSessionId, namespace, {
@@ -4007,7 +4019,7 @@ export class SyncEngine {
             })
             return false
         }
-        if (session?.active) this.handleSessionEnd({ sid: sessionId, time: Date.now(), reason: 'error' })
+        if (session?.active) await this.handleSessionEnd({ sid: sessionId, time: Date.now(), reason: 'error' })
         const remaining = this.sessionCache.getSession(sessionId)
         if (remaining && !remaining.active) await this.sessionCache.deleteSession(sessionId)
         this.piUnexpectedTempOriginalIds.delete(sessionId)
@@ -4041,7 +4053,7 @@ export class SyncEngine {
         restoreArchive = false
     ): Promise<void> {
         for (let i = 0; i < 5; i += 1) {
-            const current = this.sessionCache.getSessionByNamespace(sessionId, namespace) ?? this.sessionCache.refreshSession(sessionId)
+            const current = this.sessionCache.getSessionByNamespace(sessionId, namespace) ?? (await this.sessionCache.refreshSession(sessionId))
             if (!current?.metadata) return
             const next = { ...current.metadata }
             if (attempt) next.piResumeAttempt = attempt
@@ -4059,13 +4071,13 @@ export class SyncEngine {
                     else next.archiveReason = snapshot.archiveReason
                 }
             }
-            const result = this.store.sessions.updateSessionMetadata(sessionId, next, current.metadataVersion, namespace, { touchUpdatedAt: false })
+            const result = (await this.store.sessions.updateSessionMetadata(sessionId, next, current.metadataVersion, namespace, { touchUpdatedAt: false }))
             if (result.result === 'success') {
-                this.sessionCache.refreshSession(sessionId)
+                await this.sessionCache.refreshSession(sessionId)
                 return
             }
             if (result.result !== 'version-mismatch') throw new Error('Failed to update Pi resume attempt')
-            this.sessionCache.refreshSession(sessionId)
+            await this.sessionCache.refreshSession(sessionId)
         }
         throw new Error('Pi resume attempt metadata was modified concurrently')
     }
@@ -4091,7 +4103,7 @@ export class SyncEngine {
     ): Promise<void> {
         for (let i = 0; i < 5; i += 1) {
             const current = this.sessionCache.getSessionByNamespace(sessionId, namespace)
-                ?? this.sessionCache.refreshSession(sessionId)
+                ?? (await this.sessionCache.refreshSession(sessionId))
             if (!current?.metadata) throw new Error('PTY resume attempt session metadata is unavailable')
             const next = { ...current.metadata }
             if (attempt) next.ptyResumeAttempt = attempt
@@ -4109,19 +4121,19 @@ export class SyncEngine {
                     else next.archiveReason = snapshot.archiveReason
                 }
             }
-            const result = this.store.sessions.updateSessionMetadata(
+            const result = (await this.store.sessions.updateSessionMetadata(
                 sessionId,
                 next,
                 current.metadataVersion,
                 namespace,
                 { touchUpdatedAt: false }
-            )
+            ))
             if (result.result === 'success') {
-                this.sessionCache.refreshSession(sessionId)
+                await this.sessionCache.refreshSession(sessionId)
                 return
             }
             if (result.result !== 'version-mismatch') throw new Error('Failed to update PTY resume attempt')
-            this.sessionCache.refreshSession(sessionId)
+            await this.sessionCache.refreshSession(sessionId)
         }
         throw new Error('PTY resume attempt metadata was modified concurrently')
     }
@@ -4139,7 +4151,7 @@ export class SyncEngine {
 
         const current = this.sessionCache.getSession(session.id)
         if (current?.active) {
-            this.handleSessionEnd({ sid: session.id, time: Date.now(), reason: 'error' })
+            await this.handleSessionEnd({ sid: session.id, time: Date.now(), reason: 'error' })
         }
         try {
             // Restore archive from the attempt snapshot when cleaning a failed
@@ -4166,7 +4178,7 @@ export class SyncEngine {
         if (status === 'still_alive' || status === 'unknown') return false
 
         const child = this.sessionCache.getSession(childSessionId)
-        if (child?.active) this.handleSessionEnd({ sid: childSessionId, time: Date.now(), reason: 'error' })
+        if (child?.active) await this.handleSessionEnd({ sid: childSessionId, time: Date.now(), reason: 'error' })
         if (childSessionId !== session.id) {
             const remaining = this.sessionCache.getSession(childSessionId)
             if (remaining && !remaining.active) await this.sessionCache.deleteSession(childSessionId)
@@ -4177,13 +4189,13 @@ export class SyncEngine {
         return true
     }
 
-    private triggerDedupIfNeeded(sessionId: string): void {
+    private async triggerDedupIfNeeded(sessionId: string): Promise<void> {
         const session = this.sessionCache.getSession(sessionId)
         if (session?.metadata) {
             if (!this.canRunCursorDedup(session)) {
                 return
             }
-            void this.sessionCache.deduplicateByAgentSessionId(sessionId).catch(() => {
+            await this.sessionCache.deduplicateByAgentSessionId(sessionId).catch(() => {
                 // best-effort: web-side safety net hides remaining duplicates
             })
         }
@@ -4192,7 +4204,7 @@ export class SyncEngine {
     async waitForSessionActive(sessionId: string, timeoutMs: number = 15_000): Promise<boolean> {
         const start = Date.now()
         while (Date.now() - start < timeoutMs) {
-            const session = this.getSession(sessionId)
+            const session = (await this.getSession(sessionId))
             if (session?.active) {
                 return true
             }
@@ -4207,7 +4219,7 @@ export class SyncEngine {
             if (this.sessionReadyIds.has(sessionId)) {
                 return 'ready'
             }
-            const session = this.getSession(sessionId)
+            const session = (await this.getSession(sessionId))
             if (!session?.active) {
                 return 'ended'
             }
@@ -4219,7 +4231,7 @@ export class SyncEngine {
     async waitForSessionInactive(sessionId: string, timeoutMs: number = 15_000): Promise<boolean> {
         const start = Date.now()
         while (Date.now() - start < timeoutMs) {
-            const session = this.getSession(sessionId)
+            const session = (await this.getSession(sessionId))
             if (!session?.active) {
                 return true
             }

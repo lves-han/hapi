@@ -1,3 +1,4 @@
+import { orderedHandler } from './orderedHandler'
 import { z } from 'zod'
 import {
     TerminalErrorPayloadSchema,
@@ -12,7 +13,7 @@ import type { AccessErrorReason, AccessResult } from './types'
 import { appendAgentTerminalOutput, clearAgentTerminalBuffer } from '../../agentTerminalBuffer'
 import { appendUserTerminalOutput } from '../../userTerminalBuffer'
 
-type ResolveSessionAccess = (sessionId: string) => AccessResult<StoredSession>
+type ResolveSessionAccess = (sessionId: string) => AccessResult<StoredSession> | Promise<AccessResult<StoredSession>>
 
 type EmitAccessError = (scope: 'session' | 'machine', id: string, reason: AccessErrorReason) => void
 
@@ -33,10 +34,10 @@ export type TerminalHandlersDeps = {
 export function registerTerminalHandlers(socket: CliSocketWithData, deps: TerminalHandlersDeps): void {
     const { terminalRegistry, terminalNamespace, resolveSessionAccess, emitAccessError } = deps
 
-    const resolveOwnedEntry = (payload: { sessionId: string; terminalId: string }) => {
+    const resolveOwnedEntry = async (payload: { sessionId: string; terminalId: string }) => {
         const entry = terminalRegistry.get(payload.terminalId)
         if (!entry || entry.cliSocketId !== socket.id || payload.sessionId !== entry.sessionId) return null
-        const sessionAccess = resolveSessionAccess(payload.sessionId)
+        const sessionAccess = (await resolveSessionAccess(payload.sessionId))
         if (!sessionAccess.ok) {
             emitAccessError('session', payload.sessionId, sessionAccess.reason)
             return null
@@ -44,15 +45,15 @@ export function registerTerminalHandlers(socket: CliSocketWithData, deps: Termin
         return entry
     }
 
-    const resolveOwnedTerminal = (payload: { sessionId: string; terminalId: string }) => {
-        const entry = resolveOwnedEntry(payload)
+    const resolveOwnedTerminal = async (payload: { sessionId: string; terminalId: string }) => {
+        const entry = (await resolveOwnedEntry(payload))
         if (!entry) return null
         const terminalSocket = terminalNamespace.sockets.get(entry.socketId)
         return terminalSocket ? { entry, terminalSocket } : null
     }
 
-    const forwardTerminalEvent = (event: string, payload: { sessionId: string; terminalId: string } & Record<string, unknown>) => {
-        const owned = resolveOwnedTerminal(payload)
+    const forwardTerminalEvent = async (event: string, payload: { sessionId: string; terminalId: string } & Record<string, unknown>) => {
+        const owned = (await resolveOwnedTerminal(payload))
         if (!owned) return false
         owned.terminalSocket.emit(event, payload)
         return true
@@ -61,37 +62,37 @@ export function registerTerminalHandlers(socket: CliSocketWithData, deps: Termin
     const ownsAgentSession = (sessionId: string): boolean => socket.rooms.has(`session:${sessionId}`)
 
 
-    socket.on('terminal:ready', (data: unknown) => {
+    socket.on('terminal:ready', orderedHandler(socket, 'terminal:ready', async (data: unknown) => {
         const parsed = terminalReadySchema.safeParse(data)
         if (!parsed.success) {
             return
         }
-        if (forwardTerminalEvent('terminal:ready', parsed.data)) {
+        if ((await forwardTerminalEvent('terminal:ready', parsed.data))) {
             terminalRegistry.markActivity(parsed.data.terminalId)
         }
-    })
+    }))
 
-    socket.on('terminal:output', (data: unknown) => {
+    socket.on('terminal:output', orderedHandler(socket, 'terminal:output', async (data: unknown) => {
         const parsed = terminalOutputSchema.safeParse(data)
         if (!parsed.success) {
             return
         }
-        const entry = resolveOwnedEntry(parsed.data)
+        const entry = (await resolveOwnedEntry(parsed.data))
         if (!entry) return
         terminalRegistry.markActivity(parsed.data.terminalId)
         // Keep buffering while the web socket is detached so its replacement
         // can replay everything the still-running PTY emitted in the gap.
         appendUserTerminalOutput(parsed.data.sessionId, parsed.data.terminalId, parsed.data.data)
         terminalNamespace.sockets.get(entry.socketId)?.emit('terminal:output', parsed.data)
-    })
+    }))
 
-    socket.on('agent-terminal:output', (data: unknown) => {
+    socket.on('agent-terminal:output', orderedHandler(socket, 'agent-terminal:output', async (data: unknown) => {
         const parsed = terminalOutputSchema.safeParse(data)
         if (!parsed.success) {
             return
         }
         if (!ownsAgentSession(parsed.data.sessionId)) return
-        const sessionAccess = resolveSessionAccess(parsed.data.sessionId)
+        const sessionAccess = (await resolveSessionAccess(parsed.data.sessionId))
         if (!sessionAccess.ok) {
             emitAccessError('session', parsed.data.sessionId, sessionAccess.reason)
             return
@@ -103,15 +104,15 @@ export function registerTerminalHandlers(socket: CliSocketWithData, deps: Termin
         // `session:${id}` room) so only agent-terminal viewers receive PTY output
         // and the streaming-teardown viewer count stays accurate.
         terminalNamespace.to(`agent-session:${parsed.data.sessionId}`).emit('agent-terminal:output', parsed.data)
-    })
+    }))
 
-    socket.on('agent-terminal:reset', (data: unknown) => {
+    socket.on('agent-terminal:reset', orderedHandler(socket, 'agent-terminal:reset', async (data: unknown) => {
         const parsed = z.object({ sessionId: z.string().min(1) }).safeParse(data)
         if (!parsed.success) {
             return
         }
         if (!ownsAgentSession(parsed.data.sessionId)) return
-        const sessionAccess = resolveSessionAccess(parsed.data.sessionId)
+        const sessionAccess = (await resolveSessionAccess(parsed.data.sessionId))
         if (!sessionAccess.ok) {
             emitAccessError('session', parsed.data.sessionId, sessionAccess.reason)
             return
@@ -120,9 +121,9 @@ export function registerTerminalHandlers(socket: CliSocketWithData, deps: Termin
         // re-subscribing viewer doesn't replay stale (and alt-screen-corrupted)
         // output from before the restart.
         clearAgentTerminalBuffer(parsed.data.sessionId)
-    })
+    }))
 
-    socket.on('terminal:exit', (data: unknown) => {
+    socket.on('terminal:exit', orderedHandler(socket, 'terminal:exit', (data: unknown) => {
         const parsed = terminalExitSchema.safeParse(data)
         if (!parsed.success) {
             return
@@ -139,9 +140,9 @@ export function registerTerminalHandlers(socket: CliSocketWithData, deps: Termin
             return
         }
         terminalSocket.emit('terminal:exit', parsed.data)
-    })
+    }))
 
-    socket.on('terminal:error', (data: unknown) => {
+    socket.on('terminal:error', orderedHandler(socket, 'terminal:error', async (data: unknown) => {
         const parsed = terminalErrorSchema.safeParse(data)
         if (!parsed.success) {
             return
@@ -152,7 +153,7 @@ export function registerTerminalHandlers(socket: CliSocketWithData, deps: Termin
             return
         }
 
-        const sessionAccess = resolveSessionAccess(parsed.data.sessionId)
+        const sessionAccess = (await resolveSessionAccess(parsed.data.sessionId))
         if (!sessionAccess.ok) {
             terminalRegistry.remove(parsed.data.terminalId)
             emitAccessError('session', parsed.data.sessionId, sessionAccess.reason)
@@ -162,7 +163,7 @@ export function registerTerminalHandlers(socket: CliSocketWithData, deps: Termin
         const terminalSocket = terminalNamespace.sockets.get(entry.socketId)
         terminalRegistry.remove(parsed.data.terminalId)
         terminalSocket?.emit('terminal:error', parsed.data)
-    })
+    }))
 }
 
 export function cleanupTerminalHandlers(socket: CliSocketWithData, deps: { terminalRegistry: TerminalRegistry; terminalNamespace: SocketNamespace }): void {

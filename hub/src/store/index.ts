@@ -1,4 +1,5 @@
 import { Database } from 'bun:sqlite'
+import { SQLiteDatabase, type Database as StorageDatabase } from './database'
 import { chmodSync, closeSync, existsSync, mkdirSync, openSync } from 'node:fs'
 import { dirname } from 'node:path'
 
@@ -59,7 +60,8 @@ const REQUIRED_TABLES = [
 ] as const
 
 export class Store {
-    private db: Database
+    private db!: Database
+    private runtimeDb: StorageDatabase
     private readonly _dbPath: string
     private closed: boolean = false
 
@@ -82,50 +84,54 @@ export class Store {
         return this._dbPath
     }
 
-    constructor(dbPath: string) {
+    constructor(dbPath: string, backend?: StorageDatabase) {
         this._dbPath = dbPath
-        if (dbPath !== ':memory:' && !dbPath.startsWith('file::memory:')) {
-            const dir = dirname(dbPath)
-            mkdirSync(dir, { recursive: true, mode: 0o700 })
-            try {
-                chmodSync(dir, 0o700)
-            } catch {
-            }
-
-            if (!existsSync(dbPath)) {
+        if (!backend) {
+            if (dbPath !== ':memory:' && !dbPath.startsWith('file::memory:')) {
+                const dir = dirname(dbPath)
+                mkdirSync(dir, { recursive: true, mode: 0o700 })
                 try {
-                    const fd = openSync(dbPath, 'a', 0o600)
-                    closeSync(fd)
+                    chmodSync(dir, 0o700)
                 } catch {
                 }
-            }
-        }
 
-        this.db = new Database(dbPath, { create: true, readwrite: true, strict: true })
-        this.db.exec('PRAGMA journal_mode = WAL')
-        this.db.exec('PRAGMA synchronous = NORMAL')
-        this.db.exec('PRAGMA foreign_keys = ON')
-        this.db.exec('PRAGMA busy_timeout = 5000')
-        this.initSchema()
-
-        if (dbPath !== ':memory:' && !dbPath.startsWith('file::memory:')) {
-            for (const path of [dbPath, `${dbPath}-wal`, `${dbPath}-shm`]) {
-                try {
-                    chmodSync(path, 0o600)
-                } catch {
+                if (!existsSync(dbPath)) {
+                    try {
+                        const fd = openSync(dbPath, 'a', 0o600)
+                        closeSync(fd)
+                    } catch {
+                    }
                 }
             }
-        }
 
-        this.sessions = new SessionStore(this.db)
-        this.machines = new MachineStore(this.db)
-        this.messages = new MessageStore(this.db)
-        this.users = new UserStore(this.db)
-        this.push = new PushStore(this.db)
-        this.fcm = new FcmStore(this.db)
-        this.scratchlist = new ScratchlistStore(this.db)
-        this.usage = new UsageStore(this.db)
-        this.workGraph = new WorkGraphStore(this.db)
+            this.db = new Database(dbPath, { create: true, readwrite: true, strict: true })
+            this.db.exec('PRAGMA journal_mode = WAL')
+            this.db.exec('PRAGMA synchronous = NORMAL')
+            this.db.exec('PRAGMA foreign_keys = ON')
+            this.db.exec('PRAGMA busy_timeout = 5000')
+            this.initSchema()
+
+            if (dbPath !== ':memory:' && !dbPath.startsWith('file::memory:')) {
+                for (const path of [dbPath, `${dbPath}-wal`, `${dbPath}-shm`]) {
+                    try {
+                        chmodSync(path, 0o600)
+                    } catch {
+                    }
+                }
+            }
+
+        }
+        this.runtimeDb = backend ?? new SQLiteDatabase(this.db)
+
+        this.sessions = new SessionStore(this.runtimeDb)
+        this.machines = new MachineStore(this.runtimeDb)
+        this.messages = new MessageStore(this.runtimeDb)
+        this.users = new UserStore(this.runtimeDb)
+        this.push = new PushStore(this.runtimeDb)
+        this.fcm = new FcmStore(this.runtimeDb)
+        this.scratchlist = new ScratchlistStore(this.runtimeDb)
+        this.usage = new UsageStore(this.runtimeDb)
+        this.workGraph = new WorkGraphStore(this.runtimeDb)
     }
 
     /**
@@ -134,19 +140,19 @@ export class Store {
      * acknowledgement leaves the session untouched while returning its existing
      * timestamp for replay-safe in-memory cache synchronization.
      */
-    recordMessagesConsumed(
+    async recordMessagesConsumed(
         sessionId: string,
         localIds: string[],
         invokedAt: number,
         namespace: string
-    ): number {
-        return this.db.transaction(() => {
-            const changes = this.messages.markMessagesInvoked(sessionId, localIds, invokedAt)
+    ): Promise<number> {
+        return this.runtimeDb.operation(() => this.runtimeDb.transaction(async () => {
+            const changes = (await this.messages.markMessagesInvoked(sessionId, localIds, invokedAt))
             if (changes > 0) {
-                this.sessions.touchSessionUpdatedAt(sessionId, invokedAt, namespace)
+                await this.sessions.touchSessionUpdatedAt(sessionId, invokedAt, namespace)
             }
 
-            const session = this.sessions.getSessionByNamespace(sessionId, namespace)
+            const session = (await this.sessions.getSessionByNamespace(sessionId, namespace))
             if (!session) {
                 throw new Error('session not found after messages-consumed transition')
             }
@@ -155,59 +161,59 @@ export class Store {
             }
 
             return session.updatedAt
-        })()
+        })(), true)
     }
 
     /** Persist a steer delivery state before/after the native request. */
-    recordSteerDeliveryState(
+    async recordSteerDeliveryState(
         sessionId: string,
         localIds: string[],
         state: 'queued' | 'dispatching' | 'indeterminate',
         namespace: string
-    ): boolean {
-        return this.db.transaction(() => {
-            const changes = this.messages.setMessagesDeliveryState(sessionId, localIds, state)
+    ): Promise<boolean> {
+        return this.runtimeDb.operation(() => this.runtimeDb.transaction(async () => {
+            const changes = (await this.messages.setMessagesDeliveryState(sessionId, localIds, state))
             const now = Date.now()
             if (changes > 0) {
-                this.sessions.touchSessionUpdatedAt(sessionId, now, namespace)
+                await this.sessions.touchSessionUpdatedAt(sessionId, now, namespace)
             }
-            const session = this.sessions.getSessionByNamespace(sessionId, namespace)
+            const session = (await this.sessions.getSessionByNamespace(sessionId, namespace))
             if (!session) {
                 throw new Error('session not found after steer delivery transition')
             }
             return changes > 0
-        })()
+        })(), true)
     }
 
     /** Persist an ambiguous agent steer without stamping it delivered. */
-    recordMessagesIndeterminate(
+    async recordMessagesIndeterminate(
         sessionId: string,
         localIds: string[],
         namespace: string
-    ): number {
-        return this.db.transaction(() => {
-            const changes = this.messages.markMessagesIndeterminate(sessionId, localIds)
+    ): Promise<number> {
+        return this.runtimeDb.operation(() => this.runtimeDb.transaction(async () => {
+            const changes = (await this.messages.markMessagesIndeterminate(sessionId, localIds))
             const now = Date.now()
             if (changes > 0) {
-                this.sessions.touchSessionUpdatedAt(sessionId, now, namespace)
+                await this.sessions.touchSessionUpdatedAt(sessionId, now, namespace)
             }
-            const session = this.sessions.getSessionByNamespace(sessionId, namespace)
+            const session = (await this.sessions.getSessionByNamespace(sessionId, namespace))
             if (!session) {
                 throw new Error('session not found after indeterminate transition')
             }
             return session.updatedAt
-        })()
+        })(), true)
     }
 
     /** Resolve a durable OpenCode clear reservation and insert in one SQLite transaction. */
-    addMessageForCurrentSession(
+    async addMessageForCurrentSession(
         sessionId: string,
         content: unknown,
         localId?: string,
         scheduledAt?: number | null
-    ): { sessionId: string; message: StoredMessage; inserted: boolean } {
-        return this.db.transaction(() => {
-            const row = this.db.prepare('SELECT namespace, metadata FROM sessions WHERE id = ?').get(sessionId) as { namespace: string; metadata: string | null } | undefined
+    ): Promise<{ sessionId: string; message: StoredMessage; inserted: boolean }> {
+        return this.runtimeDb.operation(() => this.runtimeDb.transaction(async () => {
+            const row = (await this.runtimeDb.prepare('SELECT namespace, metadata FROM sessions WHERE id = ?').get(sessionId)) as { namespace: string; metadata: string | null } | undefined
             if (!row) throw new Error('Message source session not found')
             let targetSessionId = sessionId
             if (row?.metadata) {
@@ -219,44 +225,47 @@ export class Store {
                     ?? sessionId
             }
             if (targetSessionId !== sessionId) {
-                const target = this.db.prepare('SELECT 1 FROM sessions WHERE id = ? AND namespace = ?')
-                    .get(targetSessionId, row.namespace)
+                const target = (await this.runtimeDb.prepare('SELECT 1 FROM sessions WHERE id = ? AND namespace = ?')
+                    .get(targetSessionId, row.namespace))
                 if (!target) throw new Error('OpenCode clear redirect target is unavailable in the source namespace')
             }
             const alreadyExists = localId
-                ? Boolean(this.db.prepare('SELECT 1 FROM messages WHERE session_id = ? AND local_id = ? LIMIT 1')
-                    .get(targetSessionId, localId))
+                ? Boolean((await this.runtimeDb.prepare('SELECT 1 FROM messages WHERE session_id = ? AND local_id = ? LIMIT 1')
+                    .get(targetSessionId, localId)))
                 : false
             return {
                 sessionId: targetSessionId,
-                message: addMessage(this.db, targetSessionId, content, localId, scheduledAt),
+                message: (await addMessage(this.runtimeDb, targetSessionId, content, localId, scheduledAt)),
                 inserted: !alreadyExists
             }
-        })()
+        })(), true)
     }
 
     /** Durable delivery gate for a preallocated replacement owned by an unfinished clear. */
-    isOpenCodeClearDeliveryGated(sessionId: string): boolean {
-        const target = this.db.prepare('SELECT namespace FROM sessions WHERE id = ?')
-            .get(sessionId) as { namespace: string } | undefined
-        if (!target) return false
-        const rows = this.db.prepare('SELECT metadata FROM sessions WHERE namespace = ? AND metadata IS NOT NULL')
-            .all(target.namespace) as Array<{ metadata: string }>
-        return rows.some((row) => {
-            try {
-                const operation = (JSON.parse(row.metadata) as {
-                    opencodeClearOperation?: { replacementSessionId?: string; state?: string }
-                }).opencodeClearOperation
-                return operation?.replacementSessionId === sessionId
-                    && operation.state !== 'completed'
-                    && operation.state !== 'aborted'
-            } catch {
-                return false
-            }
-        })
+    async isOpenCodeClearDeliveryGated(sessionId: string): Promise<boolean> {
+        return this.runtimeDb.operation(async () => {
+            const target = (await this.runtimeDb.prepare('SELECT namespace FROM sessions WHERE id = ?')
+                .get(sessionId)) as { namespace: string } | undefined
+            if (!target) return false
+            const rows = (await this.runtimeDb.prepare('SELECT metadata FROM sessions WHERE namespace = ? AND metadata IS NOT NULL')
+                .all(target.namespace)) as Array<{ metadata: string }>
+            return rows.some((row) => {
+                try {
+                    const operation = (JSON.parse(row.metadata) as {
+                        opencodeClearOperation?: { replacementSessionId?: string; state?: string }
+                    }).opencodeClearOperation
+                    return operation?.replacementSessionId === sessionId
+                        && operation.state !== 'completed'
+                        && operation.state !== 'aborted'
+                } catch {
+                    return false
+                }
+            })
+
+}, false)
     }
 
-    abortOpenCodeClearOperation(
+    async abortOpenCodeClearOperation(
         sessionId: string,
         replacementSessionId: string,
         metadata: unknown,
@@ -264,8 +273,8 @@ export class Store {
         namespace: string,
         expected?: { replacementSessionId: string; state: string; requireInactive?: boolean }
     ) {
-        return this.db.transaction(() => {
-            const current = this.sessions.getSessionByNamespace(sessionId, namespace)
+        return this.runtimeDb.operation(() => this.runtimeDb.transaction(async () => {
+            const current = (await this.sessions.getSessionByNamespace(sessionId, namespace))
             const operation = current?.metadata && typeof current.metadata === 'object'
                 ? (current.metadata as { opencodeClearOperation?: { replacementSessionId?: string; state?: string } }).opencodeClearOperation
                 : undefined
@@ -275,21 +284,21 @@ export class Store {
                 || operation.state !== expected.state)) {
                 return { result: 'version-mismatch' as const }
             }
-            const result = this.sessions.updateSessionMetadata(sessionId, metadata, expectedVersion, namespace, { touchUpdatedAt: false })
-            if (result.result === 'success') this.messages.moveUninvokedMessages(replacementSessionId, sessionId)
+            const result = (await this.sessions.updateSessionMetadata(sessionId, metadata, expectedVersion, namespace, { touchUpdatedAt: false }))
+            if (result.result === 'success') await this.messages.moveUninvokedMessages(replacementSessionId, sessionId)
             return result
-        })()
+        })(), true)
     }
 
-    transitionOpenCodeClearOperation(
+    async transitionOpenCodeClearOperation(
         sessionId: string,
         metadata: unknown,
         expectedVersion: number,
         namespace: string,
         expected: { replacementSessionId: string; state: string }
     ) {
-        return this.db.transaction(() => {
-            const current = this.sessions.getSessionByNamespace(sessionId, namespace)
+        return this.runtimeDb.operation(() => this.runtimeDb.transaction(async () => {
+            const current = (await this.sessions.getSessionByNamespace(sessionId, namespace))
             const operation = current?.metadata && typeof current.metadata === 'object'
                 ? (current.metadata as { opencodeClearOperation?: { replacementSessionId?: string; state?: string } }).opencodeClearOperation
                 : undefined
@@ -298,13 +307,13 @@ export class Store {
                 || operation.state !== expected.state) {
                 return { result: 'version-mismatch' as const }
             }
-            return this.sessions.updateSessionMetadata(sessionId, metadata, expectedVersion, namespace, { touchUpdatedAt: false })
-        })()
+            return (await this.sessions.updateSessionMetadata(sessionId, metadata, expectedVersion, namespace, { touchUpdatedAt: false }))
+        })(), true)
     }
 
-    close(): void {
+    async close(): Promise<void> {
         if (this.closed) return
-        this.db.close()
+        await this.runtimeDb.close()
         this.closed = true
 
         // Bun's SQLite close uses sqlite3_close_v2 by default, so prepared
@@ -315,6 +324,13 @@ export class Store {
             Bun.gc(true)
         }
     }
+
+    get sqliteDatabase(): Database {
+        if (this.runtimeDb.backend !== 'sqlite') throw new Error('SQLite database access requires the SQLite backend')
+        return this.db
+    }
+
+    get backend(): 'sqlite' | 'postgres' { return this.runtimeDb.backend }
 
     private initSchema(): void {
         const currentVersion = this.getUserVersion()

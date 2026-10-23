@@ -11,7 +11,7 @@ describe('Store V10→V11 migration: fcm_devices', () => {
         expect(tableExists(store, 'fcm_devices')).toBe(true)
     })
 
-    it('V10 DB migrates to V11: fcm_devices created', () => {
+    it('V10 DB migrates to V11: fcm_devices created', async () => {
         const dir = mkdtempSync(join(tmpdir(), 'hapi-migration-v11-test-'))
         const dbPath = join(dir, 'test.db')
         let store: Store | undefined
@@ -26,24 +26,24 @@ describe('Store V10→V11 migration: fcm_devices', () => {
             store = new Store(dbPath)
             expect(tableExists(store, 'fcm_devices')).toBe(true)
         } finally {
-            store?.close()
+            await store?.close()
             rmSync(dir, { recursive: true, force: true })
         }
     })
 
-    it('upsert replaces token for same namespace+deviceId+platform', () => {
+    it('upsert replaces token for same namespace+deviceId+platform', async () => {
         const store = new Store(':memory:')
-        store.fcm.upsertDevice('default', {
+        await store.fcm.upsertDevice('default', {
             token: 'tok-a',
             platform: 'phone',
             deviceId: 'pixel-1'
         })
-        store.fcm.upsertDevice('default', {
+        await store.fcm.upsertDevice('default', {
             token: 'tok-b',
             platform: 'phone',
             deviceId: 'pixel-1'
         })
-        const devices = store.fcm.getDevicesByNamespace('default')
+        const devices = (await store.fcm.getDevicesByNamespace('default'))
         expect(devices).toHaveLength(1)
         expect(devices[0].token).toBe('tok-b')
     })

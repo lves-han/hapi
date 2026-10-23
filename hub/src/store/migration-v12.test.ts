@@ -32,7 +32,7 @@ describe('Store V11→V12 migration: session_scratchlist table', () => {
         expect(rows).toHaveLength(1)
     })
 
-    it('V11 DB migrates through V14 via Store: session_scratchlist created', () => {
+    it('V11 DB migrates through V14 via Store: session_scratchlist created', async () => {
         const dir = mkdtempSync(join(tmpdir(), 'hapi-migration-v12-test-'))
         const dbPath = join(dir, 'test.db')
         let store: Store | undefined
@@ -56,12 +56,12 @@ describe('Store V11→V12 migration: session_scratchlist table', () => {
             ).all() as Array<{ id: string }>
             expect(sessions.map((r) => r.id)).toEqual(['s1'])
         } finally {
-            store?.close()
+            await store?.close()
             rmSync(dir, { recursive: true, force: true })
         }
     })
 
-    it('V9 DB migrates through V14 (multi-hop service_tier + fcm_devices + scratchlist)', () => {
+    it('V9 DB migrates through V14 (multi-hop service_tier + fcm_devices + scratchlist)', async () => {
         const dir = mkdtempSync(join(tmpdir(), 'hapi-migration-v9-to-v12-'))
         const dbPath = join(dir, 'test.db')
         let store: Store | undefined
@@ -79,12 +79,12 @@ describe('Store V11→V12 migration: session_scratchlist table', () => {
             const scratchCols = getColumns(store, 'session_scratchlist')
             expect(scratchCols).toContain('entry_id')
         } finally {
-            store?.close()
+            await store?.close()
             rmSync(dir, { recursive: true, force: true })
         }
     })
 
-    it('current DB reopen is idempotent: schema unchanged', () => {
+    it('current DB reopen is idempotent: schema unchanged', async () => {
         const dir = mkdtempSync(join(tmpdir(), 'hapi-migration-v12-idempotent-'))
         const dbPath = join(dir, 'test.db')
         let store1: Store | undefined
@@ -97,36 +97,36 @@ describe('Store V11→V12 migration: session_scratchlist table', () => {
             const cols2 = getColumns(store2, 'session_scratchlist')
             expect(cols2).toEqual(cols1)
         } finally {
-            store2?.close()
-            store1?.close()
+            await store2?.close()
+            await store1?.close()
             rmSync(dir, { recursive: true, force: true })
         }
     })
 
     it('cascade-delete: scratchlist entries are removed when their session is deleted', async () => {
         const store = new Store(':memory:')
-        const session = store.sessions.getOrCreateSession('test', { path: '/tmp' }, null, 'default')
-        const create1 = store.scratchlist.create(session.id, 'note one')
-        const create2 = store.scratchlist.create(session.id, 'note two')
+        const session = (await store.sessions.getOrCreateSession('test', { path: '/tmp' }, null, 'default'))
+        const create1 = (await store.scratchlist.create(session.id, 'note one'))
+        const create2 = (await store.scratchlist.create(session.id, 'note two'))
         expect(create1.outcome).toBe('created')
         expect(create2.outcome).toBe('created')
-        expect(store.scratchlist.count(session.id)).toBe(2)
+        expect((await store.scratchlist.count(session.id))).toBe(2)
 
         await store.sessions.deleteSession(session.id, 'default')
-        expect(store.scratchlist.count(session.id)).toBe(0)
+        expect((await store.scratchlist.count(session.id))).toBe(0)
     })
 })
 
 describe('ScratchlistStore: CRUD through the typed-table wrapper', () => {
-    function setup() {
+    async function setup() {
         const store = new Store(':memory:')
-        const session = store.sessions.getOrCreateSession('test', { path: '/tmp' }, null, 'default')
+        const session = (await store.sessions.getOrCreateSession('test', { path: '/tmp' }, null, 'default'))
         return { store, sessionId: session.id }
     }
 
-    it('create returns the canonical row and assigns an entryId when omitted', () => {
-        const { store, sessionId } = setup()
-        const result = store.scratchlist.create(sessionId, 'hello')
+    it('create returns the canonical row and assigns an entryId when omitted', async () => {
+        const { store, sessionId } = (await setup())
+        const result = (await store.scratchlist.create(sessionId, 'hello'))
         if (result.outcome !== 'created') {
             throw new Error(`Expected created, got ${result.outcome}`)
         }
@@ -136,90 +136,90 @@ describe('ScratchlistStore: CRUD through the typed-table wrapper', () => {
         expect(result.entry.updatedAt).toBe(result.entry.createdAt)
     })
 
-    it('create preserves caller-supplied entryId and createdAt for migration path', () => {
-        const { store, sessionId } = setup()
-        const result = store.scratchlist.create(sessionId, 'migrated', {
+    it('create preserves caller-supplied entryId and createdAt for migration path', async () => {
+        const { store, sessionId } = (await setup())
+        const result = (await store.scratchlist.create(sessionId, 'migrated', {
             entryId: 'legacy-id-1',
             createdAt: 12345,
-        })
+        }))
         if (result.outcome !== 'created') throw new Error(`Expected created, got ${result.outcome}`)
         expect(result.entry.entryId).toBe('legacy-id-1')
         expect(result.entry.createdAt).toBe(12345)
         expect(result.entry.updatedAt).toBeGreaterThan(12345)
     })
 
-    it('create with an existing entryId is reported as duplicate and returns the existing row', () => {
-        const { store, sessionId } = setup()
-        const first = store.scratchlist.create(sessionId, 'first', { entryId: 'dup-id' })
+    it('create with an existing entryId is reported as duplicate and returns the existing row', async () => {
+        const { store, sessionId } = (await setup())
+        const first = (await store.scratchlist.create(sessionId, 'first', { entryId: 'dup-id' }))
         if (first.outcome !== 'created') throw new Error(`Expected created`)
-        const second = store.scratchlist.create(sessionId, 'second', { entryId: 'dup-id' })
+        const second = (await store.scratchlist.create(sessionId, 'second', { entryId: 'dup-id' }))
         if (second.outcome !== 'duplicate') {
             throw new Error(`Expected duplicate, got ${second.outcome}`)
         }
         expect(second.entry.text).toBe('first')
     })
 
-    it('create against a non-existent session reports session-not-found (not a SQLite error)', () => {
+    it('create against a non-existent session reports session-not-found (not a SQLite error)', async () => {
         const store = new Store(':memory:')
-        const result = store.scratchlist.create('does-not-exist', 'orphan')
+        const result = (await store.scratchlist.create('does-not-exist', 'orphan'))
         expect(result.outcome).toBe('session-not-found')
     })
 
-    it('list returns entries in createdAt DESC order (newest first)', () => {
-        const { store, sessionId } = setup()
-        const a = store.scratchlist.create(sessionId, 'oldest', { entryId: 'a', createdAt: 1000 })
-        const b = store.scratchlist.create(sessionId, 'middle', { entryId: 'b', createdAt: 2000 })
-        const c = store.scratchlist.create(sessionId, 'newest', { entryId: 'c', createdAt: 3000 })
+    it('list returns entries in createdAt DESC order (newest first)', async () => {
+        const { store, sessionId } = (await setup())
+        const a = (await store.scratchlist.create(sessionId, 'oldest', { entryId: 'a', createdAt: 1000 }))
+        const b = (await store.scratchlist.create(sessionId, 'middle', { entryId: 'b', createdAt: 2000 }))
+        const c = (await store.scratchlist.create(sessionId, 'newest', { entryId: 'c', createdAt: 3000 }))
         expect(a.outcome).toBe('created')
         expect(b.outcome).toBe('created')
         expect(c.outcome).toBe('created')
-        const entries = store.scratchlist.list(sessionId)
+        const entries = (await store.scratchlist.list(sessionId))
         expect(entries.map((e) => e.entryId)).toEqual(['c', 'b', 'a'])
     })
 
-    it('update bumps updated_at without touching createdAt; returns null for missing entries', () => {
-        const { store, sessionId } = setup()
-        const created = store.scratchlist.create(sessionId, 'before', {
+    it('update bumps updated_at without touching createdAt; returns null for missing entries', async () => {
+        const { store, sessionId } = (await setup())
+        const created = (await store.scratchlist.create(sessionId, 'before', {
             entryId: 'u1',
             createdAt: 1000,
-        })
+        }))
         if (created.outcome !== 'created') throw new Error('Expected created')
 
-        const updated = store.scratchlist.update(sessionId, 'u1', { text: 'after' })
+        const updated = (await store.scratchlist.update(sessionId, 'u1', { text: 'after' }))
         expect(updated).not.toBeNull()
         expect(updated!.text).toBe('after')
         expect(updated!.createdAt).toBe(1000)
         expect(updated!.updatedAt).toBeGreaterThan(1000)
 
-        const missing = store.scratchlist.update(sessionId, 'does-not-exist', { text: 'noop' })
+        const missing = (await store.scratchlist.update(sessionId, 'does-not-exist', { text: 'noop' }))
         expect(missing).toBeNull()
     })
 
-    it('delete returns true when the row existed, false otherwise', () => {
-        const { store, sessionId } = setup()
-        store.scratchlist.create(sessionId, 'doomed', { entryId: 'd1' })
-        expect(store.scratchlist.delete(sessionId, 'd1')).toBe(true)
-        expect(store.scratchlist.delete(sessionId, 'd1')).toBe(false)
+    it('delete returns true when the row existed, false otherwise', async () => {
+        const { store, sessionId } = (await setup())
+        await store.scratchlist.create(sessionId, 'doomed', { entryId: 'd1' })
+        expect((await store.scratchlist.delete(sessionId, 'd1'))).toBe(true)
+        expect((await store.scratchlist.delete(sessionId, 'd1'))).toBe(false)
     })
 
-    it('count tracks current rows', () => {
-        const { store, sessionId } = setup()
-        expect(store.scratchlist.count(sessionId)).toBe(0)
-        store.scratchlist.create(sessionId, 'a', { entryId: 'a' })
-        store.scratchlist.create(sessionId, 'b', { entryId: 'b' })
-        expect(store.scratchlist.count(sessionId)).toBe(2)
-        store.scratchlist.delete(sessionId, 'a')
-        expect(store.scratchlist.count(sessionId)).toBe(1)
+    it('count tracks current rows', async () => {
+        const { store, sessionId } = (await setup())
+        expect((await store.scratchlist.count(sessionId))).toBe(0)
+        await store.scratchlist.create(sessionId, 'a', { entryId: 'a' })
+        await store.scratchlist.create(sessionId, 'b', { entryId: 'b' })
+        expect((await store.scratchlist.count(sessionId))).toBe(2)
+        await store.scratchlist.delete(sessionId, 'a')
+        expect((await store.scratchlist.count(sessionId))).toBe(1)
     })
 
-    it('entries from session A are not visible to session B', () => {
+    it('entries from session A are not visible to session B', async () => {
         const store = new Store(':memory:')
-        const a = store.sessions.getOrCreateSession('a', { path: '/a' }, null, 'default')
-        const b = store.sessions.getOrCreateSession('b', { path: '/b' }, null, 'default')
-        store.scratchlist.create(a.id, 'A note', { entryId: 'shared-id' })
-        expect(store.scratchlist.list(b.id)).toEqual([])
-        expect(store.scratchlist.get(a.id, 'shared-id')).not.toBeNull()
-        expect(store.scratchlist.get(b.id, 'shared-id')).toBeNull()
+        const a = (await store.sessions.getOrCreateSession('a', { path: '/a' }, null, 'default'))
+        const b = (await store.sessions.getOrCreateSession('b', { path: '/b' }, null, 'default'))
+        await store.scratchlist.create(a.id, 'A note', { entryId: 'shared-id' })
+        expect((await store.scratchlist.list(b.id))).toEqual([])
+        expect((await store.scratchlist.get(a.id, 'shared-id'))).not.toBeNull()
+        expect((await store.scratchlist.get(b.id, 'shared-id'))).toBeNull()
     })
 })
 

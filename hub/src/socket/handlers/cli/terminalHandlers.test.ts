@@ -16,13 +16,13 @@ class FakeSocket {
     readonly data: Record<string, unknown> = {}
     readonly rooms = new Set<string>()
     readonly emitted: EmittedEvent[] = []
-    private readonly handlers = new Map<string, (...args: unknown[]) => void>()
+    private readonly handlers = new Map<string, (...args: unknown[]) => unknown>()
 
     constructor(id: string) {
         this.id = id
     }
 
-    on(event: string, handler: (...args: unknown[]) => void): this {
+    on(event: string, handler: (...args: unknown[]) => unknown): this {
         this.handlers.set(event, handler)
         return this
     }
@@ -32,16 +32,16 @@ class FakeSocket {
         return true
     }
 
-    trigger(event: string, data?: unknown): void {
+    async trigger(event: string, data?: unknown): Promise<void> {
         const handler = this.handlers.get(event)
         if (!handler) {
             return
         }
         if (typeof data === 'undefined') {
-            handler()
+            await handler()
             return
         }
-        handler(data)
+        await handler(data)
     }
 }
 
@@ -79,7 +79,7 @@ function firstRoomEmit(namespace: FakeNamespace, event: string): RoomEmit | unde
 }
 
 describe('cli terminal handlers', () => {
-    it('forwards agent-terminal:output to the agent-terminal room on terminal namespace', () => {
+    it('forwards agent-terminal:output to the agent-terminal room on terminal namespace', async () => {
         const cliSocket = new FakeSocket('cli-socket')
         const terminalNamespace = new FakeNamespace()
         const terminalRegistry = new TerminalRegistry({ idleTimeoutMs: 0 })
@@ -94,7 +94,7 @@ describe('cli terminal handlers', () => {
             }
         })
 
-        cliSocket.trigger('agent-terminal:output', {
+        await cliSocket.trigger('agent-terminal:output', {
             sessionId: 'session-1',
             terminalId: 'agent',
             data: '\x1b[32mhello\x1b[0m'
@@ -110,7 +110,7 @@ describe('cli terminal handlers', () => {
         })
     })
 
-    it('rejects agent-terminal:output when session access is denied', () => {
+    it('rejects agent-terminal:output when session access is denied', async () => {
         const cliSocket = new FakeSocket('cli-socket')
         const terminalNamespace = new FakeNamespace()
         const terminalRegistry = new TerminalRegistry({ idleTimeoutMs: 0 })
@@ -126,7 +126,7 @@ describe('cli terminal handlers', () => {
             }
         })
 
-        cliSocket.trigger('agent-terminal:output', {
+        await cliSocket.trigger('agent-terminal:output', {
             sessionId: 'session-1',
             terminalId: 'agent',
             data: 'should not pass'
@@ -138,7 +138,7 @@ describe('cli terminal handlers', () => {
         ])
     })
 
-    it('does not refresh a replacement terminal from a stale CLI ready event', () => {
+    it('does not refresh a replacement terminal from a stale CLI ready event', async () => {
         const staleCli = new FakeSocket('stale-cli')
         const ownerCli = new FakeSocket('owner-cli')
         const terminalSocket = new FakeSocket('terminal-socket')
@@ -152,12 +152,12 @@ describe('cli terminal handlers', () => {
             resolveSessionAccess: () => ({ ok: true, value: {} as StoredSession }),
             emitAccessError: () => { throw new Error('Unexpected access error') }
         })
-        staleCli.trigger('terminal:ready', { sessionId: 'session-1', terminalId: 'terminal-1' })
+        await staleCli.trigger('terminal:ready', { sessionId: 'session-1', terminalId: 'terminal-1' })
         expect(terminalRegistry.get('terminal-1')?.idleTimer).toBe(before)
         terminalRegistry.remove('terminal-1')
     })
 
-    it('rejects foreign agent-terminal output and reset without mutating replay', () => {
+    it('rejects foreign agent-terminal output and reset without mutating replay', async () => {
         const foreignCli = new FakeSocket('foreign-cli')
         foreignCli.rooms.add('session:session-a')
         const terminalNamespace = new FakeNamespace()
@@ -169,14 +169,14 @@ describe('cli terminal handlers', () => {
             resolveSessionAccess: () => ({ ok: true, value: {} as StoredSession }),
             emitAccessError: () => { throw new Error('Unexpected access error') }
         })
-        foreignCli.trigger('agent-terminal:output', { sessionId: 'session-b', terminalId: 'agent', data: 'foreign' })
-        foreignCli.trigger('agent-terminal:reset', { sessionId: 'session-b' })
+        await foreignCli.trigger('agent-terminal:output', { sessionId: 'session-b', terminalId: 'agent', data: 'foreign' })
+        await foreignCli.trigger('agent-terminal:reset', { sessionId: 'session-b' })
         expect(getAgentTerminalReplay('session-b')).toBe('owned-screen')
         expect(terminalNamespace.roomEmits).toHaveLength(0)
         clearAgentTerminalBuffer('session-b')
     })
 
-    it('buffers PTY output while the web socket is detached', () => {
+    it('buffers PTY output while the web socket is detached', async () => {
         const cliSocket = new FakeSocket('cli-socket')
         const terminalNamespace = new FakeNamespace()
         const terminalRegistry = new TerminalRegistry({ idleTimeoutMs: 0 })
@@ -191,7 +191,7 @@ describe('cli terminal handlers', () => {
             emitAccessError: () => { throw new Error('Unexpected access error') }
         })
 
-        cliSocket.trigger('terminal:output', {
+        await cliSocket.trigger('terminal:output', {
             sessionId: 'session-1',
             terminalId: 'terminal-1',
             data: 'output during reconnect'
@@ -202,7 +202,7 @@ describe('cli terminal handlers', () => {
         clearUserTerminalBuffer('session-1', 'terminal-1')
     })
 
-    it('does not buffer output for unknown or removed terminals', () => {
+    it('does not buffer output for unknown or removed terminals', async () => {
         const cliSocket = new FakeSocket('cli-socket')
         const terminalSocket = new FakeSocket('terminal-socket')
         const terminalNamespace = new FakeNamespace()
@@ -215,16 +215,16 @@ describe('cli terminal handlers', () => {
             resolveSessionAccess: () => ({ ok: true, value: {} as StoredSession }),
             emitAccessError: () => { throw new Error('Unexpected access error') }
         })
-        cliSocket.trigger('terminal:output', { sessionId: 'session-1', terminalId: 'terminal-1', data: 'unknown' })
+        await cliSocket.trigger('terminal:output', { sessionId: 'session-1', terminalId: 'terminal-1', data: 'unknown' })
         terminalRegistry.register('terminal-1', 'session-1', terminalSocket.id, cliSocket.id)
         expect(getUserTerminalBuffer('session-1', 'terminal-1')).toBe('')
         terminalRegistry.remove('terminal-1')
-        cliSocket.trigger('terminal:output', { sessionId: 'session-1', terminalId: 'terminal-1', data: 'late' })
+        await cliSocket.trigger('terminal:output', { sessionId: 'session-1', terminalId: 'terminal-1', data: 'late' })
         terminalRegistry.register('terminal-1', 'session-1', terminalSocket.id, cliSocket.id)
         expect(getUserTerminalBuffer('session-1', 'terminal-1')).toBe('')
     })
 
-    it('removes stale registry entries after terminal errors', () => {
+    it('removes stale registry entries after terminal errors', async () => {
         const cliSocket = new FakeSocket('cli-socket')
         const terminalSocket = new FakeSocket('terminal-socket')
         const terminalNamespace = new FakeNamespace()
@@ -242,7 +242,7 @@ describe('cli terminal handlers', () => {
             }
         })
 
-        cliSocket.trigger('terminal:error', {
+        await cliSocket.trigger('terminal:error', {
             sessionId: 'session-1',
             terminalId: 'terminal-1',
             message: 'Remote terminal is not supported on Windows yet.'

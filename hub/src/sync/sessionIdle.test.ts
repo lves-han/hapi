@@ -135,30 +135,30 @@ describe('shouldClearKeepaliveIdle', () => {
 describe('SessionCache.reconcileKeepaliveIdle', () => {
     const window = 12 * HOUR
 
-    function setup() {
+    async function setup() {
         const events: SyncEvent[] = []
         const store = new Store(':memory:')
         const cache = new SessionCache(store, createPublisher(events))
-        const created = cache.getOrCreateSession(
+        const created = (await cache.getOrCreateSession(
             'tag-1',
             { path: '/tmp/project', host: 'localhost', flavor: 'cursor', lifecycleState: 'running' },
             null,
             'default'
-        )
+        ))
         // The row is stamped "now"; walk the clock forward instead of
         // rewriting persisted timestamps, so `updatedAt` stays honest across
         // the refreshSession that a lifecycle write performs.
         return { store, cache, events, sessionId: created.id, later: Date.now() + 87 * HOUR }
     }
 
-    it('reconciles a keepalive-only session to idle without touching active', () => {
-        const { cache, sessionId, later } = setup()
+    it('reconciles a keepalive-only session to idle without touching active', async () => {
+        const { cache, sessionId, later } = (await setup())
 
         // 87h of keepalives, nothing else — exactly the #1820 sample.
-        cache.handleSessionAlive({ sid: sessionId, time: Date.now() })
+        await cache.handleSessionAlive({ sid: sessionId, time: Date.now() })
         expect(cache.getSession(sessionId)!.active).toBe(true)
 
-        expect(cache.reconcileKeepaliveIdle(later, window)).toEqual([sessionId])
+        expect((await cache.reconcileKeepaliveIdle(later, window))).toEqual([sessionId])
 
         const marked = cache.getSession(sessionId)!
         expect(marked.metadata?.lifecycleState).toBe('idle')
@@ -167,22 +167,22 @@ describe('SessionCache.reconcileKeepaliveIdle', () => {
         expect(marked.active).toBe(true)
     })
 
-    it('keepalives alone never wake it back up, but agent progress does', () => {
-        const { cache, sessionId, later } = setup()
-        cache.handleSessionAlive({ sid: sessionId, time: Date.now() })
-        cache.reconcileKeepaliveIdle(later, window)
+    it('keepalives alone never wake it back up, but agent progress does', async () => {
+        const { cache, sessionId, later } = (await setup())
+        await cache.handleSessionAlive({ sid: sessionId, time: Date.now() })
+        await cache.reconcileKeepaliveIdle(later, window)
         expect(cache.getSession(sessionId)!.metadata?.lifecycleState).toBe('idle')
 
-        cache.handleSessionAlive({ sid: sessionId, time: Date.now() })
-        cache.reconcileKeepaliveIdle(later, window)
+        await cache.handleSessionAlive({ sid: sessionId, time: Date.now() })
+        await cache.reconcileKeepaliveIdle(later, window)
         expect(cache.getSession(sessionId)!.metadata?.lifecycleState).toBe('idle')
 
         cache.recordAgentProgress(sessionId, later)
-        cache.reconcileKeepaliveIdle(later, window)
+        await cache.reconcileKeepaliveIdle(later, window)
         expect(cache.getSession(sessionId)!.metadata?.lifecycleState).toBe('running')
     })
 
-    it('survives a hub restart: recent assistant output is not read as idle', () => {
+    it('survives a hub restart: recent assistant output is not read as idle', async () => {
         // Needs a file-backed store so the human-turn clock can be backdated
         // directly; `touchSessionUpdatedAt` is forward-only by design.
         const dir = mkdtempSync(join(tmpdir(), 'hapi-1820-'))
@@ -190,17 +190,17 @@ describe('SessionCache.reconcileKeepaliveIdle', () => {
             const dbPath = join(dir, 'hapi.db')
             const store = new Store(dbPath)
             const cache = new SessionCache(store, createPublisher([]))
-            const sessionId = cache.getOrCreateSession(
+            const sessionId = (await cache.getOrCreateSession(
                 'tag-restart',
                 { path: '/tmp/project', host: 'localhost', flavor: 'cursor', lifecycleState: 'running' },
                 null,
                 'default'
-            ).id
+            )).id
 
             // Assistant output just now. This deliberately does NOT move
             // `updatedAt` (sessionHandlers bumps that for human turns only), so
             // the message row is the only durable record of it.
-            store.messages.addMessage(
+            await store.messages.addMessage(
                 sessionId,
                 { role: 'agent', content: { type: 'text', text: 'still working' } }
             )
@@ -212,15 +212,15 @@ describe('SessionCache.reconcileKeepaliveIdle', () => {
 
             // Hub restart: fresh cache over the same store, empty progress map.
             const restarted = new SessionCache(store, createPublisher([]))
-            restarted.reloadAll()
-            restarted.handleSessionAlive({ sid: sessionId, time: Date.now() })
+            await restarted.reloadAll()
+            await restarted.handleSessionAlive({ sid: sessionId, time: Date.now() })
 
             // Seeded from the message, not from the 80h-old `updatedAt`.
-            expect(restarted.reconcileKeepaliveIdle(Date.now(), window)).toEqual([])
+            expect((await restarted.reconcileKeepaliveIdle(Date.now(), window))).toEqual([])
             expect(restarted.getSession(sessionId)!.metadata?.lifecycleState).toBe('running')
 
             // ...and once that output is itself stale, it does get marked.
-            expect(restarted.reconcileKeepaliveIdle(Date.now() + 13 * HOUR, window)).toEqual([sessionId])
+            expect((await restarted.reconcileKeepaliveIdle(Date.now() + 13 * HOUR, window))).toEqual([sessionId])
             expect(restarted.getSession(sessionId)!.metadata?.lifecycleState).toBe('idle')
 
         } finally {
@@ -230,16 +230,16 @@ describe('SessionCache.reconcileKeepaliveIdle', () => {
         }
     })
 
-    it('an assistant message over the socket handler wakes an idle session', () => {
-        const { store, cache, sessionId, later } = setup()
-        cache.handleSessionAlive({ sid: sessionId, time: Date.now() })
-        cache.reconcileKeepaliveIdle(later, window)
+    it('an assistant message over the socket handler wakes an idle session', async () => {
+        const { store, cache, sessionId, later } = (await setup())
+        await cache.handleSessionAlive({ sid: sessionId, time: Date.now() })
+        await cache.reconcileKeepaliveIdle(later, window)
         expect(cache.getSession(sessionId)!.metadata?.lifecycleState).toBe('idle')
 
         // Mirror startHub's wiring: the socket handler's onAgentProgress hook
         // feeds the cache clock. A refactor dropping this would silently
         // false-idle every actively working session.
-        const handlers = new Map<string, (payload: unknown) => void>()
+        const handlers = new Map<string, (payload: unknown) => unknown>()
         const progress: Array<{ sessionId: string; at: number }> = []
         registerSessionHandlers({
             on: (event: string, handler: (payload: unknown) => void) => {
@@ -248,8 +248,8 @@ describe('SessionCache.reconcileKeepaliveIdle', () => {
             to: () => ({ emit: () => {} })
         } as never, {
             store,
-            resolveSessionAccess: (id: string) => {
-                const stored = store.sessions.getSessionByNamespace(id, 'default')
+            resolveSessionAccess: async (id: string) => {
+                const stored = (await store.sessions.getSessionByNamespace(id, 'default'))
                 return stored ? { ok: true, value: stored } : { ok: false, reason: 'not-found' }
             },
             emitAccessError: () => {},
@@ -261,22 +261,22 @@ describe('SessionCache.reconcileKeepaliveIdle', () => {
 
         // An *assistant* message: it never bumps `updatedAt`, so the progress
         // hook is the only thing that can wake the session.
-        handlers.get('message')?.({
+        await handlers.get('message')?.({
             sid: sessionId,
             message: JSON.stringify({ role: 'agent', content: { type: 'text', text: 'resumed work' } })
         })
         expect(progress).toHaveLength(1)
         expect(progress[0].sessionId).toBe(sessionId)
 
-        cache.reconcileKeepaliveIdle(progress[0].at + 1 * HOUR, window)
+        await cache.reconcileKeepaliveIdle(progress[0].at + 1 * HOUR, window)
         expect(cache.getSession(sessionId)!.metadata?.lifecycleState).toBe('running')
     })
 
-    it('does nothing when the window is disabled', () => {
-        const { cache, sessionId, later } = setup()
-        cache.handleSessionAlive({ sid: sessionId, time: Date.now() })
+    it('does nothing when the window is disabled', async () => {
+        const { cache, sessionId, later } = (await setup())
+        await cache.handleSessionAlive({ sid: sessionId, time: Date.now() })
 
-        expect(cache.reconcileKeepaliveIdle(later, 0)).toEqual([])
+        expect((await cache.reconcileKeepaliveIdle(later, 0))).toEqual([])
         expect(cache.getSession(sessionId)!.metadata?.lifecycleState).toBe('running')
     })
 })

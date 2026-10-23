@@ -1,4 +1,4 @@
-import type { Database } from 'bun:sqlite'
+import type { Database } from './database'
 
 import type { StoredMachine, VersionedUpdateResult } from './types'
 import {
@@ -18,41 +18,41 @@ export class MachineStore {
         this.db = db
     }
 
-    getOrCreateMachine(id: string, metadata: unknown, runnerState: unknown, namespace: string): StoredMachine {
-        return getOrCreateMachine(this.db, id, metadata, runnerState, namespace)
+    async getOrCreateMachine(id: string, metadata: unknown, runnerState: unknown, namespace: string): Promise<StoredMachine> {
+        return this.db.operation(() => getOrCreateMachine(this.db, id, metadata, runnerState, namespace), true)
     }
 
-    updateMachineMetadata(
+    async updateMachineMetadata(
         id: string,
         metadata: unknown,
         expectedVersion: number,
         namespace: string
-    ): VersionedUpdateResult<unknown | null> {
-        return updateMachineMetadata(this.db, id, metadata, expectedVersion, namespace)
+    ): Promise<VersionedUpdateResult<unknown | null>> {
+        return this.db.operation(() => updateMachineMetadata(this.db, id, metadata, expectedVersion, namespace), true)
     }
 
-    updateMachineRunnerState(
+    async updateMachineRunnerState(
         id: string,
         runnerState: unknown,
         expectedVersion: number,
         namespace: string
-    ): VersionedUpdateResult<unknown | null> {
-        return updateMachineRunnerState(this.db, id, runnerState, expectedVersion, namespace)
+    ): Promise<VersionedUpdateResult<unknown | null>> {
+        return this.db.operation(() => updateMachineRunnerState(this.db, id, runnerState, expectedVersion, namespace), true)
     }
 
-    getMachine(id: string): StoredMachine | null {
-        return getMachine(this.db, id)
+    async getMachine(id: string): Promise<StoredMachine | null> {
+        return this.db.operation(() => getMachine(this.db, id), false)
     }
 
-    getMachineByNamespace(id: string, namespace: string): StoredMachine | null {
-        return getMachineByNamespace(this.db, id, namespace)
+    async getMachineByNamespace(id: string, namespace: string): Promise<StoredMachine | null> {
+        return this.db.operation(() => getMachineByNamespace(this.db, id, namespace), false)
     }
 
-    getMachines(): StoredMachine[] {
-        return getMachines(this.db)
+    async getMachines(): Promise<StoredMachine[]> {
+        return this.db.operation(() => getMachines(this.db), false)
     }
 
-    getMachinesByNamespace(namespace: string): StoredMachine[] {
-        return getMachinesByNamespace(this.db, namespace)
+    async getMachinesByNamespace(namespace: string): Promise<StoredMachine[]> {
+        return this.db.operation(() => getMachinesByNamespace(this.db, namespace), false)
     }
 }

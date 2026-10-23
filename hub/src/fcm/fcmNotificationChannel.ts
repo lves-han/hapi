@@ -32,7 +32,7 @@ export class FcmNotificationChannel implements NotificationChannel {
             return
         }
 
-        await this.deliver(session, this.toFcmPayload(this.composer.composeReady(session)), ctx)
+        await this.deliver(session, this.toFcmPayload((await this.composer.composeReady(session))), ctx)
     }
 
     async sendTaskNotification(session: Session, notification: TaskNotification, ctx?: NotificationSendContext): Promise<void> {

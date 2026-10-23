@@ -29,6 +29,7 @@
  *   direct-APNs credentials (settings: apnsKeyP8Path, apnsKeyId, apnsTeamId, apnsBundleId, apnsEnv)
  * - HAPI_HOME: Data directory (default: ~/.hapi)
  * - DB_PATH: SQLite database path (default: {HAPI_HOME}/hapi.db)
+ * - DATABASE_URL: PostgreSQL URL; imports an existing SQLite database before Hub readiness
  */
 
 import { existsSync, mkdirSync } from 'node:fs'
@@ -99,6 +100,9 @@ class Configuration {
 
     /** SQLite DB path */
     public readonly dbPath: string
+
+    /** PostgreSQL credentials remain environment-only. */
+    public readonly databaseUrl = process.env.DATABASE_URL
 
     /** Port for the HTTP service */
     public readonly listenPort: number

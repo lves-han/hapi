@@ -1,4 +1,4 @@
-import type { Database } from 'bun:sqlite'
+import type { Database } from './database'
 import { randomUUID } from 'node:crypto'
 import {
     type WorkGraphArtifactRef,
@@ -144,12 +144,12 @@ export type InsertWorkGraphEventResult = {
     inserted: boolean
 }
 
-export function insertWorkGraphEvent(
+export async function insertWorkGraphEvent(
     db: Database,
     namespace: string,
     input: WorkGraphEventCreate,
     options?: { id?: string; ts?: number }
-): InsertWorkGraphEventResult {
+): Promise<InsertWorkGraphEventResult> {
     // All writers (HTTP + notify ingest + future callers) share one ledger
     // bound: schema max lengths / payload size. Typed callers can still
     // bypass TypeScript with forged objects; this is the choke point.
@@ -168,11 +168,11 @@ export function insertWorkGraphEvent(
     }
 
     if (eventInput.idempotency_key) {
-        const existing = db.prepare(`
+        const existing = (await db.prepare(`
             SELECT * FROM events
             WHERE namespace = ? AND idempotency_key = ?
             LIMIT 1
-        `).get(namespace, eventInput.idempotency_key) as EventRow | undefined
+        `).get(namespace, eventInput.idempotency_key)) as EventRow | undefined
         if (existing) {
             return { event: toEvent(existing), inserted: false }
         }
@@ -188,7 +188,7 @@ export function insertWorkGraphEvent(
     const principalJson = JSON.stringify(eventInput.principal)
 
     try {
-        db.prepare(`
+        await db.prepare(`
             INSERT INTO events (
                 id, ts,
                 source_kind, source_ref,
@@ -236,11 +236,11 @@ export function insertWorkGraphEvent(
     } catch (error) {
         // Race on idempotency unique index: return the winner's row.
         if (eventInput.idempotency_key) {
-            const existing = db.prepare(`
+            const existing = (await db.prepare(`
                 SELECT * FROM events
                 WHERE namespace = ? AND idempotency_key = ?
                 LIMIT 1
-            `).get(namespace, eventInput.idempotency_key) as EventRow | undefined
+            `).get(namespace, eventInput.idempotency_key)) as EventRow | undefined
             if (existing) {
                 return { event: toEvent(existing), inserted: false }
             }
@@ -248,62 +248,62 @@ export function insertWorkGraphEvent(
         throw error
     }
 
-    const row = db.prepare('SELECT * FROM events WHERE id = ? AND namespace = ?')
-        .get(id, namespace) as EventRow
+    const row = (await db.prepare('SELECT * FROM events WHERE id = ? AND namespace = ?')
+        .get(id, namespace)) as EventRow
     return { event: toEvent(row), inserted: true }
 }
 
-export function getWorkGraphEventByNamespace(
+export async function getWorkGraphEventByNamespace(
     db: Database,
     eventId: string,
     namespace: string
-): WorkGraphEvent | null {
-    const row = db.prepare('SELECT * FROM events WHERE id = ? AND namespace = ?')
-        .get(eventId, namespace) as EventRow | undefined
+): Promise<WorkGraphEvent | null> {
+    const row = (await db.prepare('SELECT * FROM events WHERE id = ? AND namespace = ?')
+        .get(eventId, namespace)) as EventRow | undefined
     return row ? toEvent(row) : null
 }
 
-export function listWorkGraphEventsByRelatedSession(
+export async function listWorkGraphEventsByRelatedSession(
     db: Database,
     namespace: string,
     relatedSessionId: string,
     options?: { limit?: number }
-): WorkGraphEvent[] {
+): Promise<WorkGraphEvent[]> {
     const limit = Math.min(Math.max(options?.limit ?? 100, 1), 500)
-    const rows = db.prepare(`
+    const rows = (await db.prepare(`
         SELECT * FROM events
         WHERE namespace = ? AND related_session_id = ?
         ORDER BY ts DESC
         LIMIT ?
-    `).all(namespace, relatedSessionId, limit) as EventRow[]
+    `).all(namespace, relatedSessionId, limit)) as EventRow[]
     return rows.map(toEvent)
 }
 
 /** Full-session work_ad history for notify-ingest cause resolution (no HTTP list cap). */
-export function listWorkGraphWorkAdsByRelatedSession(
+export async function listWorkGraphWorkAdsByRelatedSession(
     db: Database,
     namespace: string,
     relatedSessionId: string
-): WorkGraphEvent[] {
-    const rows = db.prepare(`
+): Promise<WorkGraphEvent[]> {
+    const rows = (await db.prepare(`
         SELECT * FROM events
         WHERE namespace = ? AND related_session_id = ? AND event_type = 'work_ad'
         ORDER BY rowid ASC
-    `).all(namespace, relatedSessionId) as EventRow[]
+    `).all(namespace, relatedSessionId)) as EventRow[]
     return rows.map(toEvent)
 }
 
-export function insertWorkGraphEventLink(
+export async function insertWorkGraphEventLink(
     db: Database,
     namespace: string,
     input: WorkGraphEventLinkCreate,
     options?: { id?: string; createdAt?: number }
-): WorkGraphEventLink {
-    const fromEvent = getWorkGraphEventByNamespace(db, input.from_event_id, namespace)
+): Promise<WorkGraphEventLink> {
+    const fromEvent = (await getWorkGraphEventByNamespace(db, input.from_event_id, namespace))
     if (!fromEvent) {
         throw new WorkGraphNotFoundError('from_event_id not found in namespace')
     }
-    const toEvent = getWorkGraphEventByNamespace(db, input.to_event_id, namespace)
+    const toEvent = (await getWorkGraphEventByNamespace(db, input.to_event_id, namespace))
     if (!toEvent) {
         throw new WorkGraphNotFoundError('to_event_id not found in namespace')
     }
@@ -314,7 +314,7 @@ export function insertWorkGraphEventLink(
         ? null
         : JSON.stringify(input.metadata_json)
 
-    db.prepare(`
+    await db.prepare(`
         INSERT INTO event_links (
             id, from_event_id, to_event_id, relation_type,
             created_at, metadata_json, namespace
@@ -332,8 +332,8 @@ export function insertWorkGraphEventLink(
         namespace
     })
 
-    const row = db.prepare('SELECT * FROM event_links WHERE id = ? AND namespace = ?')
-        .get(id, namespace) as LinkRow
+    const row = (await db.prepare('SELECT * FROM event_links WHERE id = ? AND namespace = ?')
+        .get(id, namespace)) as LinkRow
     return toLink(row)
 }
 
@@ -341,20 +341,20 @@ export function insertWorkGraphEventLink(
  * Move hub-elevated notify work_ads onto the surviving session id.
  * HTTP-posted rows keep their original session keys.
  */
-export function reassignWorkGraphNotifySession(
+export async function reassignWorkGraphNotifySession(
     db: Database,
     namespace: string,
     oldSessionId: string,
     newSessionId: string
-): number {
+): Promise<number> {
     if (oldSessionId === newSessionId) return 0
-    const rows = db.prepare(`
+    const rows = (await db.prepare(`
         SELECT id, related_session_id, source_ref, idempotency_key, principal_json
         FROM events
         WHERE namespace = ?
           AND provenance = 'AGENT_NOTIFY_SUMMARY'
           AND (related_session_id = ? OR source_ref = ?)
-    `).all(namespace, oldSessionId, oldSessionId) as Array<{
+    `).all(namespace, oldSessionId, oldSessionId)) as Array<{
         id: string
         related_session_id: string | null
         source_ref: string
@@ -376,7 +376,7 @@ export function reassignWorkGraphNotifySession(
     const oldPrincipal = `session:${oldSessionId}`
     const newPrincipal = `session:${newSessionId}`
 
-    return db.transaction(() => {
+    return (await db.transaction(async () => {
         let changed = 0
         for (const row of rows) {
             const relatedSessionId = row.related_session_id === oldSessionId
@@ -391,7 +391,7 @@ export function reassignWorkGraphNotifySession(
                 ? row.principal_json.split(oldPrincipal).join(newPrincipal)
                 : row.principal_json
             try {
-                update.run(
+                await update.run(
                     relatedSessionId,
                     sourceRef,
                     idempotencyKey,
@@ -400,7 +400,7 @@ export function reassignWorkGraphNotifySession(
                     namespace
                 )
             } catch {
-                update.run(
+                await update.run(
                     relatedSessionId,
                     sourceRef,
                     row.idempotency_key,
@@ -412,19 +412,19 @@ export function reassignWorkGraphNotifySession(
             changed += 1
         }
         return changed
-    })()
+    })())
 }
 
-export function listWorkGraphEventLinksForEvent(
+export async function listWorkGraphEventLinksForEvent(
     db: Database,
     namespace: string,
     eventId: string
-): WorkGraphEventLink[] {
-    const rows = db.prepare(`
+): Promise<WorkGraphEventLink[]> {
+    const rows = (await db.prepare(`
         SELECT * FROM event_links
         WHERE namespace = ?
           AND (from_event_id = ? OR to_event_id = ?)
         ORDER BY created_at ASC
-    `).all(namespace, eventId, eventId) as LinkRow[]
+    `).all(namespace, eventId, eventId)) as LinkRow[]
     return rows.map(toLink)
 }

@@ -224,39 +224,39 @@ function readCauseFromPayload(payload: unknown): WorkAdCause | null {
     }
 }
 
-function loadMessagesForCause(
+async function loadMessagesForCause(
     store: Store,
     sessionId: string,
     previousWorkAds: WorkGraphEvent[]
-): StoredMessage[] {
+): Promise<StoredMessage[]> {
     const previous = previousWorkAds.at(-1) ?? null
     const cursorId = readCauseCursorMessageId(previous?.payloadJson)
     if (cursorId) {
-        const cursorSeq = store.messages.getSeqById(sessionId, cursorId)
+        const cursorSeq = (await store.messages.getSeqById(sessionId, cursorId))
         if (cursorSeq != null) {
-            return store.messages.getMessagesAfterSeq(sessionId, cursorSeq)
+            return (await store.messages.getMessagesAfterSeq(sessionId, cursorSeq))
         }
-        return store.messages.getAllMessages(sessionId)
+        return (await store.messages.getAllMessages(sessionId))
     }
     const afterSeq = readCauseSeq(previous?.payloadJson)
     // First event / legacy rows without causeSeq still need the full session.
     // Later notifies only need rows after the previous cause (not every
     // compressed agent/tool blob since session start).
     if (afterSeq == null) {
-        return store.messages.getAllMessages(sessionId)
+        return (await store.messages.getAllMessages(sessionId))
     }
-    return store.messages.getMessagesAfterSeq(sessionId, afterSeq)
+    return (await store.messages.getMessagesAfterSeq(sessionId, afterSeq))
 }
 
-function listPreviousWorkAds(
+async function listPreviousWorkAds(
     store: Store,
     namespace: string,
     sessionId: string
-): WorkGraphEvent[] {
+): Promise<WorkGraphEvent[]> {
     // Only hub notify elevation. Client POST /work-graph/events can mint
     // work_ad rows; those must not steal related_event_id, follows, or sticky cause.
-    return store.workGraph
-        .listWorkAdsByRelatedSession(namespace, sessionId)
+    return (await store.workGraph
+        .listWorkAdsByRelatedSession(namespace, sessionId))
         .filter((event) => (
             event.provenance === 'AGENT_NOTIFY_SUMMARY'
             && event.sourceRef === sessionId
@@ -447,7 +447,7 @@ export function buildWorkAdFromNotify(params: {
  * Ledger rows are append-only audit: deleting the related session does not
  * delete work_ad rows (cold review M1).
  */
-export function ingestNotifySummaryFromMessage(input: NotifyIngestInput): NotifyIngestResult {
+export async function ingestNotifySummaryFromMessage(input: NotifyIngestInput): Promise<NotifyIngestResult> {
     if (!isAgentMessageContent(input.content)) {
         return null
     }
@@ -465,8 +465,8 @@ export function ingestNotifySummaryFromMessage(input: NotifyIngestInput): Notify
     }
 
     // Cause is hub-derived from session messages SQL (no REST 200 cap).
-    const previousWorkAds = listPreviousWorkAds(input.store, input.namespace, input.sessionId)
-    const messages = loadMessagesForCause(input.store, input.sessionId, previousWorkAds)
+    const previousWorkAds = (await listPreviousWorkAds(input.store, input.namespace, input.sessionId))
+    const messages = (await loadMessagesForCause(input.store, input.sessionId, previousWorkAds))
     const assistantSeq = messages.find((message) => message.id === input.messageId)?.seq ?? null
     const { cause, previousEventId } = resolveWorkAdCause({
         messages,
@@ -486,10 +486,10 @@ export function ingestNotifySummaryFromMessage(input: NotifyIngestInput): Notify
     })
 
     try {
-        const result = input.store.workGraph.insertEvent(input.namespace, create, { ts: input.ts })
+        const result = (await input.store.workGraph.insertEvent(input.namespace, create, { ts: input.ts }))
         if (result.inserted && previousEventId) {
             try {
-                input.store.workGraph.insertLink(input.namespace, {
+                await input.store.workGraph.insertLink(input.namespace, {
                     from_event_id: result.event.id,
                     to_event_id: previousEventId,
                     relation_type: 'follows'

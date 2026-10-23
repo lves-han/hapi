@@ -1,4 +1,4 @@
-import type { Database } from 'bun:sqlite'
+import type { Database } from './database'
 
 import type { StoredUser } from './types'
 
@@ -20,39 +20,39 @@ function toStoredUser(row: DbUserRow): StoredUser {
     }
 }
 
-export function getUser(db: Database, platform: string, platformUserId: string): StoredUser | null {
-    const row = db.prepare(
+export async function getUser(db: Database, platform: string, platformUserId: string): Promise<StoredUser | null> {
+    const row = (await db.prepare(
         'SELECT * FROM users WHERE platform = ? AND platform_user_id = ? LIMIT 1'
-    ).get(platform, platformUserId) as DbUserRow | undefined
+    ).get(platform, platformUserId)) as DbUserRow | undefined
     return row ? toStoredUser(row) : null
 }
 
-export function getUsersByPlatform(db: Database, platform: string): StoredUser[] {
-    const rows = db.prepare(
+export async function getUsersByPlatform(db: Database, platform: string): Promise<StoredUser[]> {
+    const rows = (await db.prepare(
         'SELECT * FROM users WHERE platform = ? ORDER BY created_at ASC'
-    ).all(platform) as DbUserRow[]
+    ).all(platform)) as DbUserRow[]
     return rows.map(toStoredUser)
 }
 
-export function getUsersByPlatformAndNamespace(
+export async function getUsersByPlatformAndNamespace(
     db: Database,
     platform: string,
     namespace: string
-): StoredUser[] {
-    const rows = db.prepare(
+): Promise<StoredUser[]> {
+    const rows = (await db.prepare(
         'SELECT * FROM users WHERE platform = ? AND namespace = ? ORDER BY created_at ASC'
-    ).all(platform, namespace) as DbUserRow[]
+    ).all(platform, namespace)) as DbUserRow[]
     return rows.map(toStoredUser)
 }
 
-export function addUser(
+export async function addUser(
     db: Database,
     platform: string,
     platformUserId: string,
     namespace: string
-): StoredUser {
+): Promise<StoredUser> {
     const now = Date.now()
-    db.prepare(`
+    await db.prepare(`
         INSERT OR IGNORE INTO users (
             platform, platform_user_id, namespace, created_at
         ) VALUES (
@@ -65,16 +65,16 @@ export function addUser(
         created_at: now
     })
 
-    const row = getUser(db, platform, platformUserId)
+    const row = (await getUser(db, platform, platformUserId))
     if (!row) {
         throw new Error('Failed to create user')
     }
     return row
 }
 
-export function removeUser(db: Database, platform: string, platformUserId: string): boolean {
-    const result = db.prepare(
+export async function removeUser(db: Database, platform: string, platformUserId: string): Promise<boolean> {
+    const result = (await db.prepare(
         'DELETE FROM users WHERE platform = ? AND platform_user_id = ?'
-    ).run(platform, platformUserId)
+    ).run(platform, platformUserId))
     return result.changes > 0
 }

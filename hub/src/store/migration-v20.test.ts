@@ -7,19 +7,19 @@ import { getUsageSummary } from '../sync/usageService'
 import { Store } from './index'
 
 describe('Store V20->V21 migration: usage semantics re-index', () => {
-    it('clears both derived tables, preserves messages, and lazily rebuilds idempotently', () => {
+    it('clears both derived tables, preserves messages, and lazily rebuilds idempotently', async () => {
         const directory = mkdtempSync(join(tmpdir(), 'hapi-migration-v20-to-v21-'))
         const dbPath = join(directory, 'test.db')
         let store: Store | undefined
         try {
             store = new Store(dbPath)
-            const session = store.sessions.getOrCreateSession(
+            const session = (await store.sessions.getOrCreateSession(
                 'session-1',
                 { path: '/tmp', host: 'test', flavor: 'claude' },
                 null,
                 'default'
-            )
-            store.messages.addMessage(session.id, {
+            ))
+            await store.messages.addMessage(session.id, {
                 role: 'agent',
                 content: {
                     type: 'output',
@@ -32,8 +32,8 @@ describe('Store V20->V21 migration: usage semantics re-index', () => {
                     }
                 }
             })
-            expect(getUsageSummary(store, 'default', 'all').totals.inputTokens).toBe(90)
-            store.close()
+            expect((await getUsageSummary(store, 'default', 'all')).totals.inputTokens).toBe(90)
+            await store.close()
             store = undefined
 
             const db = new Database(dbPath, { create: true, readwrite: true, strict: true })
@@ -46,17 +46,17 @@ describe('Store V20->V21 migration: usage semantics re-index', () => {
             expect((internalDb.prepare('PRAGMA user_version').get() as { user_version: number }).user_version).toBe(26)
             expect(count('usage_events')).toBe(0)
             expect(count('usage_scan_state')).toBe(0)
-            expect(store.messages.getMessages(session.id)).toHaveLength(1)
+            expect((await store.messages.getMessages(session.id))).toHaveLength(1)
 
-            const first = getUsageSummary(store, 'default', 'all')
+            const first = (await getUsageSummary(store, 'default', 'all'))
             expect(first.totals.inputTokens).toBe(90)
             expect(count('usage_events')).toBe(1)
             expect(count('usage_scan_state')).toBe(1)
-            const second = getUsageSummary(store, 'default', 'all')
+            const second = (await getUsageSummary(store, 'default', 'all'))
             expect(second.totals).toEqual(first.totals)
             expect(count('usage_events')).toBe(1)
         } finally {
-            store?.close()
+            await store?.close()
             rmSync(directory, { recursive: true, force: true })
         }
     })

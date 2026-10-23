@@ -24,7 +24,7 @@ const terminalCloseSchema = z.object({
 
 export type TerminalHandlersDeps = {
     io: SocketServer
-    getSession: (sessionId: string) => { active: boolean; namespace: string } | null
+    getSession: (sessionId: string) => { active: boolean; namespace: string } | null | Promise<{ active: boolean; namespace: string } | null>
     terminalRegistry: TerminalRegistry
     maxTerminalsPerSocket: number
     maxTerminalsPerSession: number
@@ -84,14 +84,14 @@ export function registerTerminalHandlers(socket: SocketWithData, deps: TerminalH
         return null
     }
 
-    socket.on('terminal:create', (data: unknown) => {
+    socket.on('terminal:create', async (data: unknown) => {
         const parsed = terminalCreateSchema.safeParse(data)
         if (!parsed.success) {
             return
         }
 
         const { sessionId, terminalId, cols, rows } = parsed.data
-        const session = getSession(sessionId)
+        const session = (await getSession(sessionId))
         if (!namespace || !session || session.namespace !== namespace || !session.active) {
             emitTerminalError(terminalId, 'Session is inactive or unavailable.')
             return
@@ -243,8 +243,8 @@ export function registerTerminalHandlers(socket: SocketWithData, deps: TerminalH
     // unauthorized caller would leak existence, and the only honest-client
     // rejection path (a session that just went inactive) unmounts the terminal
     // view anyway via canViewAgentTerminal, so there is no live viewer to inform.
-    const isAuthorizedSession = (sessionId: string): boolean => {
-        const session = getSession(sessionId)
+    const isAuthorizedSession = async (sessionId: string): Promise<boolean> => {
+        const session = (await getSession(sessionId))
         return Boolean(namespace && session && session.namespace === namespace && session.active)
     }
     const tellCliIfNoViewers = (sessionId: string): void => {
@@ -254,13 +254,13 @@ export function registerTerminalHandlers(socket: SocketWithData, deps: TerminalH
         }
     }
 
-    socket.on('agent-terminal:subscribe', (data: unknown) => {
+    socket.on('agent-terminal:subscribe', async (data: unknown) => {
         const parsed = z.object({ sessionId: z.string().min(1) }).safeParse(data)
         if (!parsed.success) {
             return
         }
         const { sessionId } = parsed.data
-        if (!isAuthorizedSession(sessionId)) {
+        if (!(await isAuthorizedSession(sessionId))) {
             return
         }
         socket.join(agentTerminalRoom(sessionId))
@@ -294,7 +294,7 @@ export function registerTerminalHandlers(socket: SocketWithData, deps: TerminalH
         tellCliIfNoViewers(sessionId)
     })
 
-    socket.on('agent-terminal:resize', (data: unknown) => {
+    socket.on('agent-terminal:resize', async (data: unknown) => {
         const parsed = z.object({
             sessionId: z.string().min(1),
             cols: z.number().int().positive(),
@@ -304,7 +304,7 @@ export function registerTerminalHandlers(socket: SocketWithData, deps: TerminalH
             return
         }
         const { sessionId, cols, rows } = parsed.data
-        if (!isAuthorizedSession(sessionId)) {
+        if (!(await isAuthorizedSession(sessionId))) {
             return
         }
         emitToCliForSession(sessionId, 'agent-terminal:resize', { sessionId, cols, rows })
@@ -313,7 +313,7 @@ export function registerTerminalHandlers(socket: SocketWithData, deps: TerminalH
     // Raw keystroke(s) from a viewer → relay to the CLI to write into the agent
     // PTY. Same authorization guard as resize: only an authorized viewer of an
     // active session in this namespace may drive its TUI.
-    socket.on('agent-terminal:input', (data: unknown) => {
+    socket.on('agent-terminal:input', async (data: unknown) => {
         const parsed = z.object({
             sessionId: z.string().min(1),
             data: z.string().min(1)
@@ -322,7 +322,7 @@ export function registerTerminalHandlers(socket: SocketWithData, deps: TerminalH
             return
         }
         const { sessionId, data: keys } = parsed.data
-        if (!isAuthorizedSession(sessionId)) {
+        if (!(await isAuthorizedSession(sessionId))) {
             return
         }
         emitToCliForSession(sessionId, 'agent-terminal:input', { sessionId, data: keys })

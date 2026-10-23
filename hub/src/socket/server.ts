@@ -36,17 +36,17 @@ export type SocketServerDeps = {
     store: Store
     jwtSecret: Uint8Array
     corsOrigins?: string[]
-    getSession?: (sessionId: string) => { active: boolean; namespace: string } | null
-    onWebappEvent?: (event: SyncEvent) => void
-    onSessionAlive?: (payload: { sid: string; time: number; thinking?: boolean; mode?: 'local' | 'remote' }) => void
-    onSessionReady?: (payload: { sid: string; time: number }) => void
-    onSessionEnd?: (payload: { sid: string; time: number }) => void
-    onMachineAlive?: (payload: { machineId: string; time: number; health?: unknown }) => void
-    onBackgroundTaskDelta?: (sessionId: string, delta: { started: number; completed: number }) => void
-    onSessionActivity?: (sessionId: string, updatedAt: number) => void
-    onAgentProgress?: (sessionId: string, at: number) => void
-    onSweepImmediateQueued?: (sessionId: string, now: number) => void
-    onMessagesConsumed?: (sessionId: string) => void
+    getSession?: (sessionId: string) => { active: boolean; namespace: string } | null | Promise<{ active: boolean; namespace: string } | null>
+    onWebappEvent?: (event: SyncEvent) => unknown
+    onSessionAlive?: (payload: { sid: string; time: number; thinking?: boolean; mode?: 'local' | 'remote' }) => unknown
+    onSessionReady?: (payload: { sid: string; time: number }) => unknown
+    onSessionEnd?: (payload: { sid: string; time: number }) => unknown
+    onMachineAlive?: (payload: { machineId: string; time: number; health?: unknown }) => unknown
+    onBackgroundTaskDelta?: (sessionId: string, delta: { started: number; completed: number }) => unknown
+    onSessionActivity?: (sessionId: string, updatedAt: number) => unknown
+    onAgentProgress?: (sessionId: string, at: number) => unknown
+    onSweepImmediateQueued?: (sessionId: string, now: number) => unknown
+    onMessagesConsumed?: (sessionId: string) => unknown
 }
 
 export function createSocketServer(deps: SocketServerDeps): {
@@ -121,22 +121,27 @@ export function createSocketServer(deps: SocketServerDeps): {
         socket.data.namespace = parsedToken.namespace
         next()
     })
-    cliNs.on('connection', (socket) => registerCliHandlers(socket as CliSocketWithData, {
-        io,
-        store: deps.store,
-        rpcRegistry,
-        terminalRegistry,
-        onSessionAlive: deps.onSessionAlive,
-        onSessionReady: deps.onSessionReady,
-        onSessionEnd: deps.onSessionEnd,
-        onMachineAlive: deps.onMachineAlive,
-        onWebappEvent: deps.onWebappEvent,
-        onBackgroundTaskDelta: deps.onBackgroundTaskDelta,
-        onSessionActivity: deps.onSessionActivity,
-        onAgentProgress: deps.onAgentProgress,
-        onSweepImmediateQueued: deps.onSweepImmediateQueued,
-        onMessagesConsumed: deps.onMessagesConsumed
-    }))
+    cliNs.on('connection', (socket) => {
+        void registerCliHandlers(socket as CliSocketWithData, {
+            io,
+            store: deps.store,
+            rpcRegistry,
+            terminalRegistry,
+            onSessionAlive: deps.onSessionAlive,
+            onSessionReady: deps.onSessionReady,
+            onSessionEnd: deps.onSessionEnd,
+            onMachineAlive: deps.onMachineAlive,
+            onWebappEvent: deps.onWebappEvent,
+            onBackgroundTaskDelta: deps.onBackgroundTaskDelta,
+            onSessionActivity: deps.onSessionActivity,
+            onAgentProgress: deps.onAgentProgress,
+            onSweepImmediateQueued: deps.onSweepImmediateQueued,
+            onMessagesConsumed: deps.onMessagesConsumed
+        }).catch(() => {
+            console.error('[CLI] Connection initialization failed; closing transport for retry')
+            socket.conn.close()
+        })
+    })
 
     terminalNs.use(async (socket, next) => {
         const auth = socket.handshake.auth as Record<string, unknown> | undefined
@@ -161,8 +166,8 @@ export function createSocketServer(deps: SocketServerDeps): {
     })
     terminalNs.on('connection', (socket) => registerTerminalHandlers(socket, {
         io,
-        getSession: (sessionId) => {
-            return deps.getSession?.(sessionId) ?? deps.store.sessions.getSession(sessionId)
+        getSession: async (sessionId) => {
+            return (await deps.getSession?.(sessionId)) ?? (await deps.store.sessions.getSession(sessionId))
         },
         terminalRegistry,
         maxTerminalsPerSocket,

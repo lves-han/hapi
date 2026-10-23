@@ -2,12 +2,12 @@ import { describe, expect, it } from 'bun:test'
 import { Store } from '../store'
 import { getUsageSummary } from './usageService'
 
-function addAgentMessage(store: Store, sessionId: string, content: unknown, createdAt?: number): void {
+async function addAgentMessage(store: Store, sessionId: string, content: unknown, createdAt?: number): Promise<void> {
     if (createdAt === undefined) {
-        store.messages.addMessage(sessionId, { role: 'agent', content })
+        await store.messages.addMessage(sessionId, { role: 'agent', content })
         return
     }
-    store.messages.copyMessageToSession(sessionId, {
+    await store.messages.copyMessageToSession(sessionId, {
         content: { role: 'agent', content },
         createdAt,
         localId: null,
@@ -17,17 +17,17 @@ function addAgentMessage(store: Store, sessionId: string, content: unknown, crea
 }
 
 describe('usage service', () => {
-    it('normalizes historical Claude input that excludes cached tokens', () => {
+    it('normalizes historical Claude input that excludes cached tokens', async () => {
         const store = new Store(':memory:')
-        const session = store.sessions.getOrCreateSession(
+        const session = (await store.sessions.getOrCreateSession(
             'claude-usage-test',
             { path: '/tmp', host: 'test', flavor: 'claude' },
             null,
             'default',
             'test-model'
-        )
+        ))
 
-        addAgentMessage(store, session.id, {
+        await addAgentMessage(store, session.id, {
             type: 'output',
             data: {
                 type: 'assistant',
@@ -38,7 +38,7 @@ describe('usage service', () => {
                 }
             }
         })
-        addAgentMessage(store, session.id, {
+        await addAgentMessage(store, session.id, {
             type: 'output',
             data: {
                 type: 'assistant',
@@ -50,7 +50,7 @@ describe('usage service', () => {
             }
         })
 
-        const result = getUsageSummary(store, 'default', 'all')
+        const result = (await getUsageSummary(store, 'default', 'all'))
         expect(result.totals.requests).toBe(1)
         expect(result.totals.inputTokens).toBe(102)
         expect(result.totals.outputTokens).toBe(3)
@@ -58,20 +58,20 @@ describe('usage service', () => {
         expect(result.totals.totalTokens).toBe(105)
         expect(result.totals.uncachedTokens).toBe(15)
         expect(result.byModel.find((row) => row.key === 'claude-test')?.totalTokens).toBe(105)
-        store.close()
+        await store.close()
     })
 
-    it('normalizes historical Codex cumulative usage with inclusive input', () => {
+    it('normalizes historical Codex cumulative usage with inclusive input', async () => {
         const store = new Store(':memory:')
-        const session = store.sessions.getOrCreateSession(
+        const session = (await store.sessions.getOrCreateSession(
             'codex-usage-test',
             { path: '/tmp', host: 'test', flavor: 'codex' },
             null,
             'default',
             'test-model'
-        )
+        ))
 
-        addAgentMessage(store, session.id, {
+        await addAgentMessage(store, session.id, {
             type: 'codex',
             data: {
                 type: 'token_count',
@@ -84,7 +84,7 @@ describe('usage service', () => {
                 }
             }
         })
-        addAgentMessage(store, session.id, {
+        await addAgentMessage(store, session.id, {
             type: 'codex',
             data: {
                 type: 'token_count',
@@ -97,7 +97,7 @@ describe('usage service', () => {
                 }
             }
         })
-        addAgentMessage(store, session.id, {
+        await addAgentMessage(store, session.id, {
             type: 'codex',
             data: {
                 type: 'token_count',
@@ -111,34 +111,34 @@ describe('usage service', () => {
             }
         })
 
-        const result = getUsageSummary(store, 'default', 'all')
+        const result = (await getUsageSummary(store, 'default', 'all'))
         expect(result.totals.requests).toBe(2)
         expect(result.totals.inputTokens).toBe(240)
         expect(result.totals.outputTokens).toBe(25)
         expect(result.totals.cacheReadTokens).toBe(180)
         expect(result.totals.totalTokens).toBe(265)
         expect(result.totals.uncachedTokens).toBe(85)
-        store.close()
+        await store.close()
     })
 
-    it('normalizes historical Kimi usage totals as inclusive per-request deltas', () => {
+    it('normalizes historical Kimi usage totals as inclusive per-request deltas', async () => {
         const store = new Store(':memory:')
-        const session = store.sessions.getOrCreateSession(
+        const session = (await store.sessions.getOrCreateSession(
             'kimi-usage-test',
             { path: '/tmp', host: 'test', flavor: 'kimi' },
             null,
             'default',
             'kimi-model'
-        )
+        ))
 
-        addAgentMessage(store, session.id, {
+        await addAgentMessage(store, session.id, {
             type: 'codex',
             data: {
                 type: 'token_count',
                 info: { total: { inputTokens: 100, outputTokens: 10, cachedInputTokens: 80 } }
             }
         })
-        addAgentMessage(store, session.id, {
+        await addAgentMessage(store, session.id, {
             type: 'codex',
             data: {
                 type: 'token_count',
@@ -146,26 +146,26 @@ describe('usage service', () => {
             }
         })
 
-        const result = getUsageSummary(store, 'default', 'all')
+        const result = (await getUsageSummary(store, 'default', 'all'))
         expect(result.totals.requests).toBe(2)
         expect(result.totals.inputTokens).toBe(240)
         expect(result.totals.outputTokens).toBe(25)
         expect(result.totals.cacheReadTokens).toBe(180)
         expect(result.totals.totalTokens).toBe(265)
         expect(result.totals.uncachedTokens).toBe(85)
-        store.close()
+        await store.close()
     })
 
-    it('recognizes the model-bearing historical generic ACP wire as inclusive', () => {
+    it('recognizes the model-bearing historical generic ACP wire as inclusive', async () => {
         const store = new Store(':memory:')
-        const session = store.sessions.getOrCreateSession(
+        const session = (await store.sessions.getOrCreateSession(
             'acp-cache-usage-test',
             { path: '/tmp', host: 'test', flavor: 'opencode' },
             null,
             'default'
-        )
+        ))
 
-        addAgentMessage(store, session.id, {
+        await addAgentMessage(store, session.id, {
             type: 'codex',
             data: {
                 type: 'token_count',
@@ -180,24 +180,24 @@ describe('usage service', () => {
             }
         })
 
-        const result = getUsageSummary(store, 'default', 'all')
+        const result = (await getUsageSummary(store, 'default', 'all'))
         expect(result.totals.inputTokens).toBe(13_879)
         expect(result.totals.cacheReadTokens).toBe(5_760)
         expect(result.totals.totalTokens).toBe(13_881)
         expect(result.totals.uncachedTokens).toBe(8_121)
-        store.close()
+        await store.close()
     })
 
-    it('falls back to legacy provenance when v1 usage semantics are malformed', () => {
+    it('falls back to legacy provenance when v1 usage semantics are malformed', async () => {
         const store = new Store(':memory:')
-        const session = store.sessions.getOrCreateSession(
+        const session = (await store.sessions.getOrCreateSession(
             'malformed-generic-usage-test',
             { path: '/tmp', host: 'test', flavor: 'opencode' },
             null,
             'default'
-        )
+        ))
 
-        addAgentMessage(store, session.id, {
+        await addAgentMessage(store, session.id, {
             type: 'codex',
             data: {
                 type: 'token_count',
@@ -214,25 +214,25 @@ describe('usage service', () => {
             }
         })
 
-        const result = getUsageSummary(store, 'default', 'all')
+        const result = (await getUsageSummary(store, 'default', 'all'))
         expect(result.totals).toEqual(expect.objectContaining({
             inputTokens: 150,
             cacheReadTokens: 40,
             cacheCreationTokens: 10,
             totalTokens: 170
         }))
-        store.close()
+        await store.close()
     })
 
-    it('repairs unmarked legacy generic ACP input that excluded cache', () => {
+    it('repairs unmarked legacy generic ACP input that excluded cache', async () => {
         const store = new Store(':memory:')
-        const session = store.sessions.getOrCreateSession(
+        const session = (await store.sessions.getOrCreateSession(
             'legacy-generic-usage-test',
             { path: '/tmp', host: 'test', flavor: 'opencode' },
             null,
             'default'
-        )
-        addAgentMessage(store, session.id, {
+        ))
+        await addAgentMessage(store, session.id, {
             type: 'codex',
             data: {
                 type: 'token_count',
@@ -240,48 +240,48 @@ describe('usage service', () => {
             }
         })
 
-        const result = getUsageSummary(store, 'default', 'all')
+        const result = (await getUsageSummary(store, 'default', 'all'))
         expect(result.totals.inputTokens).toBe(200)
         expect(result.totals.cacheReadTokens).toBe(80)
         expect(result.totals.cacheCreationTokens).toBe(20)
         expect(result.totals.uncachedTokens).toBe(125)
-        store.close()
+        await store.close()
     })
 
-    it('normalizes mixed legacy and marked generic usage per message in one session', () => {
+    it('normalizes mixed legacy and marked generic usage per message in one session', async () => {
         const store = new Store(':memory:')
-        const session = store.sessions.getOrCreateSession(
+        const session = (await store.sessions.getOrCreateSession(
             'mixed-generic-usage-test',
             { path: '/tmp', host: 'test', flavor: 'opencode' },
             null,
             'default'
-        )
+        ))
         const messages = [
             { type: 'token_count', info: { total: { inputTokens: 100, outputTokens: 5, cachedInputTokens: 80 } } },
             { type: 'token_count', usageSchema: 'hapi.usage.v1', inputTokenSemantics: 'includes-cache', info: { total: { inputTokens: 180, outputTokens: 5, cachedInputTokens: 80 } } },
             { type: 'token_count', model: null, info: { total: { inputTokens: 180, outputTokens: 5, cachedInputTokens: 80 } } }
         ]
-        for (const data of messages) addAgentMessage(store, session.id, { type: 'codex', data })
+        for (const data of messages) await addAgentMessage(store, session.id, { type: 'codex', data })
 
-        const result = getUsageSummary(store, 'default', 'all')
+        const result = (await getUsageSummary(store, 'default', 'all'))
         expect(result.totals.inputTokens).toBe(540)
         expect(result.totals.outputTokens).toBe(15)
         expect(result.totals.cacheReadTokens).toBe(240)
         expect(result.totals.requests).toBe(3)
-        store.close()
+        await store.close()
     })
 
-    it('uses the explicit v1 generic usage input semantics without double-counting cache', () => {
+    it('uses the explicit v1 generic usage input semantics without double-counting cache', async () => {
         const store = new Store(':memory:')
-        const session = store.sessions.getOrCreateSession(
+        const session = (await store.sessions.getOrCreateSession(
             'generic-v1-usage-test',
             { path: '/tmp', host: 'test', flavor: 'opencode' },
             null,
             'default',
             'acp-model'
-        )
+        ))
 
-        addAgentMessage(store, session.id, {
+        await addAgentMessage(store, session.id, {
             type: 'codex',
             data: {
                 type: 'token_count',
@@ -298,7 +298,7 @@ describe('usage service', () => {
             }
         })
 
-        const result = getUsageSummary(store, 'default', 'all')
+        const result = (await getUsageSummary(store, 'default', 'all'))
         expect(result.totals).toEqual(expect.objectContaining({
             inputTokens: 150,
             outputTokens: 20,
@@ -308,17 +308,17 @@ describe('usage service', () => {
             uncachedTokens: 130,
             requests: 1
         }))
-        store.close()
+        await store.close()
     })
 
-    it('normalizes cumulative total and last snapshots with the same declared semantics', () => {
+    it('normalizes cumulative total and last snapshots with the same declared semantics', async () => {
         const store = new Store(':memory:')
-        const session = store.sessions.getOrCreateSession(
+        const session = (await store.sessions.getOrCreateSession(
             'codex-exclusive-cumulative-test',
             { path: '/tmp', host: 'test', flavor: 'codex' },
             null,
             'default'
-        )
+        ))
         const snapshots = [
             {
                 total: { inputTokens: 100, outputTokens: 10, cachedInputTokens: 80 },
@@ -329,7 +329,7 @@ describe('usage service', () => {
                 last: { inputTokens: 30, outputTokens: 5, cachedInputTokens: 20 }
             }
         ]
-        snapshots.forEach((info, index) => addAgentMessage(store, session.id, {
+        await Promise.all(snapshots.map(async (info, index) => (await addAgentMessage(store, session.id, {
             type: 'codex',
             data: {
                 type: 'token_count',
@@ -339,26 +339,26 @@ describe('usage service', () => {
                 turnId: `turn-${index}`,
                 info
             }
-        }))
+        }))))
 
-        const result = getUsageSummary(store, 'default', 'all')
+        const result = (await getUsageSummary(store, 'default', 'all'))
         expect(result.totals).toEqual(expect.objectContaining({
             inputTokens: 80,
             outputTokens: 7,
             cacheReadTokens: 30,
             requests: 2
         }))
-        store.close()
+        await store.close()
     })
 
-    it('treats a cumulative counter reset as a whole-snapshot reset', () => {
+    it('treats a cumulative counter reset as a whole-snapshot reset', async () => {
         const store = new Store(':memory:')
-        const session = store.sessions.getOrCreateSession(
+        const session = (await store.sessions.getOrCreateSession(
             'codex-whole-reset-test',
             { path: '/tmp', host: 'test', flavor: 'codex' },
             null,
             'default'
-        )
+        ))
         const snapshots = [
             {
                 total: { inputTokens: 100, outputTokens: 20, cachedInputTokens: 80 },
@@ -370,7 +370,7 @@ describe('usage service', () => {
                 last: { inputTokens: 50, outputTokens: 7, cachedInputTokens: 40 }
             }
         ]
-        snapshots.forEach((info, index) => addAgentMessage(store, session.id, {
+        await Promise.all(snapshots.map(async (info, index) => (await addAgentMessage(store, session.id, {
             type: 'codex',
             data: {
                 type: 'token_count',
@@ -378,27 +378,27 @@ describe('usage service', () => {
                 turnId: `turn-${index}`,
                 info
             }
-        }))
+        }))))
 
-        const result = getUsageSummary(store, 'default', 'all')
+        const result = (await getUsageSummary(store, 'default', 'all'))
         expect(result.totals).toEqual(expect.objectContaining({
             inputTokens: 150,
             outputTokens: 27,
             cacheReadTokens: 120,
             requests: 2
         }))
-        store.close()
+        await store.close()
     })
 
-    it('preserves primary usage and requests when the cache partition is impossible', () => {
+    it('preserves primary usage and requests when the cache partition is impossible', async () => {
         const store = new Store(':memory:')
-        const session = store.sessions.getOrCreateSession(
+        const session = (await store.sessions.getOrCreateSession(
             'invalid-cache-partition-test',
             { path: '/tmp', host: 'test', flavor: 'opencode' },
             null,
             'default'
-        )
-        addAgentMessage(store, session.id, {
+        ))
+        await addAgentMessage(store, session.id, {
             type: 'codex',
             data: {
                 type: 'usage',
@@ -411,7 +411,7 @@ describe('usage service', () => {
             }
         })
 
-        const result = getUsageSummary(store, 'default', 'all')
+        const result = (await getUsageSummary(store, 'default', 'all'))
         expect(result.totals).toEqual(expect.objectContaining({
             inputTokens: 100,
             outputTokens: 20,
@@ -422,20 +422,20 @@ describe('usage service', () => {
             requests: 1
         }))
         expect(result.totals.sessions).toBe(1)
-        store.close()
+        await store.close()
     })
 
-    it('falls back to the session model for Codex events without a model', () => {
+    it('falls back to the session model for Codex events without a model', async () => {
         const store = new Store(':memory:')
-        const session = store.sessions.getOrCreateSession(
+        const session = (await store.sessions.getOrCreateSession(
             'codex-last-usage-test',
             { path: '/tmp', host: 'test', flavor: 'codex' },
             null,
             'default',
             'deepseek-v4-flash[1m]'
-        )
+        ))
 
-        addAgentMessage(store, session.id, {
+        await addAgentMessage(store, session.id, {
             type: 'codex',
             data: {
                 type: 'token_count',
@@ -447,27 +447,27 @@ describe('usage service', () => {
             }
         })
 
-        const result = getUsageSummary(store, 'default', 'all')
+        const result = (await getUsageSummary(store, 'default', 'all'))
         expect(result.totals.requests).toBe(1)
         expect(result.totals.totalTokens).toBe(110)
         expect(result.totals.uncachedTokens).toBe(30)
         expect(result.byModel).toEqual([
             expect.objectContaining({ key: 'deepseek-v4-flash[1m]', totalTokens: 110 })
         ])
-        store.close()
+        await store.close()
     })
 
-    it('preserves an indexed fallback model across session model changes', () => {
+    it('preserves an indexed fallback model across session model changes', async () => {
         const store = new Store(':memory:')
-        const session = store.sessions.getOrCreateSession(
+        const session = (await store.sessions.getOrCreateSession(
             'codex-model-fallback-rebuild-test',
             { path: '/tmp', host: 'test', flavor: 'codex' },
             null,
             'default',
             'deepseek-v4-flash'
-        )
+        ))
 
-        addAgentMessage(store, session.id, {
+        await addAgentMessage(store, session.id, {
             type: 'codex',
             data: {
                 type: 'token_count',
@@ -480,29 +480,29 @@ describe('usage service', () => {
             }
         })
 
-        expect(getUsageSummary(store, 'default', 'all').byModel).toEqual([
+        expect((await getUsageSummary(store, 'default', 'all')).byModel).toEqual([
             expect.objectContaining({ key: 'deepseek-v4-flash', totalTokens: 110 })
         ])
 
-        store.sessions.setSessionModel(session.id, 'gpt-5.6-sol', 'default')
-        store.messages.bumpMessageEpoch(session.id)
+        await store.sessions.setSessionModel(session.id, 'gpt-5.6-sol', 'default')
+        await store.messages.bumpMessageEpoch(session.id)
 
-        expect(getUsageSummary(store, 'default', 'all').byModel).toEqual([
+        expect((await getUsageSummary(store, 'default', 'all')).byModel).toEqual([
             expect.objectContaining({ key: 'deepseek-v4-flash', totalTokens: 110 })
         ])
-        store.close()
+        await store.close()
     })
 
-    it('replaces a cumulative fallback model when a replay adds an explicit model', () => {
+    it('replaces a cumulative fallback model when a replay adds an explicit model', async () => {
         const store = new Store(':memory:')
-        const session = store.sessions.getOrCreateSession(
+        const session = (await store.sessions.getOrCreateSession(
             'codex-explicit-model-replay-test',
             { path: '/tmp', host: 'test', flavor: 'codex' },
             null,
             'default',
             'deepseek-v4-flash'
-        )
-        const tokenCount = (model?: string) => ({
+        ))
+        const tokenCount = async (model?: string) => ({
             type: 'codex',
             data: {
                 type: 'token_count',
@@ -516,31 +516,31 @@ describe('usage service', () => {
             }
         })
 
-        addAgentMessage(store, session.id, tokenCount())
-        expect(getUsageSummary(store, 'default', 'all').byModel).toEqual([
+        await addAgentMessage(store, session.id, (await tokenCount()))
+        expect((await getUsageSummary(store, 'default', 'all')).byModel).toEqual([
             expect.objectContaining({ key: 'deepseek-v4-flash', totalTokens: 110, requests: 1 })
         ])
 
-        addAgentMessage(store, session.id, tokenCount('gpt-5.6-sol'))
-        const result = getUsageSummary(store, 'default', 'all')
+        await addAgentMessage(store, session.id, (await tokenCount('gpt-5.6-sol')))
+        const result = (await getUsageSummary(store, 'default', 'all'))
         expect(result.totals).toEqual(expect.objectContaining({ totalTokens: 110, requests: 1 }))
         expect(result.byModel).toEqual([
             expect.objectContaining({ key: 'gpt-5.6-sol', totalTokens: 110, requests: 1 })
         ])
-        store.close()
+        await store.close()
     })
 
-    it('preserves event-level models across model switches and epoch rebuilds', () => {
+    it('preserves event-level models across model switches and epoch rebuilds', async () => {
         const store = new Store(':memory:')
-        const session = store.sessions.getOrCreateSession(
+        const session = (await store.sessions.getOrCreateSession(
             'codex-model-switch-test',
             { path: '/tmp', host: 'test', flavor: 'codex' },
             null,
             'default',
             'initial-model'
-        )
+        ))
 
-        addAgentMessage(store, session.id, {
+        await addAgentMessage(store, session.id, {
             type: 'codex',
             data: {
                 type: 'token_count',
@@ -553,7 +553,7 @@ describe('usage service', () => {
                 }
             }
         })
-        addAgentMessage(store, session.id, {
+        await addAgentMessage(store, session.id, {
             type: 'codex',
             data: {
                 type: 'token_count',
@@ -566,64 +566,64 @@ describe('usage service', () => {
                 }
             }
         })
-        store.sessions.setSessionModel(session.id, 'latest-session-model', 'default')
+        await store.sessions.setSessionModel(session.id, 'latest-session-model', 'default')
 
         const expectedModels = [
             expect.objectContaining({ key: 'old-model', totalTokens: 110 }),
             expect.objectContaining({ key: 'new-model', totalTokens: 45 })
         ]
-        expect(getUsageSummary(store, 'default', 'all').byModel).toEqual(expectedModels)
+        expect((await getUsageSummary(store, 'default', 'all')).byModel).toEqual(expectedModels)
 
-        store.messages.bumpMessageEpoch(session.id)
-        expect(getUsageSummary(store, 'default', 'all').byModel).toEqual(expectedModels)
-        store.close()
+        await store.messages.bumpMessageEpoch(session.id)
+        expect((await getUsageSummary(store, 'default', 'all')).byModel).toEqual(expectedModels)
+        await store.close()
     })
 
-    it('buckets historical usage with the event-specific DST offset', () => {
+    it('buckets historical usage with the event-specific DST offset', async () => {
         const store = new Store(':memory:')
-        const session = store.sessions.getOrCreateSession(
+        const session = (await store.sessions.getOrCreateSession(
             'timezone-usage-test',
             { path: '/tmp', host: 'test', flavor: 'claude' },
             null,
             'default'
-        )
-        const usage = (id: string) => ({
+        ))
+        const usage = async (id: string) => ({
             type: 'output',
             data: {
                 type: 'assistant',
                 message: { id, usage: { input_tokens: 10, output_tokens: 2 } }
             }
         })
-        addAgentMessage(store, session.id, usage('before-dst'), Date.parse('2026-03-07T04:30:00Z'))
-        addAgentMessage(store, session.id, usage('after-dst'), Date.parse('2026-03-09T04:30:00Z'))
+        await addAgentMessage(store, session.id, (await usage('before-dst')), Date.parse('2026-03-07T04:30:00Z'))
+        await addAgentMessage(store, session.id, (await usage('after-dst')), Date.parse('2026-03-09T04:30:00Z'))
 
-        expect(getUsageSummary(store, 'default', 'all', 'America/New_York').daily.map((row) => row.key)).toEqual([
+        expect((await getUsageSummary(store, 'default', 'all', 'America/New_York')).daily.map((row) => row.key)).toEqual([
             '2026-03-06',
             '2026-03-09'
         ])
-        store.close()
+        await store.close()
     })
 
-    it('resumes scanning after the last checked message and resets after an epoch change', () => {
+    it('resumes scanning after the last checked message and resets after an epoch change', async () => {
         const store = new Store(':memory:')
-        const session = store.sessions.getOrCreateSession(
+        const session = (await store.sessions.getOrCreateSession(
             'incremental-usage-test',
             { path: '/tmp', host: 'test', flavor: 'claude' },
             null,
             'default',
             'test-model'
-        )
-        store.messages.addMessage(session.id, { role: 'user', content: { type: 'text', text: 'hello' } })
+        ))
+        await store.messages.addMessage(session.id, { role: 'user', content: { type: 'text', text: 'hello' } })
 
         const afterSeqs: number[] = []
         const getMessagesAfterSeq = store.messages.getMessagesAfterSeq.bind(store.messages)
-        store.messages.getMessagesAfterSeq = (sessionId, afterSeq) => {
+        store.messages.getMessagesAfterSeq = async (sessionId, afterSeq) => {
             afterSeqs.push(afterSeq)
-            return getMessagesAfterSeq(sessionId, afterSeq)
+            return (await getMessagesAfterSeq(sessionId, afterSeq))
         }
 
-        expect(getUsageSummary(store, 'default', 'all').totals.requests).toBe(0)
-        addAgentMessage(store, session.id, {
+        expect((await getUsageSummary(store, 'default', 'all')).totals.requests).toBe(0)
+        await addAgentMessage(store, session.id, {
             type: 'output',
             data: {
                 type: 'assistant',
@@ -633,24 +633,24 @@ describe('usage service', () => {
                 }
             }
         })
-        expect(getUsageSummary(store, 'default', 'all').totals.requests).toBe(1)
+        expect((await getUsageSummary(store, 'default', 'all')).totals.requests).toBe(1)
 
-        store.messages.bumpMessageEpoch(session.id)
-        expect(getUsageSummary(store, 'default', 'all').totals.requests).toBe(1)
+        await store.messages.bumpMessageEpoch(session.id)
+        expect((await getUsageSummary(store, 'default', 'all')).totals.requests).toBe(1)
         expect(afterSeqs).toEqual([0, 1, 0])
-        store.close()
+        await store.close()
     })
 
-    it('removes usage from transcript history discarded by a rewind', () => {
+    it('removes usage from transcript history discarded by a rewind', async () => {
         const store = new Store(':memory:')
-        const session = store.sessions.getOrCreateSession(
+        const session = (await store.sessions.getOrCreateSession(
             'rewound-usage-test',
             { path: '/tmp', host: 'test', flavor: 'claude' },
             null,
             'default',
             'test-model'
-        )
-        const claudeUsage = (id: string) => ({
+        ))
+        const claudeUsage = async (id: string) => ({
             role: 'agent',
             content: {
                 type: 'output',
@@ -661,33 +661,33 @@ describe('usage service', () => {
             }
         })
 
-        store.messages.addMessage(session.id, claudeUsage('kept-message'))
-        store.messages.addMessage(
+        await store.messages.addMessage(session.id, (await claudeUsage('kept-message')))
+        await store.messages.addMessage(
             session.id,
             { role: 'user', content: { type: 'text', text: 'retry this' } },
             'rewind-point'
         )
-        store.messages.addMessage(session.id, claudeUsage('discarded-message'))
-        expect(getUsageSummary(store, 'default', 'all').totals.requests).toBe(2)
+        await store.messages.addMessage(session.id, (await claudeUsage('discarded-message')))
+        expect((await getUsageSummary(store, 'default', 'all')).totals.requests).toBe(2)
 
-        const result = store.messages.truncateMessagesFromLocalId(session.id, 'rewind-point')
+        const result = (await store.messages.truncateMessagesFromLocalId(session.id, 'rewind-point'))
         expect(result.deleted).toBe(2)
-        expect(getUsageSummary(store, 'default', 'all').totals.requests).toBe(1)
-        expect(store.usage.getEvents([session.id])).toHaveLength(1)
-        store.close()
+        expect((await getUsageSummary(store, 'default', 'all')).totals.requests).toBe(1)
+        expect((await store.usage.getEvents([session.id]))).toHaveLength(1)
+        await store.close()
     })
 
-    it('does not deduplicate matching Codex turns from different sessions', () => {
+    it('does not deduplicate matching Codex turns from different sessions', async () => {
         const store = new Store(':memory:')
         for (const [sessionId, threadId] of [['codex-session-1', 'thread-1'], ['codex-session-2', 'thread-2']] as const) {
-            const session = store.sessions.getOrCreateSession(
+            const session = (await store.sessions.getOrCreateSession(
                 sessionId,
                 { path: '/tmp', host: 'test', flavor: 'codex' },
                 null,
                 'default',
                 'test-model'
-            )
-            addAgentMessage(store, session.id, {
+            ))
+            await addAgentMessage(store, session.id, {
                 type: 'codex',
                 data: {
                     type: 'token_count',
@@ -702,21 +702,21 @@ describe('usage service', () => {
             })
         }
 
-        const result = getUsageSummary(store, 'default', 'all')
+        const result = (await getUsageSummary(store, 'default', 'all'))
         expect(result.totals.requests).toBe(2)
         expect(result.totals.totalTokens).toBe(220)
-        store.close()
+        await store.close()
     })
 
-    it('deduplicates repeated cumulative snapshots without thread metadata', () => {
+    it('deduplicates repeated cumulative snapshots without thread metadata', async () => {
         const store = new Store(':memory:')
-        const session = store.sessions.getOrCreateSession(
+        const session = (await store.sessions.getOrCreateSession(
             'imported-codex-usage-test',
             { path: '/tmp', host: 'test', flavor: 'codex' },
             null,
             'default',
             'test-model'
-        )
+        ))
         const snapshots = [
             {
                 total: { inputTokens: 100, outputTokens: 10, cachedInputTokens: 80 },
@@ -728,23 +728,23 @@ describe('usage service', () => {
             }
         ]
         for (const info of [...snapshots, ...snapshots]) {
-            addAgentMessage(store, session.id, {
+            await addAgentMessage(store, session.id, {
                 type: 'codex',
                 data: { type: 'token_count', info }
             })
         }
 
-        const result = getUsageSummary(store, 'default', 'all')
+        const result = (await getUsageSummary(store, 'default', 'all'))
         expect(result.totals.requests).toBe(2)
         expect(result.totals.inputTokens).toBe(140)
         expect(result.totals.outputTokens).toBe(15)
         expect(result.totals.uncachedTokens).toBe(55)
-        store.close()
+        await store.close()
     })
 
-    it('excludes pre-HAPI Codex transcript usage from imported sessions', () => {
+    it('excludes pre-HAPI Codex transcript usage from imported sessions', async () => {
         const store = new Store(':memory:')
-        const session = store.sessions.getOrCreateSession(
+        const session = (await store.sessions.getOrCreateSession(
             'resumed-codex-usage-test',
             {
                 path: '/tmp',
@@ -756,9 +756,9 @@ describe('usage service', () => {
             null,
             'default',
             'test-model'
-        )
+        ))
 
-        addAgentMessage(store, session.id, {
+        await addAgentMessage(store, session.id, {
             type: 'codex',
             data: {
                 type: 'token_count',
@@ -768,7 +768,7 @@ describe('usage service', () => {
                 }
             }
         })
-        addAgentMessage(store, session.id, {
+        await addAgentMessage(store, session.id, {
             type: 'codex',
             data: {
                 type: 'token_count',
@@ -781,24 +781,24 @@ describe('usage service', () => {
             }
         })
 
-        const result = getUsageSummary(store, 'default', 'all')
+        const result = (await getUsageSummary(store, 'default', 'all'))
         expect(result.totals.requests).toBe(1)
         expect(result.totals.totalTokens).toBe(101_000)
         expect(result.totals.uncachedTokens).toBe(11_000)
-        store.close()
+        await store.close()
     })
 
-    it('excludes transcript replay events explicitly marked by the CLI', () => {
+    it('excludes transcript replay events explicitly marked by the CLI', async () => {
         const store = new Store(':memory:')
-        const session = store.sessions.getOrCreateSession(
+        const session = (await store.sessions.getOrCreateSession(
             'marked-codex-history-test',
             { path: '/tmp', host: 'test', flavor: 'codex' },
             null,
             'default',
             'test-model'
-        )
+        ))
 
-        addAgentMessage(store, session.id, {
+        await addAgentMessage(store, session.id, {
             type: 'codex',
             data: {
                 type: 'token_count',
@@ -809,7 +809,7 @@ describe('usage service', () => {
                 }
             }
         })
-        addAgentMessage(store, session.id, {
+        await addAgentMessage(store, session.id, {
             type: 'codex',
             data: {
                 type: 'token_count',
@@ -822,29 +822,29 @@ describe('usage service', () => {
             }
         })
 
-        const result = getUsageSummary(store, 'default', 'all')
+        const result = (await getUsageSummary(store, 'default', 'all'))
         expect(result.totals.requests).toBe(1)
         expect(result.totals.totalTokens).toBe(101_000)
-        store.close()
+        await store.close()
     })
 
-    it('keeps usage counted once when session history is merged', () => {
+    it('keeps usage counted once when session history is merged', async () => {
         const store = new Store(':memory:')
-        const source = store.sessions.getOrCreateSession(
+        const source = (await store.sessions.getOrCreateSession(
             'usage-merge-source',
             { path: '/tmp', host: 'test', flavor: 'claude' },
             null,
             'default',
             'test-model'
-        )
-        const target = store.sessions.getOrCreateSession(
+        ))
+        const target = (await store.sessions.getOrCreateSession(
             'usage-merge-target',
             { path: '/tmp', host: 'test', flavor: 'claude' },
             null,
             'default',
             'test-model'
-        )
-        addAgentMessage(store, source.id, {
+        ))
+        await addAgentMessage(store, source.id, {
             type: 'output',
             data: {
                 type: 'assistant',
@@ -854,16 +854,16 @@ describe('usage service', () => {
                 }
             }
         })
-        expect(getUsageSummary(store, 'default', 'all').totals.requests).toBe(1)
+        expect((await getUsageSummary(store, 'default', 'all')).totals.requests).toBe(1)
 
-        const moved = store.messages.mergeSessionMessages(source.id, target.id)
+        const moved = (await store.messages.mergeSessionMessages(source.id, target.id))
         expect(moved.moved).toBe(1)
-        store.usage.transferSession(source.id, target.id)
+        await store.usage.transferSession(source.id, target.id)
 
-        const result = getUsageSummary(store, 'default', 'all')
+        const result = (await getUsageSummary(store, 'default', 'all'))
         expect(result.totals.requests).toBe(1)
-        expect(store.usage.getEvents([source.id])).toEqual([])
-        expect(store.usage.getEvents([target.id])).toHaveLength(1)
-        store.close()
+        expect((await store.usage.getEvents([source.id]))).toEqual([])
+        expect((await store.usage.getEvents([target.id]))).toHaveLength(1)
+        await store.close()
     })
 })

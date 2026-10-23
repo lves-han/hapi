@@ -33,7 +33,7 @@ export class AndroidRelayService implements AndroidPushSender {
     constructor(private readonly transport: EncryptedPushTransport, private readonly store: Store) {}
 
     async sendToNamespace(namespace: string, payload: FcmSendPayload): Promise<FcmSendResult> {
-        const devices = this.store.fcm.getDevicesByNamespace(namespace, ['phone'])
+        const devices = (await this.store.fcm.getDevicesByNamespace(namespace, ['phone']))
         const result: FcmSendResult = { sent: 0, failed: 0, invalidTokens: [] }
         if (!devices.length) return result
         const plaintext = androidRelayPlaintext(payload.data)
@@ -56,7 +56,7 @@ export class AndroidRelayService implements AndroidPushSender {
                     return
                 }
                 if (outcome === 'invalid') {
-                    this.store.fcm.removeDeviceByToken(namespace, device.token)
+                    await this.store.fcm.removeDeviceByToken(namespace, device.token)
                     result.invalidTokens.push(device.token)
                 }
             } catch {

@@ -1,4 +1,4 @@
-import type { Database } from 'bun:sqlite'
+import type { Database } from './database'
 
 import type { NativeDevicePlatform, StoredFcmDevice } from './types'
 
@@ -26,11 +26,11 @@ function toStoredFcmDevice(row: DbFcmDeviceRow): StoredFcmDevice {
     }
 }
 
-export function upsertFcmDevice(
+export async function upsertFcmDevice(
     db: Database,
     namespace: string,
     device: { token: string; platform: NativeDevicePlatform; deviceId: string; pushKey?: string }
-): void {
+): Promise<void> {
     const now = Date.now()
     const params = {
         namespace,
@@ -42,17 +42,17 @@ export function upsertFcmDevice(
         updated_at: now
     }
 
-    db.transaction(() => {
+    await db.transaction(async () => {
         // One push token must not deliver across namespaces. Re-pairing the
         // same native install under a new namespace drops stale rows that
         // still reference this token elsewhere.
-        db.prepare(`
+        await db.prepare(`
             DELETE FROM fcm_devices
             WHERE token = @token
               AND (namespace != @namespace OR device_id != @device_id OR platform != @platform)
         `).run(params)
 
-        db.prepare(`
+        await db.prepare(`
             INSERT INTO fcm_devices (
                 namespace, token, platform, device_id, push_key, created_at, updated_at
             ) VALUES (
@@ -67,24 +67,24 @@ export function upsertFcmDevice(
     })()
 }
 
-export function removeFcmDeviceByToken(db: Database, namespace: string, token: string): void {
-    db.prepare('DELETE FROM fcm_devices WHERE namespace = ? AND token = ?').run(namespace, token)
+export async function removeFcmDeviceByToken(db: Database, namespace: string, token: string): Promise<void> {
+    await db.prepare('DELETE FROM fcm_devices WHERE namespace = ? AND token = ?').run(namespace, token)
 }
 
-export function getFcmDevicesByNamespace(
+export async function getFcmDevicesByNamespace(
     db: Database,
     namespace: string,
     platforms?: readonly NativeDevicePlatform[]
-): StoredFcmDevice[] {
+): Promise<StoredFcmDevice[]> {
     if (platforms && platforms.length > 0) {
         const placeholders = platforms.map(() => '?').join(', ')
-        const rows = db.prepare(
+        const rows = (await db.prepare(
             `SELECT * FROM fcm_devices WHERE namespace = ? AND platform IN (${placeholders}) ORDER BY updated_at DESC`
-        ).all(namespace, ...platforms) as DbFcmDeviceRow[]
+        ).all(namespace, ...platforms)) as DbFcmDeviceRow[]
         return rows.map(toStoredFcmDevice)
     }
-    const rows = db.prepare(
+    const rows = (await db.prepare(
         'SELECT * FROM fcm_devices WHERE namespace = ? ORDER BY updated_at DESC'
-    ).all(namespace) as DbFcmDeviceRow[]
+    ).all(namespace)) as DbFcmDeviceRow[]
     return rows.map(toStoredFcmDevice)
 }

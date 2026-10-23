@@ -29,21 +29,21 @@ function createCapturingPublisher(events: SyncEvent[]): EventPublisher {
 }
 
 describe('SessionCache.emitScratchlistChanged', () => {
-    it('emits a session-updated patch carrying scratchlistUpdatedAt', () => {
+    it('emits a session-updated patch carrying scratchlistUpdatedAt', async () => {
         const store = new Store(':memory:')
         const events: SyncEvent[] = []
         const cache = new SessionCache(store, createCapturingPublisher(events))
-        const session = cache.getOrCreateSession(
+        const session = (await cache.getOrCreateSession(
             'tag',
             { path: '/tmp', host: 'localhost', flavor: 'codex' },
             null,
             'default'
-        )
+        ))
         // Drain spawn events so we can assert on the scratchlist
         // emission alone.
         events.length = 0
 
-        cache.emitScratchlistChanged(session.id, 9999)
+        await cache.emitScratchlistChanged(session.id, 9999)
 
         expect(events).toHaveLength(1)
         const event = events[0]!
@@ -54,17 +54,17 @@ describe('SessionCache.emitScratchlistChanged', () => {
         expect(event.data).toEqual({ scratchlistUpdatedAt: 9999 })
     })
 
-    it('does not emit when the session is unknown (no namespace to scope to)', () => {
+    it('does not emit when the session is unknown (no namespace to scope to)', async () => {
         const store = new Store(':memory:')
         const events: SyncEvent[] = []
         const cache = new SessionCache(store, createCapturingPublisher(events))
-        cache.emitScratchlistChanged('does-not-exist', 9999)
+        await cache.emitScratchlistChanged('does-not-exist', 9999)
         expect(events).toHaveLength(0)
     })
 })
 
 describe('SyncEngine scratchlist mutations emit session-updated patches', () => {
-    function setup() {
+    async function setup() {
         const store = new Store(':memory:')
         const events: SyncEvent[] = []
         const cache = new SessionCache(store, createCapturingPublisher(events))
@@ -73,7 +73,7 @@ describe('SyncEngine scratchlist mutations emit session-updated patches', () => 
         // exercises the same code path used in production. We only need
         // the cache for `getOrCreateSession`; the engine reuses the
         // store internally.
-        const engine = new SyncEngine(
+        const engine = await SyncEngine.create(
             store,
             {} as never,
             new RpcRegistry(),
@@ -87,19 +87,19 @@ describe('SyncEngine scratchlist mutations emit session-updated patches', () => 
         return { engine, store, events, cache, engineEvents }
     }
 
-    it('createScratchlistEntry emits a session-updated patch on success', () => {
-        const { engine, engineEvents } = setup()
-        const session = engine.getOrCreateSession(
+    it('createScratchlistEntry emits a session-updated patch on success', async () => {
+        const { engine, engineEvents } = (await setup())
+        const session = (await engine.getOrCreateSession(
             'tag-create',
             { path: '/tmp', host: 'localhost', flavor: 'codex' },
             null,
             'default'
-        )
+        ))
         // Drain events from the spawn so we can assert on the mutation
         // emission alone.
         engineEvents.length = 0
 
-        const result = engine.createScratchlistEntry(session.id, 'note', { entryId: 'e1' })
+        const result = (await engine.createScratchlistEntry(session.id, 'note', { entryId: 'e1' }))
         expect(result.outcome).toBe('created')
 
         const matching = engineEvents.filter(
@@ -111,102 +111,102 @@ describe('SyncEngine scratchlist mutations emit session-updated patches', () => 
         expect(patch.sessionId).toBe(session.id)
         expect(patch.namespace).toBe('default')
 
-        engine.stop()
+        await engine.stop()
     })
 
-    it('updateScratchlistEntry emits a session-updated patch on success', () => {
-        const { engine, engineEvents } = setup()
-        const session = engine.getOrCreateSession(
+    it('updateScratchlistEntry emits a session-updated patch on success', async () => {
+        const { engine, engineEvents } = (await setup())
+        const session = (await engine.getOrCreateSession(
             'tag-update',
             { path: '/tmp', host: 'localhost', flavor: 'codex' },
             null,
             'default'
-        )
-        engine.createScratchlistEntry(session.id, 'before', { entryId: 'e1' })
+        ))
+        await engine.createScratchlistEntry(session.id, 'before', { entryId: 'e1' })
         engineEvents.length = 0
 
-        const updated = engine.updateScratchlistEntry(session.id, 'e1', { text: 'after' })
+        const updated = (await engine.updateScratchlistEntry(session.id, 'e1', { text: 'after' }))
         expect(updated).not.toBeNull()
         const matching = engineEvents.filter(
             (e) => e.type === 'session-updated' && (e.data as Record<string, unknown>).scratchlistUpdatedAt !== undefined
         )
         expect(matching).toHaveLength(1)
 
-        engine.stop()
+        await engine.stop()
     })
 
-    it('updateScratchlistEntry on a missing entry emits nothing', () => {
-        const { engine, engineEvents } = setup()
-        const session = engine.getOrCreateSession(
+    it('updateScratchlistEntry on a missing entry emits nothing', async () => {
+        const { engine, engineEvents } = (await setup())
+        const session = (await engine.getOrCreateSession(
             'tag-update-missing',
             { path: '/tmp', host: 'localhost', flavor: 'codex' },
             null,
             'default'
-        )
+        ))
         engineEvents.length = 0
-        const updated = engine.updateScratchlistEntry(session.id, 'never-existed', { text: 'whatever' })
+        const updated = (await engine.updateScratchlistEntry(session.id, 'never-existed', { text: 'whatever' }))
         expect(updated).toBeNull()
         const matching = engineEvents.filter(
             (e) => e.type === 'session-updated' && (e.data as Record<string, unknown>).scratchlistUpdatedAt !== undefined
         )
         expect(matching).toHaveLength(0)
-        engine.stop()
+        await engine.stop()
     })
 
-    it('deleteScratchlistEntry emits a session-updated patch on success', () => {
-        const { engine, engineEvents } = setup()
-        const session = engine.getOrCreateSession(
+    it('deleteScratchlistEntry emits a session-updated patch on success', async () => {
+        const { engine, engineEvents } = (await setup())
+        const session = (await engine.getOrCreateSession(
             'tag-delete',
             { path: '/tmp', host: 'localhost', flavor: 'codex' },
             null,
             'default'
-        )
-        engine.createScratchlistEntry(session.id, 'doomed', { entryId: 'e1' })
+        ))
+        await engine.createScratchlistEntry(session.id, 'doomed', { entryId: 'e1' })
         engineEvents.length = 0
-        const removed = engine.deleteScratchlistEntry(session.id, 'e1')
+        const removed = (await engine.deleteScratchlistEntry(session.id, 'e1'))
         expect(removed).toBe(true)
         const matching = engineEvents.filter(
             (e) => e.type === 'session-updated' && (e.data as Record<string, unknown>).scratchlistUpdatedAt !== undefined
         )
         expect(matching).toHaveLength(1)
-        engine.stop()
+        await engine.stop()
     })
 
-    it('deleteScratchlistEntry on a missing entry emits nothing', () => {
-        const { engine, engineEvents } = setup()
-        const session = engine.getOrCreateSession(
+    it('deleteScratchlistEntry on a missing entry emits nothing', async () => {
+        const { engine, engineEvents } = (await setup())
+        const session = (await engine.getOrCreateSession(
             'tag-delete-missing',
             { path: '/tmp', host: 'localhost', flavor: 'codex' },
             null,
             'default'
-        )
+        ))
         engineEvents.length = 0
-        const removed = engine.deleteScratchlistEntry(session.id, 'no-such-entry')
+        const removed = (await engine.deleteScratchlistEntry(session.id, 'no-such-entry'))
         expect(removed).toBe(false)
         const matching = engineEvents.filter(
             (e) => e.type === 'session-updated' && (e.data as Record<string, unknown>).scratchlistUpdatedAt !== undefined
         )
         expect(matching).toHaveLength(0)
-        engine.stop()
+        await engine.stop()
     })
 
-    it('createScratchlistEntry on duplicate does not emit an extra patch', () => {
-        const { engine, engineEvents } = setup()
-        const session = engine.getOrCreateSession(
+    it('createScratchlistEntry on duplicate does not emit an extra patch', async () => {
+        const { engine, engineEvents } = (await setup())
+        const session = (await engine.getOrCreateSession(
             'tag-dup',
             { path: '/tmp', host: 'localhost', flavor: 'codex' },
             null,
             'default'
-        )
-        engine.createScratchlistEntry(session.id, 'first', { entryId: 'dup' })
+        ))
+        await engine.createScratchlistEntry(session.id, 'first', { entryId: 'dup' })
         engineEvents.length = 0
-        const result = engine.createScratchlistEntry(session.id, 'second', { entryId: 'dup' })
+        const result = (await engine.createScratchlistEntry(session.id, 'second', { entryId: 'dup' }))
         if (result.outcome === 'session-not-found') throw new Error('unexpected')
         expect(result.outcome).toBe('duplicate')
         const matching = engineEvents.filter(
             (e) => e.type === 'session-updated' && (e.data as Record<string, unknown>).scratchlistUpdatedAt !== undefined
         )
         expect(matching).toHaveLength(0)
-        engine.stop()
+        await engine.stop()
     })
 })

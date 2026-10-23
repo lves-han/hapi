@@ -1,4 +1,4 @@
-import type { Database } from 'bun:sqlite'
+import type { Database } from './database'
 
 import type { StoredPushSubscription } from './types'
 
@@ -22,13 +22,13 @@ function toStoredPushSubscription(row: DbPushSubscriptionRow): StoredPushSubscri
     }
 }
 
-export function addPushSubscription(
+export async function addPushSubscription(
     db: Database,
     namespace: string,
     subscription: { endpoint: string; p256dh: string; auth: string }
-): void {
+): Promise<void> {
     const now = Date.now()
-    db.prepare(`
+    await db.prepare(`
         INSERT INTO push_subscriptions (
             namespace, endpoint, p256dh, auth, created_at
         ) VALUES (
@@ -48,18 +48,18 @@ export function addPushSubscription(
     })
 }
 
-export function removePushSubscription(db: Database, namespace: string, endpoint: string): void {
-    db.prepare(
+export async function removePushSubscription(db: Database, namespace: string, endpoint: string): Promise<void> {
+    await db.prepare(
         'DELETE FROM push_subscriptions WHERE namespace = ? AND endpoint = ?'
     ).run(namespace, endpoint)
 }
 
-export function getPushSubscriptionsByNamespace(
+export async function getPushSubscriptionsByNamespace(
     db: Database,
     namespace: string
-): StoredPushSubscription[] {
-    const rows = db.prepare(
+): Promise<StoredPushSubscription[]> {
+    const rows = (await db.prepare(
         'SELECT * FROM push_subscriptions WHERE namespace = ? ORDER BY created_at DESC'
-    ).all(namespace) as DbPushSubscriptionRow[]
+    ).all(namespace)) as DbPushSubscriptionRow[]
     return rows.map(toStoredPushSubscription)
 }

@@ -214,20 +214,20 @@ function parseUsageEvent(session: StoredSession, message: StoredMessage): UsageE
     return null
 }
 
-function collectUsageEvents(store: Store, sessions: StoredSession[]): void {
-    const scanStates = store.usage.getScanStates(sessions.map((session) => session.id))
+async function collectUsageEvents(store: Store, sessions: StoredSession[]): Promise<void> {
+    const scanStates = (await store.usage.getScanStates(sessions.map((session) => session.id)))
     for (const session of sessions) {
-        const messageEpoch = store.messages.getMessageEpoch(session.id)
+        const messageEpoch = (await store.messages.getMessageEpoch(session.id))
         const scanState = scanStates.get(session.id)
         const replaceEvents = !scanState || scanState.messageEpoch !== messageEpoch
         const afterSeq = replaceEvents ? 0 : scanState.lastSeq
-        const messages = store.messages.getMessagesAfterSeq(session.id, afterSeq)
+        const messages = (await store.messages.getMessagesAfterSeq(session.id, afterSeq))
         const events = new Map<string, UsageEvent>()
         let indexedModels: Map<string, string> | null = null
-        const getIndexedModel = (sourceKey: string): string | null => {
+        const getIndexedModel = async (sourceKey: string): Promise<string | null> => {
             if (indexedModels === null) {
                 indexedModels = new Map(
-                    store.usage.getEvents([session.id])
+                    (await store.usage.getEvents([session.id]))
                         .filter((event): event is UsageEvent & { model: string } => event.model !== null)
                         .map((event) => [event.sourceKey, event.model])
                 )
@@ -242,7 +242,7 @@ function collectUsageEvents(store: Store, sessions: StoredSession[]): void {
             const explicitModel = event.model
             event.model = explicitModel
                 ?? existingEvent?.model
-                ?? getIndexedModel(event.sourceKey)
+                ?? (await getIndexedModel(event.sourceKey))
                 ?? fallbackModel
             if (event.kind === 'delta' || !existingEvent) {
                 events.set(event.sourceKey, event)
@@ -253,7 +253,7 @@ function collectUsageEvents(store: Store, sessions: StoredSession[]): void {
         }
         const lastSeq = messages.at(-1)?.seq ?? afterSeq
         if (messages.length > 0 || replaceEvents) {
-            store.usage.recordScan(
+            await store.usage.recordScan(
                 session.id,
                 messageEpoch,
                 lastSeq,
@@ -329,23 +329,23 @@ function dayKey(timestamp: number, formatter: Intl.DateTimeFormat): string {
     return `${year}-${month}-${day}`
 }
 
-export function getUsageSummary(
+export async function getUsageSummary(
     store: Store,
     namespace: string,
     range: string | undefined,
     timeZone: string = 'UTC'
-): UsageSummaryResponse {
-    const sessions = store.sessions.getSessionsByNamespace(namespace)
+): Promise<UsageSummaryResponse> {
+    const sessions = (await store.sessions.getSessionsByNamespace(namespace))
     // This is intentionally lazy. Existing HAPI databases have no usage table;
     // the first dashboard request backfills history, while later requests only
     // update the idempotent event rows.
-    collectUsageEvents(store, sessions)
+    await collectUsageEvents(store, sessions)
 
     const now = Date.now()
     const days = range === '30d' ? 30 : range === 'all' ? null : 7
     const from = days === null ? null : now - days * 24 * 60 * 60 * 1000
     const sessionIds = new Set(sessions.map((session) => session.id))
-    const events = store.usage.getEvents(Array.from(sessionIds))
+    const events = (await store.usage.getEvents(Array.from(sessionIds)))
     const isInRange = (event: UsageEvent) => (from === null || event.createdAt >= from) && event.createdAt <= now
 
     const totals = emptyTotals()

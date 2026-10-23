@@ -80,7 +80,6 @@ export async function setup() {
         ...(process.env.TMPDIR ? { TMPDIR: process.env.TMPDIR } : {}),
         ...(process.env.BUN_INSTALL ? { BUN_INSTALL: process.env.BUN_INSTALL } : {}),
         HAPI_HOME: tmpHome,
-        DB_PATH: join(tmpHome, 'hapi.db'),
         HAPI_LISTEN_PORT: String(port),
         HAPI_LISTEN_HOST: '127.0.0.1',
         HAPI_PUBLIC_URL: `http://127.0.0.1:${port}`,

@@ -39,39 +39,39 @@ function setup() {
     return { store, events, cache }
 }
 
-function makeSessions(cache: SessionCache, ns: string = 'default') {
-    const oldSession = cache.getOrCreateSession(
+async function makeSessions(cache: SessionCache, ns: string = 'default') {
+    const oldSession = (await cache.getOrCreateSession(
         'agent-merge-old-' + Math.random().toString(36).slice(2, 8),
         { path: '/tmp/project', host: 'localhost', flavor: 'codex' },
         null,
         ns
-    )
-    const newSession = cache.getOrCreateSession(
+    ))
+    const newSession = (await cache.getOrCreateSession(
         'agent-merge-new-' + Math.random().toString(36).slice(2, 8),
         { path: '/tmp/project', host: 'localhost', flavor: 'codex' },
         null,
         ns
-    )
+    ))
     return { oldSession, newSession }
 }
 
 describe('mergeSessions (deleteOldSession=true) - scratchlist transfer', () => {
     it('moves scratchlist rows from old to new before the cascade-delete fires', async () => {
         const { store, cache } = setup()
-        const { oldSession, newSession } = makeSessions(cache)
+        const { oldSession, newSession } = (await makeSessions(cache))
 
-        store.scratchlist.create(oldSession.id, 'note one', { entryId: 'e-1', createdAt: 100 })
-        store.scratchlist.create(oldSession.id, 'note two', { entryId: 'e-2', createdAt: 200 })
+        await store.scratchlist.create(oldSession.id, 'note one', { entryId: 'e-1', createdAt: 100 })
+        await store.scratchlist.create(oldSession.id, 'note two', { entryId: 'e-2', createdAt: 200 })
 
         await cache.mergeSessions(oldSession.id, newSession.id, 'default')
 
         // New session now owns the rows.
-        const onNew = store.scratchlist.list(newSession.id).map((e) => e.entryId).sort()
+        const onNew = (await store.scratchlist.list(newSession.id)).map((e) => e.entryId).sort()
         expect(onNew).toEqual(['e-1', 'e-2'])
 
         // Old session is gone (deleteOldSession=true) AND its rows
         // are not stranded on a phantom session id.
-        expect(store.scratchlist.list(oldSession.id)).toEqual([])
+        expect((await store.scratchlist.list(oldSession.id))).toEqual([])
     })
 
     it('re-keys hub attachment paths when rows move to the new session id', async () => {
@@ -83,7 +83,7 @@ describe('mergeSessions (deleteOldSession=true) - scratchlist transfer', () => {
         process.env.HAPI_HOME = hapiHome
         try {
             const { store, cache } = setup()
-            const { oldSession, newSession } = makeSessions(cache)
+            const { oldSession, newSession } = (await makeSessions(cache))
             const { writeScratchlistAttachmentFile } = await import('../scratchlistAttachments/storage')
             const att = await writeScratchlistAttachmentFile(
                 hapiHome,
@@ -93,7 +93,7 @@ describe('mergeSessions (deleteOldSession=true) - scratchlist transfer', () => {
                 'image/png',
                 Buffer.from('img')
             )
-            store.scratchlist.create(oldSession.id, 'with pic', {
+            await store.scratchlist.create(oldSession.id, 'with pic', {
                 entryId: 'e-att',
                 createdAt: 100,
                 attachments: [att],
@@ -101,7 +101,7 @@ describe('mergeSessions (deleteOldSession=true) - scratchlist transfer', () => {
 
             await cache.mergeSessions(oldSession.id, newSession.id, 'default')
 
-            const onNew = store.scratchlist.list(newSession.id)
+            const onNew = (await store.scratchlist.list(newSession.id))
             expect(onNew).toHaveLength(1)
             expect(onNew[0]!.attachments[0]!.path).toContain(`/${newSession.id}/`)
             expect(onNew[0]!.attachments[0]!.path).not.toContain(`/${oldSession.id}/`)
@@ -126,16 +126,16 @@ describe('mergeSessions (deleteOldSession=true) - scratchlist transfer', () => {
 
     it('handles entryId PK collision by keeping the dedup target row (operator-visible session wins)', async () => {
         const { store, cache } = setup()
-        const { oldSession, newSession } = makeSessions(cache)
+        const { oldSession, newSession } = (await makeSessions(cache))
 
         // Both sessions have an entry at the same id - the new wins.
-        store.scratchlist.create(oldSession.id, 'OLD copy', { entryId: 'shared-id', createdAt: 100 })
-        store.scratchlist.create(newSession.id, 'NEW copy', { entryId: 'shared-id', createdAt: 200 })
-        store.scratchlist.create(oldSession.id, 'unique to old', { entryId: 'old-only', createdAt: 50 })
+        await store.scratchlist.create(oldSession.id, 'OLD copy', { entryId: 'shared-id', createdAt: 100 })
+        await store.scratchlist.create(newSession.id, 'NEW copy', { entryId: 'shared-id', createdAt: 200 })
+        await store.scratchlist.create(oldSession.id, 'unique to old', { entryId: 'old-only', createdAt: 50 })
 
         await cache.mergeSessions(oldSession.id, newSession.id, 'default')
 
-        const final = store.scratchlist.list(newSession.id)
+        const final = (await store.scratchlist.list(newSession.id))
         const byId = new Map(final.map((e) => [e.entryId, e.text]))
         expect(byId.get('shared-id')).toBe('NEW copy')
         expect(byId.get('old-only')).toBe('unique to old')
@@ -144,8 +144,8 @@ describe('mergeSessions (deleteOldSession=true) - scratchlist transfer', () => {
 
     it('emits scratchlistUpdatedAt on the new session (and not on the old one - it is about to be removed)', async () => {
         const { store, events, cache } = setup()
-        const { oldSession, newSession } = makeSessions(cache)
-        store.scratchlist.create(oldSession.id, 'note', { entryId: 'e-1', createdAt: 100 })
+        const { oldSession, newSession } = (await makeSessions(cache))
+        await store.scratchlist.create(oldSession.id, 'note', { entryId: 'e-1', createdAt: 100 })
         events.length = 0
 
         await cache.mergeSessions(oldSession.id, newSession.id, 'default')
@@ -162,7 +162,7 @@ describe('mergeSessions (deleteOldSession=true) - scratchlist transfer', () => {
 
     it('is a no-op (no extra emit) when the old session has no scratchlist rows', async () => {
         const { events, cache } = setup()
-        const { oldSession, newSession } = makeSessions(cache)
+        const { oldSession, newSession } = (await makeSessions(cache))
         events.length = 0
 
         await cache.mergeSessions(oldSession.id, newSession.id, 'default')
@@ -179,25 +179,25 @@ describe('mergeSessions (deleteOldSession=true) - scratchlist transfer', () => {
 describe('mergeSessionHistory (deleteOldSession=false) - scratchlist transfer', () => {
     it('moves scratchlist rows even when the old session row stays alive', async () => {
         const { store, cache } = setup()
-        const { oldSession, newSession } = makeSessions(cache)
+        const { oldSession, newSession } = (await makeSessions(cache))
 
-        store.scratchlist.create(oldSession.id, 'still-need-this', { entryId: 'e-1', createdAt: 100 })
+        await store.scratchlist.create(oldSession.id, 'still-need-this', { entryId: 'e-1', createdAt: 100 })
 
         // Active-duplicate codepath: keeps the live socket but moves
         // the persisted history into the dedup target. Scratchlist
         // is "persisted history" for this purpose.
         await cache.mergeSessionHistory(oldSession.id, newSession.id, 'default', { mergeAgentState: false })
 
-        expect(store.scratchlist.list(newSession.id).map((e) => e.entryId)).toEqual(['e-1'])
+        expect((await store.scratchlist.list(newSession.id)).map((e) => e.entryId)).toEqual(['e-1'])
         // Old row is still alive but its scratchlist is empty - the
         // operator-facing dedup target is now the source of truth.
-        expect(store.scratchlist.list(oldSession.id)).toEqual([])
+        expect((await store.scratchlist.list(oldSession.id))).toEqual([])
     })
 
     it('emits scratchlistUpdatedAt on BOTH the new and the still-alive old session id', async () => {
         const { store, events, cache } = setup()
-        const { oldSession, newSession } = makeSessions(cache)
-        store.scratchlist.create(oldSession.id, 'note', { entryId: 'e-1', createdAt: 100 })
+        const { oldSession, newSession } = (await makeSessions(cache))
+        await store.scratchlist.create(oldSession.id, 'note', { entryId: 'e-1', createdAt: 100 })
         events.length = 0
 
         await cache.mergeSessionHistory(oldSession.id, newSession.id, 'default', { mergeAgentState: false })
@@ -220,15 +220,15 @@ describe('mergeSessionHistory (deleteOldSession=false) - scratchlist transfer', 
         // without moving any; the old session stays visible in the
         // mergeSessionHistory path and must still get an invalidation.
         const { store, events, cache } = setup()
-        const { oldSession, newSession } = makeSessions(cache)
-        store.scratchlist.create(oldSession.id, 'OLD copy', { entryId: 'shared-only', createdAt: 100 })
-        store.scratchlist.create(newSession.id, 'NEW copy', { entryId: 'shared-only', createdAt: 200 })
+        const { oldSession, newSession } = (await makeSessions(cache))
+        await store.scratchlist.create(oldSession.id, 'OLD copy', { entryId: 'shared-only', createdAt: 100 })
+        await store.scratchlist.create(newSession.id, 'NEW copy', { entryId: 'shared-only', createdAt: 200 })
         events.length = 0
 
         await cache.mergeSessionHistory(oldSession.id, newSession.id, 'default', { mergeAgentState: false })
 
-        expect(store.scratchlist.list(oldSession.id)).toEqual([])
-        expect(store.scratchlist.list(newSession.id)).toHaveLength(1)
+        expect((await store.scratchlist.list(oldSession.id))).toEqual([])
+        expect((await store.scratchlist.list(newSession.id))).toHaveLength(1)
 
         const scratchPatches = events.filter((e) => {
             return e.type === 'session-updated'
@@ -253,11 +253,11 @@ describe('cascade-delete safety (regression)', () => {
         // id while the operator expected the data to follow the
         // new id.
         const { store, cache } = setup()
-        const { oldSession, newSession } = makeSessions(cache)
-        store.scratchlist.create(oldSession.id, 'note', { entryId: 'e-1', createdAt: 100 })
+        const { oldSession, newSession } = (await makeSessions(cache))
+        await store.scratchlist.create(oldSession.id, 'note', { entryId: 'e-1', createdAt: 100 })
 
         await cache.mergeSessions(oldSession.id, newSession.id, 'default')
-        expect(store.scratchlist.list(newSession.id)).toHaveLength(1)
+        expect((await store.scratchlist.list(newSession.id))).toHaveLength(1)
 
         // Now an explicit operator-driven delete of the new session.
         // Mark it inactive first because deleteSession refuses to
@@ -265,6 +265,6 @@ describe('cascade-delete safety (regression)', () => {
         const cached = cache.getSession(newSession.id)
         if (cached) cached.active = false
         await cache.deleteSession(newSession.id)
-        expect(store.scratchlist.list(newSession.id)).toEqual([])
+        expect((await store.scratchlist.list(newSession.id))).toEqual([])
     })
 })

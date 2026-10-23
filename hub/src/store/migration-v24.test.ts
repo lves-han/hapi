@@ -14,12 +14,12 @@ afterEach(() => {
 })
 
 describe('schema migration v23 to v26', () => {
-    it('adds fcm_devices.push_key to a V23 database and keeps existing rows', () => {
+    it('adds fcm_devices.push_key to a V23 database and keeps existing rows', async () => {
         const dir = mkdtempSync(join(tmpdir(), 'hapi-migration-v24-'))
         tempDirs.push(dir)
         const dbPath = join(dir, 'hapi.db')
 
-        new Store(dbPath).close()
+        await new Store(dbPath).close()
         const legacy = new Database(dbPath)
         legacy.exec(`
             ALTER TABLE fcm_devices DROP COLUMN push_key;
@@ -40,28 +40,28 @@ describe('schema migration v23 to v26', () => {
         expect(version.user_version).toBe(26)
 
         // Existing Android rows survive with a NULL push key.
-        const devices = migrated.fcm.getDevicesByNamespace('default')
+        const devices = (await migrated.fcm.getDevicesByNamespace('default'))
         expect(devices).toHaveLength(1)
         expect(devices[0].token).toBe('fcm-tok-1')
         expect(devices[0].pushKey).toBeNull()
 
         // And the migrated DB accepts new iOS rows.
-        migrated.fcm.upsertDevice('default', {
+        await migrated.fcm.upsertDevice('default', {
             token: 'a1b2',
             platform: 'ios',
             deviceId: 'iphone-1',
             pushKey: Buffer.alloc(32, 7).toString('base64')
         })
-        expect(migrated.fcm.getDevicesByNamespace('default', ['ios'])).toHaveLength(1)
-        migrated.close()
+        expect((await migrated.fcm.getDevicesByNamespace('default', ['ios']))).toHaveLength(1)
+        await migrated.close()
     })
 
-    it('adds messages.delivery_state to an already-upgraded V24 database', () => {
+    it('adds messages.delivery_state to an already-upgraded V24 database', async () => {
         const dir = mkdtempSync(join(tmpdir(), 'hapi-migration-v24-delivery-'))
         tempDirs.push(dir)
         const dbPath = join(dir, 'hapi.db')
 
-        new Store(dbPath).close()
+        await new Store(dbPath).close()
         const legacy = new Database(dbPath)
         legacy.exec(`
             ALTER TABLE messages DROP COLUMN delivery_state;
@@ -75,6 +75,6 @@ describe('schema migration v23 to v26', () => {
         const version = internalDb.prepare('PRAGMA user_version').get() as { user_version: number }
         expect(columns.some((col) => col.name === 'delivery_state')).toBe(true)
         expect(version.user_version).toBe(26)
-        migrated.close()
+        await migrated.close()
     })
 })

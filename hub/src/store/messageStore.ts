@@ -1,4 +1,4 @@
-import type { Database } from 'bun:sqlite'
+import type { Database } from './database'
 
 import { hasConversationMessageContent } from '@hapi/protocol/messages'
 import { decodeMessageContent } from './contentCodec'
@@ -55,178 +55,180 @@ export class MessageStore {
         this.db = db
     }
 
-    addMessage(sessionId: string, content: unknown, localId?: string, scheduledAt?: number | null, createdAt?: number): StoredMessage {
-        return addMessage(this.db, sessionId, content, localId, scheduledAt, createdAt)
+    async addMessage(sessionId: string, content: unknown, localId?: string, scheduledAt?: number | null, createdAt?: number): Promise<StoredMessage> {
+        return this.db.operation(() => addMessage(this.db, sessionId, content, localId, scheduledAt, createdAt), true)
     }
 
-    syncNativeQueuedMessage(sessionId: string, localId: string, text: string): StoredMessage {
-        return syncNativeQueuedMessage(this.db, sessionId, localId, text)
+    async syncNativeQueuedMessage(sessionId: string, localId: string, text: string): Promise<StoredMessage> {
+        return this.db.operation(() => syncNativeQueuedMessage(this.db, sessionId, localId, text), true)
     }
 
-    deleteLiveReasoningSnapshots(sessionId: string, streamId: string, keepMessageId?: string): number {
-        return deleteLiveReasoningSnapshots(this.db, sessionId, streamId, keepMessageId)
+    async deleteLiveReasoningSnapshots(sessionId: string, streamId: string, keepMessageId?: string): Promise<number> {
+        return this.db.operation(() => deleteLiveReasoningSnapshots(this.db, sessionId, streamId, keepMessageId), true)
     }
 
-    addImportedMessage(sessionId: string, content: unknown, localId: string, createdAt: number): { message: StoredMessage; inserted: boolean } {
-        return addImportedMessage(this.db, sessionId, content, localId, createdAt)
+    async addImportedMessage(sessionId: string, content: unknown, localId: string, createdAt: number): Promise<{ message: StoredMessage; inserted: boolean }> {
+        return this.db.operation(() => addImportedMessage(this.db, sessionId, content, localId, createdAt), true)
     }
 
-    copyMessageToSession(
+    async copyMessageToSession(
         sessionId: string,
         message: Pick<StoredMessage, 'content' | 'createdAt' | 'localId' | 'invokedAt' | 'scheduledAt' | 'deliveryState'>
-    ): StoredMessage {
-        // 中文注释：重复会话合并时需要保留源消息的时间戳和排队信息，因此走专门的复制入口而不是普通 addMessage。
-        return copyStoredMessageToSession(this.db, sessionId, message)
+    ): Promise<StoredMessage> {
+        return this.db.operation(() => copyStoredMessageToSession(this.db, sessionId, message), true)
     }
 
-    copyMessagesToSession(
+    async copyMessagesToSession(
         sessionId: string,
         messages: Array<Pick<StoredMessage, 'content' | 'createdAt' | 'localId' | 'invokedAt' | 'scheduledAt' | 'deliveryState'>>
-    ): number {
-        return copyStoredMessagesToSession(this.db, sessionId, messages)
+    ): Promise<number> {
+        return this.db.operation(() => copyStoredMessagesToSession(this.db, sessionId, messages), true)
     }
 
-    getAllMessages(sessionId: string): StoredMessage[] {
-        return getAllMessages(this.db, sessionId)
+    async getAllMessages(sessionId: string): Promise<StoredMessage[]> {
+        return this.db.operation(() => getAllMessages(this.db, sessionId), false)
     }
 
-    getMessagesAfterSeq(sessionId: string, afterSeq: number): StoredMessage[] {
-        return getMessagesAfterSeq(this.db, sessionId, afterSeq)
+    async getMessagesAfterSeq(sessionId: string, afterSeq: number): Promise<StoredMessage[]> {
+        return this.db.operation(() => getMessagesAfterSeq(this.db, sessionId, afterSeq), false)
     }
 
-    getSeqById(sessionId: string, messageId: string): number | null {
-        return getMessageSeqById(this.db, sessionId, messageId)
+    async getSeqById(sessionId: string, messageId: string): Promise<number | null> {
+        return this.db.operation(() => getMessageSeqById(this.db, sessionId, messageId), false)
     }
 
-    getMessages(sessionId: string, limit: number = 200): StoredMessage[] {
-        return getMessages(this.db, sessionId, limit)
+    async getMessages(sessionId: string, limit: number = 200): Promise<StoredMessage[]> {
+        return this.db.operation(() => getMessages(this.db, sessionId, limit), false)
     }
 
-    getFirstMessages(sessionId: string, limit: number = 50): StoredMessage[] {
-        return getFirstMessages(this.db, sessionId, limit)
+    async getFirstMessages(sessionId: string, limit: number = 50): Promise<StoredMessage[]> {
+        return this.db.operation(() => getFirstMessages(this.db, sessionId, limit), false)
     }
 
-    getDeliverableMessagesAfter(sessionId: string, afterSeq: number, now: number, limit: number = 200): StoredMessage[] {
-        return getDeliverableMessagesAfter(this.db, sessionId, afterSeq, now, limit)
+    async getDeliverableMessagesAfter(sessionId: string, afterSeq: number, now: number, limit: number = 200): Promise<StoredMessage[]> {
+        return this.db.operation(() => getDeliverableMessagesAfter(this.db, sessionId, afterSeq, now, limit), false)
     }
 
-    getMessagesByPosition(sessionId: string, limit: number, before?: { at: number; seq: number }): StoredMessage[] {
-        return getMessagesByPosition(this.db, sessionId, limit, before)
+    async getMessagesByPosition(sessionId: string, limit: number, before?: { at: number; seq: number }): Promise<StoredMessage[]> {
+        return this.db.operation(() => getMessagesByPosition(this.db, sessionId, limit, before), false)
     }
 
-    getMessagesAfterPosition(
+    async getMessagesAfterPosition(
         sessionId: string,
         limit: number,
         after: MessagePosition,
         until?: MessagePosition
-    ): StoredMessage[] {
-        return getMessagesAfterPosition(this.db, sessionId, limit, after, until)
+    ): Promise<StoredMessage[]> {
+        return this.db.operation(() => getMessagesAfterPosition(this.db, sessionId, limit, after, until), false)
     }
 
-    getNewestMessagePosition(sessionId: string): MessagePosition | null {
-        return getNewestMessagePosition(this.db, sessionId)
+    async getNewestMessagePosition(sessionId: string): Promise<MessagePosition | null> {
+        return this.db.operation(() => getNewestMessagePosition(this.db, sessionId), false)
     }
 
-    getMessageEpoch(sessionId: string): number {
-        return getMessageEpoch(this.db, sessionId)
+    async getMessageEpoch(sessionId: string): Promise<number> {
+        return this.db.operation(() => getMessageEpoch(this.db, sessionId), false)
     }
 
-    bumpMessageEpoch(sessionId: string): number {
-        return bumpMessageEpoch(this.db, sessionId)
+    async bumpMessageEpoch(sessionId: string): Promise<number> {
+        return this.db.operation(() => bumpMessageEpoch(this.db, sessionId), true)
     }
 
-    getLocalMessageStates(sessionId: string, localIds: string[]): LocalMessageState[] {
-        return getLocalMessageStates(this.db, sessionId, localIds)
+    async getLocalMessageStates(sessionId: string, localIds: string[]): Promise<LocalMessageState[]> {
+        return this.db.operation(() => getLocalMessageStates(this.db, sessionId, localIds), false)
     }
 
-    getUninvokedLocalMessages(sessionId: string, options?: { deliverableOnly?: boolean }): StoredMessage[] {
-        return getUninvokedLocalMessages(this.db, sessionId, options)
+    async getUninvokedLocalMessages(sessionId: string, options?: { deliverableOnly?: boolean }): Promise<StoredMessage[]> {
+        return this.db.operation(() => getUninvokedLocalMessages(this.db, sessionId, options), false)
     }
 
-    getMatureScheduledMessages(beforeTime: number): StoredMessage[] {
-        return getMatureScheduledMessages(this.db, beforeTime)
+    async getMatureScheduledMessages(beforeTime: number): Promise<StoredMessage[]> {
+        return this.db.operation(() => getMatureScheduledMessages(this.db, beforeTime), false)
     }
 
-    getImmediateQueuedLocalMessages(sessionId: string): StoredMessage[] {
-        return getImmediateQueuedLocalMessages(this.db, sessionId)
+    async getImmediateQueuedLocalMessages(sessionId: string): Promise<StoredMessage[]> {
+        return this.db.operation(() => getImmediateQueuedLocalMessages(this.db, sessionId), false)
     }
 
-    countFutureScheduledLocalMessages(sessionId: string, now: number = Date.now()): number {
-        return countFutureScheduledLocalMessages(this.db, sessionId, now)
+    async countFutureScheduledLocalMessages(sessionId: string, now: number = Date.now()): Promise<number> {
+        return this.db.operation(() => countFutureScheduledLocalMessages(this.db, sessionId, now), false)
     }
 
-    countFutureScheduledBySessionIds(sessionIds: string[], now: number = Date.now()): Map<string, number> {
-        return countFutureScheduledBySessionIds(this.db, sessionIds, now)
+    async countFutureScheduledBySessionIds(sessionIds: string[], now: number = Date.now()): Promise<Map<string, number>> {
+        return this.db.operation(() => countFutureScheduledBySessionIds(this.db, sessionIds, now), false)
     }
 
-    minFutureScheduledAtBySessionIds(sessionIds: string[], now: number = Date.now()): Map<string, number> {
-        return minFutureScheduledAtBySessionIds(this.db, sessionIds, now)
+    async minFutureScheduledAtBySessionIds(sessionIds: string[], now: number = Date.now()): Promise<Map<string, number>> {
+        return this.db.operation(() => minFutureScheduledAtBySessionIds(this.db, sessionIds, now), false)
     }
 
     // ponytail: scans through leading bookkeeping; index content if that prefix becomes costly.
-    hasConversationContent(sessionId: string): boolean {
-        const query = this.db.prepare<{ content: string | Uint8Array }, [string]>(
-            'SELECT content FROM messages WHERE session_id = ? ORDER BY seq ASC'
-        )
-        try {
-            for (const row of query.iterate(sessionId)) {
-                if (hasConversationMessageContent(decodeMessageContent(row.content))) return true
+    async hasConversationContent(sessionId: string): Promise<boolean> {
+        return this.db.operation(async () => {
+            const query = this.db.prepare<{ content: string | Uint8Array }, [string]>(
+                'SELECT content FROM messages WHERE session_id = ? ORDER BY seq ASC'
+            )
+            try {
+                for await (const row of query.iterate(sessionId)) {
+                    if (hasConversationMessageContent(decodeMessageContent(row.content))) return true
+                }
+                return false
+            } finally {
+                query.finalize()
             }
-            return false
-        } finally {
-            query.finalize()
-        }
+
+}, false)
     }
 
-    countMessages(sessionId: string): number {
-        return countMessages(this.db, sessionId)
+    async countMessages(sessionId: string): Promise<number> {
+        return this.db.operation(() => countMessages(this.db, sessionId), false)
     }
 
-    cancelQueuedMessage(sessionId: string, messageId: string): CancelQueuedMessageResult {
-        return cancelQueuedMessage(this.db, sessionId, messageId)
+    async cancelQueuedMessage(sessionId: string, messageId: string): Promise<CancelQueuedMessageResult> {
+        return this.db.operation(() => cancelQueuedMessage(this.db, sessionId, messageId), true)
     }
 
-    lookupQueuedMessage(sessionId: string, messageId: string): LookupQueuedMessageResult {
-        return lookupQueuedMessage(this.db, sessionId, messageId)
+    async lookupQueuedMessage(sessionId: string, messageId: string): Promise<LookupQueuedMessageResult> {
+        return this.db.operation(() => lookupQueuedMessage(this.db, sessionId, messageId), true)
     }
 
-    deleteQueuedMessageById(sessionId: string, messageId: string): boolean {
-        return deleteQueuedMessageById(this.db, sessionId, messageId)
+    async deleteQueuedMessageById(sessionId: string, messageId: string): Promise<boolean> {
+        return this.db.operation(() => deleteQueuedMessageById(this.db, sessionId, messageId), true)
     }
 
-    claimIndeterminateMessage(sessionId: string, messageId: string): StoredMessage | null {
-        return claimIndeterminateMessage(this.db, sessionId, messageId)
+    async claimIndeterminateMessage(sessionId: string, messageId: string): Promise<StoredMessage | null> {
+        return this.db.operation(() => claimIndeterminateMessage(this.db, sessionId, messageId), true)
     }
 
-    markMessagesInvoked(sessionId: string, localIds: string[], invokedAt: number): number {
-        return markMessagesInvoked(this.db, sessionId, localIds, invokedAt)
+    async markMessagesInvoked(sessionId: string, localIds: string[], invokedAt: number): Promise<number> {
+        return this.db.operation(() => markMessagesInvoked(this.db, sessionId, localIds, invokedAt), true)
     }
 
-    markMessagesIndeterminate(sessionId: string, localIds: string[]): number {
-        return markMessagesIndeterminate(this.db, sessionId, localIds)
+    async markMessagesIndeterminate(sessionId: string, localIds: string[]): Promise<number> {
+        return this.db.operation(() => markMessagesIndeterminate(this.db, sessionId, localIds), true)
     }
 
-    setMessagesDeliveryState(sessionId: string, localIds: string[], state: 'queued' | 'dispatching' | 'indeterminate'): number {
-        return setMessagesDeliveryState(this.db, sessionId, localIds, state)
+    async setMessagesDeliveryState(sessionId: string, localIds: string[], state: 'queued' | 'dispatching' | 'indeterminate'): Promise<number> {
+        return this.db.operation(() => setMessagesDeliveryState(this.db, sessionId, localIds, state), true)
     }
 
-    markUninvokedImmediateMessages(sessionId: string, invokedAt: number): string[] {
-        return markUninvokedImmediateMessages(this.db, sessionId, invokedAt)
+    async markUninvokedImmediateMessages(sessionId: string, invokedAt: number): Promise<string[]> {
+        return this.db.operation(() => markUninvokedImmediateMessages(this.db, sessionId, invokedAt), true)
     }
 
-    moveUninvokedScheduledMessages(fromSessionId: string, toSessionId: string): number {
-        return moveUninvokedScheduledMessages(this.db, fromSessionId, toSessionId)
+    async moveUninvokedScheduledMessages(fromSessionId: string, toSessionId: string): Promise<number> {
+        return this.db.operation(() => moveUninvokedScheduledMessages(this.db, fromSessionId, toSessionId), true)
     }
 
-    moveUninvokedMessages(fromSessionId: string, toSessionId: string): number {
-        return moveUninvokedMessages(this.db, fromSessionId, toSessionId)
+    async moveUninvokedMessages(fromSessionId: string, toSessionId: string): Promise<number> {
+        return this.db.operation(() => moveUninvokedMessages(this.db, fromSessionId, toSessionId), true)
     }
 
-    mergeSessionMessages(fromSessionId: string, toSessionId: string): { moved: number; oldMaxSeq: number; newMaxSeq: number } {
-        return mergeSessionMessages(this.db, fromSessionId, toSessionId)
+    async mergeSessionMessages(fromSessionId: string, toSessionId: string): Promise<{ moved: number; oldMaxSeq: number; newMaxSeq: number }> {
+        return this.db.operation(() => mergeSessionMessages(this.db, fromSessionId, toSessionId), true)
     }
 
-    truncateMessagesFromLocalId(
+    async truncateMessagesFromLocalId(
         sessionId: string,
         localId: string,
         replacement: Array<{
@@ -235,7 +237,7 @@ export class MessageStore {
             createdAt?: number
             invokedAt?: number | null
         }> = []
-    ): { deleted: number; inserted: number; epoch: number } {
-        return truncateMessagesFromLocalId(this.db, sessionId, localId, replacement)
+    ): Promise<{ deleted: number; inserted: number; epoch: number }> {
+        return this.db.operation(() => truncateMessagesFromLocalId(this.db, sessionId, localId, replacement), true)
     }
 }

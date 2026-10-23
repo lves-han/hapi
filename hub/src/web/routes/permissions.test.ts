@@ -41,7 +41,7 @@ function createApp(opts?: {
 }) {
     const session = createSession()
     const engine = {
-        resolveSessionAccess: () => ({ ok: true, sessionId: session.id, session }),
+        resolveSessionAccess: async () => ({ ok: true, sessionId: session.id, session }),
         approvePermission: opts?.approvePermission ?? (async () => {}),
         denyPermission: opts?.denyPermission ?? (async () => {})
     } as Partial<SyncEngine>

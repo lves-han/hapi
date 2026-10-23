@@ -127,7 +127,7 @@ describe('GET /api/sessions/:id/scratchlist', () => {
     it('returns the entries returned by the engine', async () => {
         const session = createSession()
         const app = createApp(session, {
-            listScratchlistEntries: () => [
+            listScratchlistEntries: async () => [
                 { entryId: 'a', text: 'note A', createdAt: 1000, updatedAt: 1000, attachments: [] },
                 { entryId: 'b', text: 'note B', createdAt: 2000, updatedAt: 2500, attachments: [] }
             ]
@@ -158,7 +158,7 @@ describe('POST /api/sessions/:id/scratchlist', () => {
         const session = createSession()
         const calls: Array<{ sessionId: string; text: string; entryId?: string; createdAt?: number }> = []
         const app = createApp(session, {
-            createScratchlistEntry: (sessionId, text, options) => {
+            createScratchlistEntry: async (sessionId, text, options) => {
                 calls.push({ sessionId, text, entryId: options?.entryId, createdAt: options?.createdAt })
                 return {
                     outcome: 'created' as const,
@@ -187,7 +187,7 @@ describe('POST /api/sessions/:id/scratchlist', () => {
     it('returns 200 with the existing row on duplicate (migration idempotency path)', async () => {
         const session = createSession()
         const app = createApp(session, {
-            createScratchlistEntry: () => ({
+            createScratchlistEntry: async () => ({
                 outcome: 'duplicate' as const,
                 entry: { entryId: 'dup', text: 'pre-existing', createdAt: 100, updatedAt: 100, attachments: [] }
             })
@@ -227,7 +227,7 @@ describe('POST /api/sessions/:id/scratchlist', () => {
     it('returns 409 when the session is at the cap', async () => {
         const session = createSession()
         const app = createApp(session, {
-            countScratchlistEntries: () => 200
+            countScratchlistEntries: async () => 200
         })
         const res = await app.request('/api/sessions/session-1/scratchlist', {
             method: 'POST',
@@ -248,8 +248,8 @@ describe('POST /api/sessions/:id/scratchlist', () => {
         const session = createSession()
         const createCalls: number[] = []
         const app = createApp(session, {
-            countScratchlistEntries: () => 200,
-            getScratchlistEntry: (_sessionId, entryId) => {
+            countScratchlistEntries: async () => 200,
+            getScratchlistEntry: async (_sessionId, entryId) => {
                 if (entryId === 'pre-existing') {
                     return {
                         entryId: 'pre-existing',
@@ -261,7 +261,7 @@ describe('POST /api/sessions/:id/scratchlist', () => {
                 }
                 return null
             },
-            createScratchlistEntry: () => {
+            createScratchlistEntry: async () => {
                 createCalls.push(1)
                 return {
                     outcome: 'created' as const,
@@ -288,8 +288,8 @@ describe('POST /api/sessions/:id/scratchlist', () => {
         // POST at cap stays a 409.
         const session = createSession()
         const app = createApp(session, {
-            countScratchlistEntries: () => 200,
-            getScratchlistEntry: () => null
+            countScratchlistEntries: async () => 200,
+            getScratchlistEntry: async () => null
         })
         const res = await app.request('/api/sessions/session-1/scratchlist', {
             method: 'POST',
@@ -321,7 +321,7 @@ describe('POST /api/sessions/:id/scratchlist', () => {
         // route surfaces a 404.
         const session = createSession()
         const app = createApp(session, {
-            createScratchlistEntry: () => ({ outcome: 'session-not-found' as const })
+            createScratchlistEntry: async () => ({ outcome: 'session-not-found' as const })
         })
         const res = await app.request('/api/sessions/session-1/scratchlist', {
             method: 'POST',
@@ -347,14 +347,14 @@ describe('PUT /api/sessions/:id/scratchlist/:entryId', () => {
     it('returns the updated entry on success', async () => {
         const session = createSession()
         const app = createApp(session, {
-            getScratchlistEntry: () => ({
+            getScratchlistEntry: async () => ({
                 entryId: 'entry-1',
                 text: 'before',
                 createdAt: 1000,
                 updatedAt: 1000,
                 attachments: [],
             }),
-            updateScratchlistEntry: (_sessionId, entryId, patch) => ({
+            updateScratchlistEntry: async (_sessionId, entryId, patch) => ({
                 entryId,
                 text: patch.text ?? 'before',
                 createdAt: 1000,
@@ -376,8 +376,8 @@ describe('PUT /api/sessions/:id/scratchlist/:entryId', () => {
     it('returns 404 when the entry does not exist', async () => {
         const session = createSession()
         const app = createApp(session, {
-            getScratchlistEntry: () => null,
-            updateScratchlistEntry: () => null
+            getScratchlistEntry: async () => null,
+            updateScratchlistEntry: async () => null
         })
         const res = await app.request('/api/sessions/session-1/scratchlist/missing-id', {
             method: 'PUT',
@@ -401,7 +401,7 @@ describe('PUT /api/sessions/:id/scratchlist/:entryId', () => {
     it('rejects clearing attachments on a textless entry (would leave an empty row)', async () => {
         const session = createSession()
         const app = createApp(session, {
-            getScratchlistEntry: () => ({
+            getScratchlistEntry: async () => ({
                 entryId: 'entry-1',
                 text: '',
                 createdAt: 1000,
@@ -441,7 +441,7 @@ describe('DELETE /api/sessions/:id/scratchlist/:entryId', () => {
     it('returns ok:true when the row was removed', async () => {
         const session = createSession()
         const app = createApp(session, {
-            deleteScratchlistEntry: () => true
+            deleteScratchlistEntry: async () => true
         })
         const res = await app.request('/api/sessions/session-1/scratchlist/e1', {
             method: 'DELETE'
@@ -453,7 +453,7 @@ describe('DELETE /api/sessions/:id/scratchlist/:entryId', () => {
     it('returns 404 when the row did not exist', async () => {
         const session = createSession()
         const app = createApp(session, {
-            deleteScratchlistEntry: () => false
+            deleteScratchlistEntry: async () => false
         })
         const res = await app.request('/api/sessions/session-1/scratchlist/missing', {
             method: 'DELETE'

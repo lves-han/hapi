@@ -975,6 +975,16 @@ export type SqliteStorageUsageResponse = {
     totalBytes: number
 }
 
+export type PostgresStorageUsageResponse = {
+    backend: 'postgres'
+    databaseName: string
+    totalBytes: number
+}
+
+export type StorageUsageResponse =
+    | (SqliteStorageUsageResponse & { backend: 'sqlite' })
+    | PostgresStorageUsageResponse
+
 export type UsageSummaryBucket = {
     key: string
     inputTokens: number

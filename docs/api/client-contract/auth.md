@@ -125,6 +125,7 @@ Every request executes in the JWT's namespace (`ns` claim, derived from the acce
 | Endpoint | Check |
 |----------|-------|
 | `GET /api/usage/summary` | `hub/src/web/routes/usage.ts` |
+| `GET /api/storage` | `hub/src/web/routes/storage.ts` |
 | `GET /api/storage/sqlite` | `hub/src/web/routes/storage.ts` |
 | `PUT /api/hub-settings` (write; read is open to all namespaces) | `hub/src/web/routes/hubSettings.ts` |
 | `GET`/`PUT /api/voice/transcription/credentials` | `hub/src/web/routes/voice.ts` |

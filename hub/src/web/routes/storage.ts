@@ -1,6 +1,7 @@
 import { stat } from 'node:fs/promises'
 import type { SqliteStorageUsageResponse } from '@hapi/protocol/apiTypes'
 import { Hono } from 'hono'
+import type { Store } from '../../store'
 import type { WebAppEnv } from '../middleware/auth'
 
 async function fileSize(path: string, required = false): Promise<number> {
@@ -12,31 +13,41 @@ async function fileSize(path: string, required = false): Promise<number> {
     }
 }
 
-export function createStorageRoutes(dbPath: string, backend: 'sqlite' | 'postgres' = 'sqlite'): Hono<WebAppEnv> {
+async function sqliteStorageUsage(dbPath: string): Promise<SqliteStorageUsageResponse> {
+    const [databaseBytes, walBytes, shmBytes] = await Promise.all([
+        fileSize(dbPath, true),
+        fileSize(`${dbPath}-wal`),
+        fileSize(`${dbPath}-shm`),
+    ])
+    return { path: dbPath, databaseBytes, walBytes, shmBytes, totalBytes: databaseBytes + walBytes + shmBytes }
+}
+
+export function createStorageRoutes(dbPath: string, store?: Pick<Store, 'backend' | 'getPostgresStorageUsage'>): Hono<WebAppEnv> {
     const app = new Hono<WebAppEnv>()
+
+    app.get('/storage', async (c) => {
+        if (c.get('namespace') !== 'default') {
+            return c.json({ error: 'Storage usage is only available to the hub owner' }, 403)
+        }
+        c.header('Cache-Control', 'no-store')
+        try {
+            if (store?.backend === 'postgres') return c.json(await store.getPostgresStorageUsage())
+            return c.json({ backend: 'sqlite' as const, ...await sqliteStorageUsage(dbPath) })
+        } catch (error) {
+            return c.json({ error: error instanceof Error ? error.message : 'Failed to read storage usage' }, 500)
+        }
+    })
 
     app.get('/storage/sqlite', async (c) => {
         if (c.get('namespace') !== 'default') {
             return c.json({ error: 'Storage usage is only available to the hub owner' }, 403)
         }
         c.header('Cache-Control', 'no-store')
-        if (backend === 'postgres') {
+        if (store?.backend === 'postgres') {
             return c.json({ error: 'Hub storage uses PostgreSQL; the SQLite file is a retained migration source' }, 409)
         }
         try {
-            const [databaseBytes, walBytes, shmBytes] = await Promise.all([
-                fileSize(dbPath, true),
-                fileSize(`${dbPath}-wal`),
-                fileSize(`${dbPath}-shm`),
-            ])
-            const response: SqliteStorageUsageResponse = {
-                path: dbPath,
-                databaseBytes,
-                walBytes,
-                shmBytes,
-                totalBytes: databaseBytes + walBytes + shmBytes,
-            }
-            return c.json(response)
+            return c.json(await sqliteStorageUsage(dbPath))
         } catch (error) {
             return c.json({
                 error: error instanceof Error ? error.message : 'Failed to read SQLite storage usage'

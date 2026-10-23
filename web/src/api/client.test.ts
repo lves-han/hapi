@@ -15,6 +15,16 @@ describe('ApiClient error mapping', () => {
         globalThis.fetch = originalFetch
     })
 
+    it.each([
+        { backend: 'sqlite', path: '/hapi.db', databaseBytes: 10, walBytes: 20, shmBytes: 0, totalBytes: 30 },
+        { backend: 'postgres', databaseName: 'hapi', totalBytes: 4096 },
+    ])('loads $backend usage from the generic storage endpoint', async (usage) => {
+        fetchMock.mockResolvedValueOnce(new Response(JSON.stringify(usage), { status: 200 }))
+        const api = new ApiClient('test-token')
+        expect(await api.getStorageUsage()).toEqual(usage)
+        expect(fetchMock.mock.calls[0]?.[0]).toBe('/api/storage')
+    })
+
     it('prefers the stable `code` field over the human-readable `error` message in ApiError.code', async () => {
         // Match the shape /sessions/:id/reopen actually returns on a 503.
         fetchMock.mockResolvedValueOnce(

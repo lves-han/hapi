@@ -2,6 +2,7 @@ import { Database } from 'bun:sqlite'
 import { SQLiteDatabase, type Database as StorageDatabase } from './database'
 import { chmodSync, closeSync, existsSync, mkdirSync, openSync } from 'node:fs'
 import { dirname } from 'node:path'
+import type { PostgresStorageUsageResponse } from '@hapi/protocol/apiTypes'
 
 import { MachineStore } from './machineStore'
 import { MessageStore } from './messageStore'
@@ -331,6 +332,18 @@ export class Store {
     }
 
     get backend(): 'sqlite' | 'postgres' { return this.runtimeDb.backend }
+
+    async getPostgresStorageUsage(): Promise<PostgresStorageUsageResponse> {
+        if (this.backend !== 'postgres') throw new Error('PostgreSQL storage usage requires the PostgreSQL backend')
+        return this.runtimeDb.operation(async () => {
+            const row = await this.runtimeDb.prepare<{ database_name: string; total_bytes: number }>(`
+                SELECT current_database() AS database_name,
+                       pg_database_size(current_database()) AS total_bytes
+            `).get()
+            if (!row) throw new Error('PostgreSQL storage usage query returned no result')
+            return { backend: 'postgres', databaseName: row.database_name, totalBytes: row.total_bytes }
+        }, false)
+    }
 
     private initSchema(): void {
         const currentVersion = this.getUserVersion()

@@ -5,6 +5,10 @@ import { mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { randomUUID, createHash } from 'node:crypto'
+import { Hono } from 'hono'
+import type { StorageUsageResponse } from '@hapi/protocol/apiTypes'
+import type { WebAppEnv } from '../web/middleware/auth'
+import { createStorageRoutes } from '../web/routes/storage'
 import { Store } from './index'
 import { openStore } from './openStore'
 import { businessTables } from './postgresSchema'
@@ -189,6 +193,36 @@ describe.skipIf(!testUrl)('PostgreSQL storage and automatic migration', () => {
     }, 30_000)
 
     for (const backend of ['sqlite', 'postgres'] as const) {
+        it(`${backend}: reports the active database storage through the owner API`, async () => {
+            await isolated(async (url, dir, sql) => {
+                const dbPath = join(dir, 'hapi.db')
+                const store = await openStore({ dbPath, dataDir: dir, databaseUrl: backend === 'postgres' ? url : undefined })
+                try {
+                    const app = new Hono<WebAppEnv>()
+                    app.use('*', async (c, next) => { c.set('namespace', 'default'); await next() })
+                    app.route('/api', createStorageRoutes(dbPath, store))
+                    const response = await app.request('/api/storage')
+                    expect(response.status).toBe(200)
+                    expect(response.headers.get('cache-control')).toBe('no-store')
+                    const usage = await response.json() as StorageUsageResponse
+                    expect(usage.backend).toBe(backend)
+                    expect(usage.totalBytes).toBeGreaterThan(0)
+                    const legacy = await app.request('/api/storage/sqlite')
+                    if (usage.backend === 'postgres') {
+                        const [expected] = await sql`SELECT pg_database_size(current_database()) AS bytes`
+                        expect(usage).toEqual({ backend: 'postgres', databaseName: new URL(url).pathname.slice(1), totalBytes: Number(expected.bytes) })
+                        expect(legacy.status).toBe(409)
+                    } else {
+                        expect(usage.path).toBe(dbPath)
+                        expect(usage.totalBytes).toBe(usage.databaseBytes + usage.walBytes + usage.shmBytes)
+                        expect(legacy.status).toBe(200)
+                        const { backend: _, ...expected } = usage
+                        expect(await legacy.json()).toEqual(expected)
+                    }
+                } finally { await store.close() }
+            })
+        }, 30_000)
+
         it(`${backend}: cancels queued messages and advances the history epoch exactly once per deletion`, async () => {
             await isolated(async (url, dir) => {
                 const store = await openStore({ dbPath: join(dir, 'hapi.db'), dataDir: dir, databaseUrl: backend === 'postgres' ? url : undefined })

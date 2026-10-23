@@ -148,7 +148,8 @@ for request/response shapes and error semantics, and `src/web/routes/` for all e
 
 ### Storage (`src/web/routes/storage.ts`)
 
-- `GET /api/storage/sqlite` - SQLite database/WAL/SHM sizes for the owner namespace; returns 409 with the PostgreSQL backend.
+- `GET /api/storage` - Active database usage for the owner namespace: SQLite database/WAL/SHM sizes or PostgreSQL database name and total size.
+- `GET /api/storage/sqlite` - Legacy SQLite database/WAL/SHM sizes for the owner namespace; returns 409 with the PostgreSQL backend.
 
 ### Git/Files (`src/web/routes/git.ts`)
 

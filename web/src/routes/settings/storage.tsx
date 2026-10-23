@@ -10,10 +10,10 @@ export default function SettingsStoragePage() {
     const { api } = useAppContext()
     const { t } = useTranslation()
     const query = useQuery({
-        queryKey: queryKeys.sqliteStorage,
+        queryKey: queryKeys.storage,
         queryFn: async () => {
             if (!api) throw new Error('API unavailable')
-            return await api.getSqliteStorageUsage()
+            return await api.getStorageUsage()
         },
         enabled: Boolean(api),
         staleTime: 0,
@@ -35,7 +35,15 @@ export default function SettingsStoragePage() {
                     ) : null}
                 </SettingsSection>
             ) : null}
-            {query.data ? (
+            {query.data?.backend === 'postgres' ? (
+                <SettingsSection title="PostgreSQL" description={t('settings.storage.postgresDescription')}>
+                    <SettingsRow label={t('settings.storage.databaseName')}>
+                        <code className="block break-all text-sm text-[var(--app-hint)]">{query.data.databaseName}</code>
+                    </SettingsRow>
+                    <SettingsRow label={t('settings.storage.total')} trailing={formatFileSize(query.data.totalBytes) ?? '0 B'} />
+                </SettingsSection>
+            ) : null}
+            {query.data?.backend === 'sqlite' ? (
                 <StorageUsagePie
                     usage={{
                         databaseBytes: query.data.databaseBytes,

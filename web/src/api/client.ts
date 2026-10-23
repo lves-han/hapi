@@ -55,6 +55,7 @@ import type {
     QueuedStateResponse,
     ReopenSessionResponse,
     SqliteStorageUsageResponse,
+    StorageUsageResponse,
     HubSettingsResponse,
     UpdateHubSettingsRequest,
     UsageSummaryResponse,
@@ -773,6 +774,10 @@ export class ApiClient {
             method: 'PATCH',
             body: JSON.stringify({ displayName })
         })
+    }
+
+    async getStorageUsage(): Promise<StorageUsageResponse> {
+        return await this.request<StorageUsageResponse>('/api/storage')
     }
 
     async getSqliteStorageUsage(): Promise<SqliteStorageUsageResponse> {

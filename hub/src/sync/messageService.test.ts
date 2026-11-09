@@ -515,6 +515,72 @@ describe('MessageService message pagination', () => {
         expect(response.page.epoch).toBe(1)
         expect(response.messages.map((message) => message.id)).toEqual([first.id])
     })
+
+    it('returns a bounded context around a searched message without scanning the full transcript into the response', async () => {
+        const store = makeStore()
+        const session = await makeSession(store, 'page-context')
+        const messages = []
+        for (let index = 0; index < 105; index++) {
+            const message = await store.messages.addMessage(session.id, `message-${index}`, `local-${index}`)
+            await store.messages.markMessagesInvoked(session.id, [`local-${index}`], (index + 1) * 1_000)
+            messages.push(message)
+        }
+        const target = messages[54]!
+
+        const context = await makeService(store).getMessageContext(session.id, target.id)
+
+        expect(context?.targetMessageId).toBe(target.id)
+        expect(context?.messages).toHaveLength(41)
+        expect(context?.messages[0]?.id).toBe(messages[34]!.id)
+        expect(context?.messages.at(-1)?.id).toBe(messages[74]!.id)
+        expect(context?.messages.map((message) => message.id)).toContain(target.id)
+        expect(context?.page).toMatchObject({
+            epoch: 0,
+            nextBeforeAt: 35_000,
+            nextBeforeSeq: messages[34]!.seq,
+            snapshotHeadAt: 105_000,
+            snapshotHeadSeq: messages[104]!.seq,
+            hasMore: true
+        })
+
+        const otherSession = await makeSession(store, 'page-context-other')
+        expect(await makeService(store).getMessageContext(otherSession.id, target.id)).toBeNull()
+    })
+
+    it('includes pending local messages without changing the context pagination cursor', async () => {
+        const store = makeStore()
+        const session = await makeSession(store, 'page-context-pending')
+        const messages = []
+        for (let index = 0; index < 105; index++) {
+            const message = await store.messages.addMessage(session.id, `message-${index}`, `local-${index}`)
+            await store.messages.markMessagesInvoked(session.id, [`local-${index}`], (index + 1) * 1_000)
+            messages.push(message)
+        }
+        const target = messages[54]!
+        const immediate = await store.messages.addMessage(
+            session.id,
+            { role: 'user', content: { type: 'text', text: 'pending immediate' } },
+            'pending-immediate'
+        )
+        const scheduled = await store.messages.addMessage(
+            session.id,
+            { role: 'user', content: { type: 'text', text: 'pending scheduled' } },
+            'pending-scheduled',
+            Date.now() + 60_000
+        )
+
+        const context = await makeService(store).getMessageContext(session.id, target.id)
+
+        expect(context?.messages.map((message) => message.id)).toEqual(expect.arrayContaining([
+            immediate.id,
+            scheduled.id,
+            target.id
+        ]))
+        expect(context?.page).toMatchObject({
+            nextBeforeAt: 35_000,
+            nextBeforeSeq: messages[34]!.seq
+        })
+    })
 })
 
 describe('MessageService.getQueuedState', () => {
@@ -1078,6 +1144,38 @@ describe('MessageService.sendMessage with scheduledAt', () => {
         // scheduledAt must be null in DB
         const msgs = (await store.messages.getMessages(session.id))
         expect(msgs[0].scheduledAt).toBeNull()
+    })
+
+    it('mints a localId for senders that omit one so the agent echo dedupes', async () => {
+        const store = makeStore()
+        const session = (await makeSession(store, 'no-local-id'))
+        const publisher = makePublisher()
+
+        const cliEmitted: Array<{ body: { message: { localId: string | null } } }> = []
+        const io = {
+            of: (ns: string) => ({
+                to: (_room: string) => ({
+                    emit: (_event: string, data: unknown) => {
+                        if (ns === '/cli') cliEmitted.push(data as typeof cliEmitted[number])
+                    },
+                    timeout: (_ms: number) => ({ emit: () => {} })
+                }),
+                adapter: { rooms: { get: () => undefined } }
+            })
+        } as unknown as Server
+
+        const service = new MessageService(store, io, publisher as any)
+        await service.sendMessage(session.id, { text: 'peer ping' })
+        await service.sendMessage(session.id, { text: 'peer ping' })
+
+        const [first, second] = cliEmitted.map((update) => update.body.message.localId)
+        expect(first).toEqual(expect.any(String))
+        expect(second).toEqual(expect.any(String))
+        expect(second).not.toBe(first)
+
+        // Shared Codex echoes the user turn back under the id it received.
+        await store.messages.addMessage(session.id, { role: 'user', content: { type: 'text', text: 'peer ping' }, meta: { sentFrom: 'cli' } }, first!)
+        expect((await store.messages.getMessages(session.id))).toHaveLength(2)
     })
 
     it('past scheduledAt (already mature): emits to /cli immediately', async () => {
@@ -1650,7 +1748,7 @@ describe('MessageService.releaseMatureScheduledMessages', () => {
 // HAPI Bot R4: session-end sweep must not stamp mature scheduled rows
 // ---------------------------------------------------------------------------
 
-describe('MessageService.sweepImmediateQueuedOnSessionEnd — scheduled rows are preserved', async () => {
+describe('MessageService.sweepImmediateQueuedOnSessionEnd — scheduled rows are preserved', () => {
     function makeNoopIo(): Server {
         return {
             of: (_ns: string) => ({
@@ -1810,5 +1908,118 @@ describe('MessageService.sweepImmediateQueuedOnSessionEnd — scheduled rows are
 
         const stillQueued = (await store.messages.getUninvokedLocalMessages(session.id))
         expect(stillQueued.find((m) => m.localId === 'local-future')?.invokedAt).toBeNull()
+    })
+
+    it('peer row (ping-peer- localId) is exempt: session-end cannot confirm an unconsumed peer message, replay preserves pending, real ACK confirms', async () => {
+        const store = makeStore()
+        const session = await makeSession(store, 'peer-sweep-exempt')
+        const publisher = makePublisher()
+        const now = Date.now()
+
+        await store.messages.addMessage(
+            session.id,
+            { role: 'user', content: { type: 'text', text: 'peer nudge' } },
+            'ping-peer-abc123'
+        )
+        await store.messages.addMessage(
+            session.id,
+            { role: 'user', content: { type: 'text', text: 'ordinary' } },
+            'local-ordinary'
+        )
+
+        const service = new MessageService(store, makeNoopIo(), publisher as any)
+        const result = await service.sweepImmediateQueuedOnSessionEnd(session.id, now)
+
+        // Ordinary row swept; peer row untouched — no synthetic confirmation.
+        expect(result?.localIds).toEqual(['local-ordinary'])
+        const consumed = publisher.events.filter(e => e.type === 'messages-consumed')
+        expect(consumed).toHaveLength(1)
+        expect((consumed[0] as { localIds: string[] }).localIds).toEqual(['local-ordinary'])
+
+        // Peer row stays pending (refresh/reconnect preserves it).
+        const stillQueued = await store.messages.getUninvokedLocalMessages(session.id)
+        expect(stillQueued.find((m) => m.localId === 'ping-peer-abc123')?.invokedAt).toBeNull()
+
+        // Re-attach replay still re-emits the unconsumed peer row.
+        const { io, cliEmitted } = makeTrackingIo()
+        const service2 = new MessageService(store, io, publisher as any)
+        expect(await service2.replayImmediateQueuedMessages(session.id)).toBe(1)
+        expect(cliEmitted).toHaveLength(1)
+
+        // A real runtime ACK confirms the peer row.
+        await store.messages.markMessagesInvoked(session.id, ['ping-peer-abc123'], now + 1000)
+        expect(
+            (await store.messages.getUninvokedLocalMessages(session.id))
+                .find((m) => m.localId === 'ping-peer-abc123')
+        ).toBeUndefined()
+    })
+
+    it('duplicate ACK on a peer row preserves the original consumption timestamp (first-write-wins)', async () => {
+        const store = makeStore()
+        const session = await makeSession(store, 'peer-dup-ack')
+        const now = Date.now()
+
+        await store.messages.addMessage(
+            session.id,
+            { role: 'user', content: { type: 'text', text: 'peer nudge' } },
+            'ping-peer-dup1'
+        )
+
+        // Actual hub consumption: first ACK stamps invoked_at.
+        await store.messages.markMessagesInvoked(session.id, ['ping-peer-dup1'], now)
+        const first = (await store.messages.getMessages(session.id))
+            .find((m) => m.localId === 'ping-peer-dup1')?.invokedAt
+        expect(first).toBe(now)
+
+        // Duplicate/late ACK must not move the timestamp.
+        await store.messages.markMessagesInvoked(session.id, ['ping-peer-dup1'], now + 60_000)
+        expect(
+            (await store.messages.getMessages(session.id))
+                .find((m) => m.localId === 'ping-peer-dup1')?.invokedAt
+        ).toBe(now)
+    })
+})
+
+it('preserves live confirmation state when an idempotent send repeats the same durable input', async () => {
+    const store = makeStore()
+    const session = (await makeSession(store, 'duplicate-pending-input'))
+    const events: SyncEvent[] = []
+    const service = new MessageService(store, {} as Server, { emit(event: SyncEvent) { events.push(event) } } as EventPublisher)
+    const message = (await store.messages.addMessage(session.id, { role: 'user', content: { type: 'text', text: 'correction' } }, 'same-local'))
+    await store.messages.setMessagesDeliveryState(session.id, ['same-local'], 'dispatching')
+    try {
+        await service.sendMessage(session.id, { text: 'correction', localId: 'same-local' })
+        const event = events.find(item => item.type === 'message-received')
+        if (!event || event.type !== 'message-received') throw new Error('missing message echo')
+        expect(event.message).toMatchObject({ id: message.id, localId: 'same-local', invokedAt: null, deliveryState: 'indeterminate', deliveryPending: true })
+        expect((await store.messages.countMessages(session.id))).toBe(1)
+        expect((await store.messages.lookupQueuedMessage(session.id, message.id)).status).toBe('dispatching')
+    } finally { await store.close() }
+})
+
+describe('observed read revision receipts', () => {
+    it('latest and completed catch-up receipt cover only their observed head', async () => {
+        const store = makeStore()
+        try {
+            const { id } = (await makeSession(store, 'read-receipt'))
+            const reply = (text: string) => ({ role: 'agent', content: { type: 'codex', data: { type: 'message', message: text } } })
+            await store.messages.addMessage(id, reply('one'), 'one', null, 1)
+            const service = new MessageService(store, makeIo(() => {}), makePublisher() as unknown as EventPublisher)
+            const first = (await service.getMessagesPage(id, { limit: 1 }))
+            expect(first.page.readThroughRevision).toBe(1)
+            const after = { at: first.page.snapshotHeadAt!, seq: first.page.snapshotHeadSeq! }
+            await store.messages.addMessage(id, reply('two'), 'two', null, 2)
+            await store.messages.addMessage(id, reply('three'), 'three', null, 3)
+            const partial = (await service.getMessagesPage(id, { limit: 1, after }))
+            expect(partial.page.hasMore).toBe(true)
+            expect(partial.page.readThroughRevision).toBeUndefined()
+            const until = { at: partial.page.snapshotHeadAt!, seq: partial.page.snapshotHeadSeq! }
+            await store.messages.addMessage(id, reply('concurrent'), 'four', null, 4)
+            const bounded = (await service.getMessagesPage(id, { limit: 20, after, until }))
+            expect(bounded.page.readThroughRevision).toBeUndefined()
+            expect((await service.getMessagesPage(id, { limit: 20, after })).page.readThroughRevision).toBe(4)
+            expect((await service.getMessagesPage(id, { limit: 20, before: until })).page.readThroughRevision).toBeUndefined()
+            expect(first.page.readThroughRevision).toBe(1)
+        } finally { await store.close() }
     })
 })

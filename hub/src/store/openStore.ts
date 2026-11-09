@@ -11,6 +11,13 @@ import { Store } from './index'
 import { PostgresDatabase } from './database'
 import { validateMessageContent } from './contentCodec'
 import { businessTables, postgresSchema, postgresSchemaVersion } from './postgresSchema'
+import { backfillPostgresMessageState, createPostgresSearchSchema, upgradePostgresFrom26 } from './postgresUpgrade'
+
+const sqliteSearchTables = new Set([
+    'message_content_search', 'message_content_search_config', 'message_content_search_content',
+    'message_content_search_data', 'message_content_search_docsize', 'message_content_search_idx',
+    'message_content_search_lookup', 'message_content_search_short'
+])
 
 type Row = Record<string, string | number | bigint | Uint8Array | null>
 type Summary = { count: number; sha256: string }
@@ -196,12 +203,22 @@ export async function openStore(options: Options): Promise<Store> {
         const [meta] = await reserved`SELECT to_regclass('public.hapi_store_metadata') AS name`
         if (meta.name) {
             const [record] = await reserved`SELECT * FROM hapi_store_metadata WHERE id = 1`
-            if (!record || Number(record.schema_version) !== postgresSchemaVersion) throw new Error('Unsupported PostgreSQL schema metadata')
+            if (!record || ![26, postgresSchemaVersion].includes(Number(record.schema_version))) throw new Error('Unsupported PostgreSQL schema metadata')
             if (record.source_fingerprint && existsSync(options.dbPath)) {
                 source = new SQLite(options.dbPath, { readonly: true })
                 if (await fingerprint(source) !== record.source_fingerprint) throw new Error('SQLite source changed after PostgreSQL migration; stop the old Hub writer and reconcile both databases')
             }
+            if (Number(record.schema_version) === 26) {
+                report.phase = 'upgrade-postgresql'
+                canonical = new Store(':memory:')
+                const schema = postgresSchema(canonical.sqliteDatabase)
+                await reserved.begin(async tx => {
+                    await upgradePostgresFrom26(database!, tx, schema)
+                    await options.checkpoint?.('upgrade-before-commit')
+                })
+            }
             for (const table of businessTables) await reserved.unsafe(`SELECT 1 FROM ${table} LIMIT 0`)
+            await reserved.unsafe('SELECT 1 FROM hapi_message_content_search LIMIT 0')
             report.phase = 'already-complete'
             saveReport()
             return new Store(options.dbPath, database)
@@ -220,7 +237,7 @@ export async function openStore(options: Options): Promise<Store> {
             report.sourceSchema = version.user_version
             if (version.user_version > postgresSchemaVersion) throw new Error('SQLite schema is newer than the supported baseline')
             const sourceTables = source.query("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'").all() as { name: string }[]
-            const unknown = sourceTables.filter(row => !businessTables.some(table => table === row.name))
+            const unknown = sourceTables.filter(row => !businessTables.some(table => table === row.name) && !sqliteSearchTables.has(row.name))
             if (unknown.length) {
                 report.unrecognizedTables = unknown.map(row => row.name)
                 throw new Error('SQLite structure contains unrecognized tables; compatibility review required')
@@ -267,6 +284,7 @@ export async function openStore(options: Options): Promise<Store> {
         const summaries: Record<string, Summary> = {}
         await reserved.begin(async tx => {
             for (const sql of schema.tables) await tx.unsafe(sql)
+            await createPostgresSearchSchema(tx)
             await options.checkpoint?.('tables')
             if (working) {
                 for (const table of businessTables) {
@@ -275,8 +293,9 @@ export async function openStore(options: Options): Promise<Store> {
                 }
             }
             for (const sql of schema.indexes) await tx.unsafe(sql)
+            if (working) await backfillPostgresMessageState(database!, tx, false)
             await options.checkpoint?.('indexes')
-            for (const [table, column] of [['users', 'id'], ['push_subscriptions', 'id'], ['fcm_devices', 'id'], ['messages', 'insertion_order'], ['events', 'insertion_order']]) {
+            for (const [table, column] of [['users', 'id'], ['push_subscriptions', 'id'], ['fcm_devices', 'id'], ['messages', 'insertion_order'], ['events', 'insertion_order'], ['session_turns', 'id']]) {
                 await tx.unsafe(`SELECT setval(pg_get_serial_sequence('${table}', '${column}'), GREATEST(COALESCE(MAX(${column}), 0), 1), COALESCE(MAX(${column}), 0) >= 1) FROM ${table}`)
             }
             if (source && (source.query('PRAGMA data_version').get() as { data_version: number }).data_version !== sourceDataVersion) throw new Error('SQLite source changed during migration')

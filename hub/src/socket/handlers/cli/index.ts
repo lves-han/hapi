@@ -1,4 +1,4 @@
-import type { CodexCollaborationMode, PermissionMode } from '@hapi/protocol/types'
+import type { BackgroundTask, CodexCollaborationMode, PermissionMode } from '@hapi/protocol/types'
 import type { Store, StoredMachine, StoredSession } from '../../../store'
 import type { RpcRegistry } from '../../rpcRegistry'
 import type { SyncEvent } from '../../../sync/syncEngine'
@@ -48,7 +48,7 @@ export type CliHandlersDeps = {
     onSessionEnd?: (payload: SessionEndPayload) => unknown
     onMachineAlive?: (payload: MachineAlivePayload) => unknown
     onWebappEvent?: (event: SyncEvent) => unknown
-    onBackgroundTaskDelta?: (sessionId: string, delta: { started: number; completed: number }) => unknown
+    onBackgroundTasks?: (sessionId: string, tasks: BackgroundTask[]) => unknown
     onSessionActivity?: (sessionId: string, updatedAt: number) => unknown
     onAgentProgress?: (sessionId: string, at: number) => unknown
     onSweepImmediateQueued?: (sessionId: string, now: number) => unknown
@@ -84,7 +84,7 @@ const SESSION_ACCESS_CACHE_TTL_MS = 1_000
 const SESSION_ACCESS_CACHE_MAX_SESSIONS = 64
 
 export async function registerCliHandlers(socket: CliSocketWithData, deps: CliHandlersDeps): Promise<void> {
-    const { io, store, rpcRegistry, terminalRegistry, onSessionAlive, onSessionReady, onSessionEnd, onMachineAlive, onWebappEvent, onBackgroundTaskDelta, onSessionActivity, onAgentProgress, onSweepImmediateQueued, onMessagesConsumed } = deps
+    const { io, store, rpcRegistry, terminalRegistry, onSessionAlive, onSessionReady, onSessionEnd, onMachineAlive, onWebappEvent, onBackgroundTasks, onSessionActivity, onAgentProgress, onSweepImmediateQueued, onMessagesConsumed } = deps
     const terminalNamespace = io.of('/terminal')
     const namespace = typeof socket.data.namespace === 'string' ? socket.data.namespace : null
 
@@ -179,7 +179,7 @@ export async function registerCliHandlers(socket: CliSocketWithData, deps: CliHa
         onSessionReady,
         onSessionEnd,
         onWebappEvent,
-        onBackgroundTaskDelta,
+        onBackgroundTasks,
         onSessionActivity,
         onAgentProgress,
         onSweepImmediateQueued,

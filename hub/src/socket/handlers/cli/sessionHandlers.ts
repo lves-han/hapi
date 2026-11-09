@@ -3,13 +3,13 @@ import type { ClientToServerEvents } from '@hapi/protocol'
 import { z } from 'zod'
 import { randomUUID } from 'node:crypto'
 import type { CopilotAgentMode } from '@hapi/protocol'
-import type { AgentState, CodexCollaborationMode, Metadata, PermissionMode } from '@hapi/protocol/types'
+import type { AgentState, BackgroundTask, CodexCollaborationMode, Metadata, PermissionMode } from '@hapi/protocol/types'
 import { getReasoningStreamId, isRedundantGoalStatusEventContent } from '@hapi/protocol/messages'
 import type { Store, StoredSession } from '../../../store'
 import type { SyncEvent } from '../../../sync/syncEngine'
 import { extractTodoWriteTodosFromMessageContent } from '../../../sync/todos'
 import { extractTeamStateFromMessageContent, applyTeamStateDelta } from '../../../sync/teams'
-import { extractBackgroundTaskDelta } from '../../../sync/backgroundTasks'
+import { extractBackgroundTasks } from '../../../sync/backgroundTasks'
 import { shouldRecordSessionActivity } from '../../../sync/sessionActivity'
 import type { CliSocketWithData } from '../../socketTypes'
 import type { SessionEndReason } from '@hapi/protocol'
@@ -69,7 +69,13 @@ const updateStateSchema = z.object({
     agentState: z.unknown().nullable()
 })
 
-const HUB_OWNED_METADATA_KEYS = ['supersededBySessionId', 'opencodeClearOperation'] as const
+const HUB_OWNED_METADATA_KEYS = [
+    'supersededBySessionId',
+    'opencodeClearOperation',
+    'titleSuggestionAutoAttemptedAt',
+    'titleSuggestionTurn',
+    'promptTitle'
+] as const
 
 function preserveHubOwnedMetadata(incoming: unknown, current: unknown): unknown {
     if (!incoming || typeof incoming !== 'object' || Array.isArray(incoming)) return incoming
@@ -92,7 +98,7 @@ export type SessionHandlersDeps = {
     onSessionReady?: (payload: SessionReadyPayload) => unknown
     onSessionEnd?: (payload: SessionEndPayload) => unknown
     onWebappEvent?: (event: SyncEvent) => unknown
-    onBackgroundTaskDelta?: (sessionId: string, delta: { started: number; completed: number }) => unknown
+    onBackgroundTasks?: (sessionId: string, tasks: BackgroundTask[]) => unknown
     onSessionActivity?: (sessionId: string, updatedAt: number) => unknown
     /** tiann/hapi#1820: any message is agent progress, either direction. */
     onAgentProgress?: (sessionId: string, at: number) => unknown
@@ -104,7 +110,7 @@ export type SessionHandlersDeps = {
 }
 
 export function registerSessionHandlers(socket: CliSocketWithData, deps: SessionHandlersDeps): void {
-    const { store, resolveSessionAccess, emitAccessError, onSessionAlive, onSessionReady, onSessionEnd, onWebappEvent, onBackgroundTaskDelta, onSessionActivity, onAgentProgress, onSweepImmediateQueued, onMessagesConsumed } = deps
+    const { store, resolveSessionAccess, emitAccessError, onSessionAlive, onSessionReady, onSessionEnd, onWebappEvent, onBackgroundTasks, onSessionActivity, onAgentProgress, onSweepImmediateQueued, onMessagesConsumed } = deps
 
     socket.on('native-queue-message', orderedHandler(socket, 'native-queue-message', async data => {
         const parsed = z.object({ sid: z.string(), localId: z.string().min(1), text: z.string().nullable() }).safeParse(data)
@@ -160,7 +166,14 @@ export function registerSessionHandlers(socket: CliSocketWithData, deps: Session
             return
         }
 
-        const msg = (await store.messages.addMessage(sid, content, localId, undefined, createdAt))
+        const backgroundTasks = extractBackgroundTasks(content)
+        if (backgroundTasks !== null) {
+            await onBackgroundTasks?.(sid, backgroundTasks)
+            return
+        }
+        const wasStored = Boolean(localId && (await store.messages.lookupQueuedMessage(sid, localId)).status !== 'absent')
+        const msg = await store.messages.addMessage(sid, content, localId, undefined, createdAt)
+        if (wasStored) return
 
         // A reasoning stream arrives as a series of growing snapshots under one
         // stable id, so a stream should cost one row rather than one per
@@ -227,11 +240,6 @@ export function registerSessionHandlers(socket: CliSocketWithData, deps: Session
             }
         }
 
-        const bgDelta = extractBackgroundTaskDelta(content)
-        if (bgDelta) {
-            await onBackgroundTaskDelta?.(sid, bgDelta)
-        }
-
         const update = {
             id: randomUUID(),
             seq: msg.seq,
@@ -259,7 +267,8 @@ export function registerSessionHandlers(socket: CliSocketWithData, deps: Session
                 localId: msg.localId,
                 content: msg.content,
                 createdAt: msg.createdAt,
-                invokedAt: msg.invokedAt
+                invokedAt: msg.invokedAt,
+                ...(msg.contentRevision ? { contentRevision: msg.contentRevision } : {})
             }
         })
     }))
@@ -510,8 +519,10 @@ export function registerSessionHandlers(socket: CliSocketWithData, deps: Session
                 sessionAccess.value.namespace
             ))
             reply({ ok })
-            if (ok && data.state === 'queued') {
-                await onWebappEvent?.({ type: 'messages-requeued', sessionId: data.sid, localIds })
+            if (ok) {
+                await onWebappEvent?.(data.state === 'queued'
+                    ? { type: 'messages-requeued', sessionId: data.sid, localIds }
+                    : { type: 'messages-indeterminate', sessionId: data.sid, localIds, dispatching: true })
             }
         } catch (err) {
             console.error('recordSteerDeliveryState failed', err)

@@ -1,5 +1,7 @@
 # PostgreSQL 与历史 SQLite 自动迁移改善方案
 
+本计划记录 schema 26 基线上的设计与验证。当前合并后的实现使用 schema 31 和 13 张业务表，支持已有 PostgreSQL schema 26 的事务升级；当前部署与回退方式以[部署指南](./postgresql-deployment.md)为准。
+
 状态：第 1 至 4 阶段实现已完成。SQLite/PostgreSQL 回归、legacy/schema 1 至 26 自动迁移、实际 v0.29.0/v0.30.7 结构、故障重试、旧 JWT/Runner、隔离容器升级与写入后回迁已完成本地验证。详见[部署与回退步骤](./postgresql-deployment.md)、[PostgreSQL 验证记录](../performance/postgresql-validation-2026-10-22.md)和 [SQLite 测量记录](../performance/hub-sqlite-scheduled-2026-10-22.md)。2026-10-23 已完成生产迁移与固定口径负载采样，见[生产性能对照](../performance/hub-postgresql-comparison-2026-10-23.md)；历史原生客户端真机验收仍待执行。
 
 基线：上游 `main` 提交 `5d8deb201189dc1f183c4f5bf38c87ec4d34dd70`，SQLite schema 26。现有部署的兼容起点为 HAPI v0.30.7；历史版本覆盖以数据库 schema 和发布版本测试矩阵共同确认。

@@ -195,11 +195,20 @@ describe('alive incremental events', () => {
             }
             expect((await engine.getSession(session.id))?.activeTurnStartedAt).toBe(received.message.createdAt)
 
+            // Prefer the incremental markMessageQueued patch. A full session
+            // snapshot (or a by-reference refreshSession emit later mutated in
+            // place) can also show thinking=true and includes activeAt as a
+            // snapshot field — that is not a claim that queued-thinking
+            // refreshed liveness (asserted via activeAtBeforeSend above).
             const update = events.find((event) => {
-                return event.type === 'session-updated'
-                    && typeof event.data === 'object'
-                    && event.data !== null
-                    && (event.data as { thinking?: unknown }).thinking === true
+                if (event.type !== 'session-updated' || typeof event.data !== 'object' || event.data === null) {
+                    return false
+                }
+                const data = event.data as Record<string, unknown>
+                return data.thinking === true
+                    && 'activeTurnStartedAt' in data
+                    && 'updatedAt' in data
+                    && !('id' in data)
             })
             expect(update).toBeDefined()
             if (!update || update.type !== 'session-updated') {
@@ -434,5 +443,40 @@ describe('alive incremental events', () => {
             return
         }
         expect(update.data).toEqual(expect.objectContaining({ thinking: false }))
+    })
+
+    it('judges liveness by hub receive time when the client clock lags (#1986)', async () => {
+        const store = new Store(':memory:')
+        const events: SyncEvent[] = []
+        const machines = new MachineCache(store, createPublisher(events))
+        const sessions = new SessionCache(store, createPublisher(events))
+        const machine = (await machines.getOrCreateMachine(
+            'machine-clock-skew',
+            { host: 'localhost', platform: 'linux', happyCliVersion: '0.1.0' },
+            null,
+            'default'
+        ))
+        const session = (await sessions.getOrCreateSession(
+            'session-clock-skew',
+            { path: '/tmp/project', host: 'localhost' },
+            { requests: {}, completedRequests: {} },
+            'default'
+        ))
+        const heartbeatAt = Date.now() + 60_000
+        const laggingClientTime = heartbeatAt - 41_800
+
+        const originalNow = Date.now
+        Date.now = () => heartbeatAt
+        try {
+            await machines.handleMachineAlive({ machineId: machine.id, time: laggingClientTime })
+            await sessions.handleSessionAlive({ sid: session.id, time: laggingClientTime, thinking: false })
+        } finally {
+            Date.now = originalNow
+        }
+        await machines.expireInactive(heartbeatAt + 5_000)
+        await sessions.expireInactive(heartbeatAt + 5_000)
+
+        expect(machines.getMachine(machine.id)?.active).toBe(true)
+        expect(sessions.getSession(session.id)?.active).toBe(true)
     })
 })

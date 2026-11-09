@@ -225,7 +225,9 @@ describe('ScratchlistStore: CRUD through the typed-table wrapper', () => {
 
 function getColumns(store: Store, table: string): string[] {
     const db: Database = (store as unknown as { db: Database }).db
-    const rows = db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>
+    const statement = db.prepare(`PRAGMA table_info(${table})`)
+    const rows = statement.all() as Array<{ name: string }>
+    statement.finalize()
     return rows.map((r) => r.name)
 }
 

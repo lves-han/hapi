@@ -6,6 +6,7 @@ import { Store } from './index'
 import { businessTables, postgresSchemaVersion } from './postgresSchema'
 import { hashRow } from './openStore'
 import { validateMessageContent } from './contentCodec'
+import { rebuildMessageContentSearch } from './messageContentSearch'
 
 /** Offline reverse migration, including every write made after the PostgreSQL cutover. */
 export async function exportPostgres(databaseUrl: string, output: string): Promise<void> {
@@ -74,6 +75,7 @@ export async function exportPostgres(databaseUrl: string, output: string): Promi
                     if (actual.digest('hex') !== sha256) throw new Error(`Reverse migration digest mismatch: ${table}`)
                     summaries[table] = { count, sha256 }
                 }
+                rebuildMessageContentSearch(db)
                 if (db.query('PRAGMA foreign_key_check').all().length) throw new Error('Exported SQLite foreign keys are invalid')
                 db.exec('COMMIT')
             } catch (error) {

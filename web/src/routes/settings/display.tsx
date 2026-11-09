@@ -6,6 +6,7 @@ import { getFontScaleOptions, useFontScale } from '@/hooks/useFontScale'
 import { getTerminalFontSizeOptions, useTerminalFontSize } from '@/hooks/useTerminalFontSize'
 import { getSessionListStatusModeOptions, useSessionListStatusMode } from '@/hooks/useSessionListStatusMode'
 import { useShowActiveSessionsOnly } from '@/hooks/useShowActiveSessionsOnly'
+import { useKeepUnreadSessionsVisible } from '@/hooks/useKeepUnreadSessionsVisible'
 import { usePinInProgressSessions } from '@/hooks/usePinInProgressSessions'
 import { MAX_SESSION_PREVIEW_LIMIT, MIN_SESSION_PREVIEW_LIMIT, normalizeSessionPreviewLimit, useSessionPreviewLimit } from '@/hooks/useSessionPreviewLimit'
 import { useThemeColors, type ThemeColorKeyId } from '@/hooks/useThemeColors'
@@ -140,12 +141,14 @@ export default function SettingsDisplayPage() {
     const { sessionListStatusMode, setSessionListStatusMode } = useSessionListStatusMode()
     const { showActiveSessionsOnly, setShowActiveSessionsOnly } = useShowActiveSessionsOnly()
     const { pinInProgressSessions, setPinInProgressSessions } = usePinInProgressSessions()
+    const { keepUnreadSessionsVisible, setKeepUnreadSessionsVisible } = useKeepUnreadSessionsVisible()
     const { appBadgeEnabled, setAppBadgeEnabled } = useAppBadgePreference()
     const { openExternalLinksInNewTab, setOpenExternalLinksInNewTab } = useOpenExternalLinksInNewTab()
     const { preferences: sessionHeaderMetadata, setPreference: setSessionHeaderMetadata } = useSessionHeaderMetadata()
     const sessionHeaderOptions: ReadonlyArray<{ key: SessionHeaderMetadataKey; labelKey: string }> = [
         { key: 'showLabels', labelKey: 'settings.display.sessionHeader.showLabels' },
         { key: 'agent', labelKey: 'settings.display.sessionHeader.agent' },
+        { key: 'project', labelKey: 'settings.display.sessionHeader.project' },
         { key: 'machine', labelKey: 'settings.display.sessionHeader.machine' },
         { key: 'lastActive', labelKey: 'settings.display.sessionHeader.lastActive' },
         { key: 'model', labelKey: 'settings.display.sessionHeader.model' },
@@ -179,6 +182,7 @@ export default function SettingsDisplayPage() {
                 <SessionPreviewLimitControl />
                 <SettingsSwitch label={t('settings.display.activeSessionsOnly')} description={t('settings.display.activeSessionsOnly.desc')} checked={showActiveSessionsOnly} onChange={setShowActiveSessionsOnly} />
                 <SettingsSwitch label={t('settings.display.pinInProgressSessions')} description={t('settings.display.pinInProgressSessions.desc')} checked={pinInProgressSessions} onChange={setPinInProgressSessions} />
+                <SettingsSwitch label={t('settings.display.keepUnreadSessionsVisible')} description={t('settings.display.keepUnreadSessionsVisible.desc')} checked={keepUnreadSessionsVisible} onChange={setKeepUnreadSessionsVisible} />
                 <SettingsSwitch label={t('settings.display.appBadge')} description={t('settings.display.appBadge.desc')} checked={appBadgeEnabled} onChange={setAppBadgeEnabled} />
                 <SettingsChoiceGroup
                     label={t('settings.display.sessionListStatus')}

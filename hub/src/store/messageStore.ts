@@ -31,6 +31,7 @@ import {
     countMessages,
     markMessagesInvoked,
     markMessagesIndeterminate,
+    markDispatchingMessagesIndeterminate,
     setMessagesDeliveryState,
     markUninvokedImmediateMessages,
     mergeSessionMessages,
@@ -40,13 +41,24 @@ import {
     copyMessagesToSession as copyStoredMessagesToSession,
     getAllMessages,
     getMessagesAfterSeq,
+    getMinSeq,
     getMessageSeqById,
+    getMessageById,
     truncateMessagesFromLocalId,
     type CancelQueuedMessageResult,
     type LookupQueuedMessageResult,
     type LocalMessageState,
     type MessagePosition,
 } from './messages'
+import {
+    hasPotentiallyIncompleteMessageContent,
+    searchMessageContent,
+    searchMessageContentInSession
+} from './messageContentSearchRuntime'
+import type {
+    MessageContentSearchMatch,
+    SessionMessageContentSearchResult
+} from './messageContentSearch'
 
 export class MessageStore {
     private readonly db: Database
@@ -93,8 +105,16 @@ export class MessageStore {
         return this.db.operation(() => getMessagesAfterSeq(this.db, sessionId, afterSeq), false)
     }
 
+    async getMinSeq(sessionId: string): Promise<number | null> {
+        return this.db.operation(() => getMinSeq(this.db, sessionId), false)
+    }
+
     async getSeqById(sessionId: string, messageId: string): Promise<number | null> {
         return this.db.operation(() => getMessageSeqById(this.db, sessionId, messageId), false)
+    }
+
+    async getMessageById(sessionId: string, messageId: string): Promise<StoredMessage | null> {
+        return this.db.operation(() => getMessageById(this.db, sessionId, messageId), false)
     }
 
     async getMessages(sessionId: string, limit: number = 200): Promise<StoredMessage[]> {
@@ -184,6 +204,18 @@ export class MessageStore {
         return this.db.operation(() => countMessages(this.db, sessionId), false)
     }
 
+    searchContent(query: string, namespace: string, limit = 50, sessionIds?: readonly string[]): Promise<MessageContentSearchMatch[]> {
+        return this.db.operation(() => searchMessageContent(this.db, query, namespace, limit, sessionIds), false)
+    }
+
+    searchContentInSession(query: string, namespace: string, sessionId: string, limit = 500): Promise<SessionMessageContentSearchResult> {
+        return this.db.operation(() => searchMessageContentInSession(this.db, query, namespace, sessionId, limit), false)
+    }
+
+    hasPotentiallyIncompleteContent(namespace: string, query: string, sessionIds?: readonly string[]): Promise<boolean> {
+        return this.db.operation(() => hasPotentiallyIncompleteMessageContent(this.db, namespace, query, sessionIds), false)
+    }
+
     async cancelQueuedMessage(sessionId: string, messageId: string): Promise<CancelQueuedMessageResult> {
         return this.db.operation(() => cancelQueuedMessage(this.db, sessionId, messageId), true)
     }
@@ -206,6 +238,10 @@ export class MessageStore {
 
     async markMessagesIndeterminate(sessionId: string, localIds: string[]): Promise<number> {
         return this.db.operation(() => markMessagesIndeterminate(this.db, sessionId, localIds), true)
+    }
+
+    async markDispatchingMessagesIndeterminate(sessionId: string): Promise<string[]> {
+        return this.db.operation(() => markDispatchingMessagesIndeterminate(this.db, sessionId), true)
     }
 
     async setMessagesDeliveryState(sessionId: string, localIds: string[], state: 'queued' | 'dispatching' | 'indeterminate'): Promise<number> {

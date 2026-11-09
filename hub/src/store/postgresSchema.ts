@@ -2,9 +2,9 @@ import type { Database } from 'bun:sqlite'
 
 export const businessTables = [
     'sessions', 'machines', 'messages', 'message_epochs', 'users', 'push_subscriptions',
-    'fcm_devices', 'session_scratchlist', 'usage_events', 'usage_scan_state', 'events', 'event_links'
+    'fcm_devices', 'session_scratchlist', 'usage_events', 'usage_scan_state', 'events', 'event_links', 'session_turns'
 ] as const
-export const postgresSchemaVersion = 26
+export const postgresSchemaVersion = 31
 
 export function postgresSchema(db: Database): { tables: string[]; indexes: string[] } {
     const tables = businessTables.map(name => {
@@ -22,7 +22,8 @@ export function postgresSchema(db: Database): { tables: string[]; indexes: strin
         }
         return sql
     })
-    const indexes = (db.query("SELECT sql FROM sqlite_master WHERE type = 'index' AND sql IS NOT NULL ORDER BY name").all() as { sql: string }[])
+    const indexes = (db.query("SELECT tbl_name, sql FROM sqlite_master WHERE type = 'index' AND sql IS NOT NULL ORDER BY name").all() as { tbl_name: string; sql: string }[])
+        .filter(row => businessTables.some(table => table === row.tbl_name))
         .map(row => row.sql)
     return { tables, indexes }
 }

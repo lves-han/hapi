@@ -236,7 +236,14 @@ async function loadMessagesForCause(
         if (cursorSeq != null) {
             return (await store.messages.getMessagesAfterSeq(sessionId, cursorSeq))
         }
-        return (await store.messages.getAllMessages(sessionId))
+        const trimmedSeq = readCauseSeq(previous?.payloadJson)
+        if (trimmedSeq != null) {
+            const minSeq = await store.messages.getMinSeq(sessionId)
+            if (minSeq == null || minSeq > trimmedSeq) {
+                return await store.messages.getMessagesAfterSeq(sessionId, trimmedSeq)
+            }
+        }
+        return await store.messages.getAllMessages(sessionId)
     }
     const afterSeq = readCauseSeq(previous?.payloadJson)
     // First event / legacy rows without causeSeq still need the full session.
@@ -294,7 +301,9 @@ function consumedInboundIds(
  * Sequential rule: first unconsumed invoked inbound is the cause identity.
  * causeSeq advances past other invoked inbounds before this assistant (one
  * Claude batch can join several same-mode prompts). Uninvoked leftovers wait.
- * No new invoked inbound → sticky copy of the previous event's cause.
+ * No new invoked inbound → sticky copy of the previous event's cause, with the
+ * resume point (causeSeq + causeCursorMessageId) advanced past this assistant
+ * turn when no waiting inbound below it can still mature into a cause.
  */
 function batchCauseCursor(
     messages: StoredMessage[],
@@ -314,10 +323,32 @@ function batchCauseCursor(
     return { causeSeq: maxSeq, causeCursorMessageId: cursorId }
 }
 
+/**
+ * An inbound below the resume watermark that can still mature into a cause
+ * later (queued/not yet invoked, or unmatured scheduled). While any exist, the
+ * resume point must not advance past them or they would never be attributed.
+ * Transcript echoes and already-consumed rows are dead ends.
+ */
+function hasWaitingInbound(
+    messages: StoredMessage[],
+    watermark: number,
+    consumed: Set<string>,
+    now: number = Date.now()
+): boolean {
+    return messages.some((message) => (
+        message.seq < watermark
+        && !consumed.has(message.id)
+        && isInboundUserMessage(message.content)
+        && asRecord(asRecord(message.content)?.meta)?.isTranscriptEcho !== true
+        && (message.invokedAt === null || (message.scheduledAt != null && message.scheduledAt > now))
+    ))
+}
+
 export function resolveWorkAdCause(params: {
     messages: StoredMessage[]
     previousWorkAds: WorkGraphEvent[]
     assistantSeq?: number | null
+    assistantMessageId?: string | null
 }): { cause: WorkAdCause | null; previousEventId: string | null } {
     const previous = params.previousWorkAds.at(-1) ?? null
     const consumed = consumedInboundIds(params.messages, params.previousWorkAds)
@@ -349,6 +380,25 @@ export function resolveWorkAdCause(params: {
     if (previous) {
         const sticky = readCauseFromPayload(previous.payloadJson)
         if (sticky) {
+            // Sticky copy keeps the cause identity but should still advance the
+            // resume point past this assistant turn when nothing below it can
+            // mature into a future cause. Automation-style sessions emit many
+            // notifies with no new invoked inbound; without the advance the
+            // resume point stays frozen at the original inbound and every
+            // notify re-reads and re-parses the whole session tail (zstd +
+            // JSON per row), growing without bound as the session grows.
+            const watermark = params.assistantSeq ?? null
+            const resumeMessageId = params.assistantMessageId ?? null
+            const canAdvance = watermark != null
+                && resumeMessageId != null
+                && watermark > (sticky.causeSeq ?? Number.NEGATIVE_INFINITY)
+                && !hasWaitingInbound(params.messages, watermark, consumed)
+            if (canAdvance) {
+                return {
+                    cause: { ...sticky, causeSeq: watermark, causeCursorMessageId: resumeMessageId },
+                    previousEventId: previous.id
+                }
+            }
             return { cause: sticky, previousEventId: previous.id }
         }
     }
@@ -467,11 +517,12 @@ export async function ingestNotifySummaryFromMessage(input: NotifyIngestInput): 
     // Cause is hub-derived from session messages SQL (no REST 200 cap).
     const previousWorkAds = (await listPreviousWorkAds(input.store, input.namespace, input.sessionId))
     const messages = (await loadMessagesForCause(input.store, input.sessionId, previousWorkAds))
-    const assistantSeq = messages.find((message) => message.id === input.messageId)?.seq ?? null
+    const assistantSeq = await input.store.messages.getSeqById(input.sessionId, input.messageId)
     const { cause, previousEventId } = resolveWorkAdCause({
         messages,
         previousWorkAds,
-        assistantSeq
+        assistantSeq,
+        assistantMessageId: input.messageId
     })
 
     const create = buildWorkAdFromNotify({

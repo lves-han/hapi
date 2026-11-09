@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'bun:test'
 import { Database } from 'bun:sqlite'
-import { SQLiteDatabase } from './database'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { SQLiteDatabase, type Database as StorageDatabase } from './database'
+import { Store } from './index'
 import { prepareCached } from './statementCache'
 
 describe('prepareCached', () => {
@@ -59,5 +63,23 @@ describe('prepareCached', () => {
         expect(((await lateA.get()) as { n: number }).n).toBe(4242)
         expect(((await lateB.get()) as { n: number }).n).toBe(4242)
         await db.close()
+    })
+
+    it('allows a file-backed Store to remove its database directory after close', async () => {
+        const directory = mkdtempSync(join(tmpdir(), 'hapi-statement-cache-close-'))
+        const dbPath = join(directory, 'test.db')
+        let store: Store | undefined
+        try {
+            store = new Store(dbPath)
+            const db = (store as unknown as { runtimeDb: StorageDatabase }).runtimeDb
+            await prepareCached(db, 'SELECT 1 AS value').get()
+
+            await store.close()
+            store = undefined
+            expect(() => rmSync(directory, { recursive: true, force: true })).not.toThrow()
+        } finally {
+            await store?.close()
+            try { rmSync(directory, { recursive: true, force: true }) } catch {}
+        }
     })
 })

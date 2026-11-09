@@ -26,6 +26,7 @@ export class SQLiteDatabase implements Database {
     private tail: Promise<unknown> = Promise.resolve()
     private savepoint = 0
     constructor(private readonly db: SQLite) {}
+    get sqliteDatabase(): SQLite { return this.db }
     prepare<Row = unknown, Params extends unknown[] = unknown[]>(sql: string): AsyncStatement<Row, Params> {
         const stmt = this.db.prepare(sql) as Statement
         return {
@@ -78,7 +79,7 @@ export function postgresQuery(source: string, params: unknown[]): { sql: string;
     let sql = source.replace(/INDEXED BY idx_messages_scheduled_pending/g, '')
         .replace(/\browid\b/g, 'insertion_order')
         .replace(/MAX\(usage_scan_state\.last_seq, excluded\.last_seq\)/g, 'GREATEST(usage_scan_state.last_seq, excluded.last_seq)')
-        .replace(/\bAS (nextSeq|maxSeq)\b/g, 'AS "$1"')
+        .replace(/\bAS (nextSeq|maxSeq|minSeq)\b/g, 'AS "$1"')
         .replace(/SELECT (id, )?content FROM messages/g, 'SELECT $1content, content_encoding FROM messages')
     const ignore = /INSERT OR IGNORE/i.test(sql)
     sql = sql.replace(/INSERT OR IGNORE/gi, 'INSERT')
@@ -125,6 +126,9 @@ export class PostgresDatabase implements Database {
     constructor(url: string) {
         if (!['postgres:', 'postgresql:'].includes(new URL(url).protocol)) throw new Error('DATABASE_URL must use PostgreSQL')
         this.sql = new SQL(url, { max: 8, connectionTimeout: 10, bigint: true })
+    }
+    withTransaction<T>(transaction: TransactionSQL, work: () => Promise<T>): Promise<T> {
+        return this.context.run(transaction, work)
     }
     prepare<Row = unknown, Params extends unknown[] = unknown[]>(source: string): AsyncStatement<Row, Params> {
         const database = this

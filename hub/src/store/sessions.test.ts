@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'bun:test'
+import type { Database } from 'bun:sqlite'
 import { Store } from './index'
 import { randomUUID } from 'node:crypto'
 import { SessionIdentityConflictError } from './sessions'
@@ -1213,6 +1214,71 @@ describe('updateSessionMetadata: protocol resume token preservation', () => {
             expect(value?.path).toBe('/tmp/project')
         }
     })
+
+    it('preserves a generated fork summary across sparse child startup metadata', async () => {
+        const store = makeStore()
+        const session = await store.sessions.getOrCreateSession(
+            'fork-summary-preserve',
+            { path: '/tmp/project', host: 'example', summary: { text: 'Fork: Source title', updatedAt: 1234 } },
+            null,
+            'default'
+        )
+        const result = await store.sessions.updateSessionMetadata(
+            session.id,
+            { path: '/tmp/project', host: 'example', lifecycleState: 'running' },
+            session.metadataVersion,
+            'default'
+        )
+        expect(result.result).toBe('success')
+        expect((await getMetadata(store, session.id))?.summary).toEqual({ text: 'Fork: Source title', updatedAt: 1234 })
+        await store.close()
+    })
+
+    it('does not globally preserve ordinary summaries across sparse metadata updates', async () => {
+        const store = makeStore()
+        const session = await store.sessions.getOrCreateSession(
+            'ordinary-summary-replace',
+            { path: '/tmp/project', host: 'example', summary: { text: 'Generated title', updatedAt: 1234 } },
+            null,
+            'default'
+        )
+        const result = await store.sessions.updateSessionMetadata(
+            session.id,
+            { path: '/tmp/project', host: 'example', lifecycleState: 'running' },
+            session.metadataVersion,
+            'default'
+        )
+        expect(result.result).toBe('success')
+        expect((await getMetadata(store, session.id))?.summary).toBeUndefined()
+        await store.close()
+    })
+
+    it('preserves the automatic title attempt marker across sparse metadata updates', async () => {
+        const store = makeStore()
+        const session = await store.sessions.getOrCreateSession(
+            'auto-title-marker',
+            {
+                path: '/tmp/project',
+                host: 'example',
+                titleSuggestionAutoAttemptedAt: 1234,
+                titleSuggestionTurn: { first: true, completed: false }
+            },
+            null,
+            'default'
+        )
+
+        const result = await store.sessions.updateSessionMetadata(
+            session.id,
+            { path: '/tmp/project', host: 'example', lifecycleState: 'archived' },
+            session.metadataVersion,
+            'default'
+        )
+
+        expect(result.result).toBe('success')
+        expect((await getMetadata(store, session.id))?.titleSuggestionAutoAttemptedAt).toBe(1234)
+        expect((await getMetadata(store, session.id))?.titleSuggestionTurn).toEqual({ first: true, completed: false })
+        await store.close()
+    })
 })
 
 describe('replaceSessionTodos: watermark ratchet (PR #897 rewind race)', () => {
@@ -1291,5 +1357,29 @@ describe('replaceSessionTodos: watermark ratchet (PR #897 rewind race)', () => {
         expect(after?.todosUpdatedAt).toBe(51)
 
         await store.close()
+    })
+})
+
+describe('updateSessionAgentState: updated_at (#1855)', () => {
+    it('only advances updated_at when a new permission request arrives', async () => {
+        const store = makeStore()
+        const session = (await store.sessions.getOrCreateSession('agent-state-recency', { path: '/tmp/p', host: 'h' }, null, 'default'))
+        const resetUpdatedAt = () => (store as unknown as { db: Database }).db
+            .prepare('UPDATE sessions SET updated_at = 1000 WHERE id = ?').run(session.id)
+        resetUpdatedAt()
+        const update = async (state: unknown, version: number) =>
+            (await store.sessions.updateSessionAgentState(session.id, state, version, 'default'))
+
+        expect((await update({ codexUsage: { primary: 1 }, requests: {} }, 1)).result).toBe('success')
+        expect((await store.sessions.getSession(session.id))?.updatedAt).toBe(1000)
+
+        expect((await update({ requests: { r1: { tool: 'Bash', arguments: {} } } }, 2)).result).toBe('success')
+        const touched = (await store.sessions.getSession(session.id))?.updatedAt ?? 0
+        expect(touched).toBeGreaterThan(1000)
+
+        resetUpdatedAt()
+        expect((await update({ requests: {}, completedRequests: { r1: { tool: 'Bash', arguments: {}, status: 'approved' } } }, 3)).result).toBe('success')
+        expect((await store.sessions.getSession(session.id))?.updatedAt).toBe(1000)
+        expect((await update({}, 3)).result).toBe('version-mismatch')
     })
 })

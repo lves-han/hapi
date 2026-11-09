@@ -20,6 +20,50 @@ async function fixture() {
 }
 
 describe('shared Codex hub binding', () => {
+    it('restores the generated fork summary after child startup replaces provisional metadata', async () => {
+        const { store, engine, create, rpc } = (await fixture())
+        try {
+            const source = (await create('source', { name: 'Source title' }))
+            rpc.forkConversation = async () => ({ nativeSessionId: 'native-child' })
+            rpc.spawnSession = async (...args) => {
+                const childId = args[12]!
+                const child = (await store.sessions.getSession(childId))!
+                await store.sessions.updateSessionMetadata(childId, {
+                    path: '/tmp/work', host: 'test', machineId: 'machine', flavor: 'codex',
+                    codexSessionId: 'native-child'
+                }, child.metadataVersion, 'default')
+                await (engine as unknown as { sessionCache: { refreshSession(id: string): Promise<unknown> } })
+                    .sessionCache.refreshSession(childId)
+                await engine.handleSessionAlive({ sid: childId, time: Date.now() })
+                await engine.handleSessionReady({ sid: childId, time: Date.now() })
+                return { type: 'success', sessionId: childId }
+            }
+            const result = await engine.forkConversation(source.id, 'default')
+            expect(result.type).toBe('success')
+            if (result.type !== 'success') throw new Error(result.message)
+            expect((await engine.getSession(result.sessionId))?.metadata?.summary?.text).toBe('Fork: Source title')
+        } finally { await engine.stop() }
+    })
+
+    it('allows Codex historical forks while thinking but retains other history guards', async () => {
+        const { store, engine, create, rpc } = (await fixture())
+        try {
+            const source = (await create('source', { conversationHistoryPoints: { boundary: true } }))
+            const child = (await create('child', { forkedFrom: source.id }))
+            await store.messages.addMessage(source.id, { role: 'user', content: 'boundary' }, 'boundary')
+            await store.messages.markMessagesInvoked(source.id, ['boundary'], Date.now())
+            await engine.handleSessionAlive({ sid: source.id, time: Date.now(), thinking: true })
+            let calls = 0
+            rpc.forkConversation = async () => { calls++; return { nativeSessionId: 'native-child', sessionId: child.id } }
+            expect(await engine.forkConversation(source.id, 'default', 'boundary')).toEqual({ type: 'success', sessionId: child.id })
+            expect((await engine.getSession(source.id))?.thinking).toBe(true)
+            expect(await engine.forkConversation(source.id, 'default')).toMatchObject({ type: 'error', message: 'Session is busy' })
+            expect(await engine.rewindConversation(source.id, 'default', 'boundary')).toMatchObject({ type: 'error', message: 'Session is busy' })
+            await store.messages.addMessage(source.id, { role: 'user', content: 'queued' }, 'queued')
+            expect(await engine.forkConversation(source.id, 'default', 'boundary')).toMatchObject({ type: 'error', message: 'Session has queued messages' })
+            expect(calls).toBe(1)
+        } finally { await engine.stop() }
+    })
     it('guards plan actions by namespace and runtime, leaving stale-plan and retry validation to CLI', async () => {
         const { engine, create, rpc } = (await fixture())
         try {

@@ -35,9 +35,9 @@ describe('SessionCache.applySessionPatch', () => {
         const todos = [
             { content: 'one', status: 'pending' as const, priority: 'medium' as const, id: '1' }
         ]
-        const applied = cache.applySessionPatch(created.id, {
+        const applied = (await cache.applySessionPatch(created.id, {
             todos: { version: 100, value: todos }
-        })
+        }))
 
         expect(applied).toBe(true)
         expect(cache.getSession(created.id)?.todos).toEqual(todos)
@@ -57,12 +57,12 @@ describe('SessionCache.applySessionPatch', () => {
         ))
 
         const nextVersion = created.metadataVersion + 1
-        const applied = cache.applySessionPatch(created.id, {
+        const applied = (await cache.applySessionPatch(created.id, {
             metadata: {
                 version: nextVersion,
                 value: { path: '/tmp', host: 'h', lifecycleState: 'archived' }
             }
-        })
+        }))
 
         expect(applied).toBe(true)
         const after = cache.getSession(created.id)
@@ -84,9 +84,9 @@ describe('SessionCache.applySessionPatch', () => {
         expect(created.agentState).not.toBeNull()
 
         const nextVersion = created.agentStateVersion + 1
-        const applied = cache.applySessionPatch(created.id, {
+        const applied = (await cache.applySessionPatch(created.id, {
             agentState: { version: nextVersion, value: null }
-        })
+        }))
 
         expect(applied).toBe(true)
         const after = cache.getSession(created.id)
@@ -94,12 +94,12 @@ describe('SessionCache.applySessionPatch', () => {
         expect(after?.agentStateVersion).toBe(nextVersion)
     })
 
-    it('returns false (caller falls back to refresh) when the session is not cached', () => {
+    it('returns false (caller falls back to refresh) when the session is not cached', async () => {
         const store = new Store(':memory:')
         const events: SyncEvent[] = []
         const cache = new SessionCache(store, createPublisher(events))
 
-        const applied = cache.applySessionPatch('does-not-exist', { todos: { version: 1, value: [] } })
+        const applied = (await cache.applySessionPatch('does-not-exist', { todos: { version: 1, value: [] } }))
         expect(applied).toBe(false)
     })
 
@@ -116,9 +116,9 @@ describe('SessionCache.applySessionPatch', () => {
         ))
 
         // Bogus shape: { metadata: { value: ... } } is missing the required version.
-        const applied = cache.applySessionPatch(created.id, {
+        const applied = (await cache.applySessionPatch(created.id, {
             metadata: { value: { path: '/x', host: 'y' } }
-        })
+        }))
         expect(applied).toBe(false)
     })
 
@@ -138,7 +138,7 @@ describe('SessionCache.applySessionPatch', () => {
             'default'
         ))
 
-        expect(cache.applySessionPatch(created.id, {})).toBe(false)
+        expect((await cache.applySessionPatch(created.id, {}))).toBe(false)
     })
 
     it('clears cached teamState when a null teamState patch lands (TeamDelete)', async () => {
@@ -160,14 +160,14 @@ describe('SessionCache.applySessionPatch', () => {
             'default'
         ))
         // Seed cached teamState (the pre-delete state).
-        const seedApplied = cache.applySessionPatch(created.id, {
+        const seedApplied = (await cache.applySessionPatch(created.id, {
             teamState: { version: 10, value: { teamName: 'crew', members: [{ name: 'a' }] } }
-        })
+        }))
         expect(seedApplied).toBe(true)
         expect(cache.getSession(created.id)?.teamState?.teamName).toBe('crew')
 
         // TeamDelete: null teamState value must clear the cache.
-        const cleared = cache.applySessionPatch(created.id, { teamState: { version: 11, value: null } })
+        const cleared = (await cache.applySessionPatch(created.id, { teamState: { version: 11, value: null } }))
         expect(cleared).toBe(true)
         expect(cache.getSession(created.id)?.teamState).toBeUndefined()
     })
@@ -187,17 +187,17 @@ describe('SessionCache.applySessionPatch', () => {
             null,
             'default'
         ))
-        cache.applySessionPatch(created.id, {
+        await cache.applySessionPatch(created.id, {
             teamState: { version: 10, value: { teamName: 'crew', members: [{ name: 'a' }] } }
         })
         expect(cache.getSession(created.id)?.teamState?.teamName).toBe('crew')
 
-        const todosOnly = cache.applySessionPatch(created.id, {
+        const todosOnly = (await cache.applySessionPatch(created.id, {
             todos: {
                 version: 20,
                 value: [{ content: 'one', status: 'pending' as const, priority: 'medium' as const, id: '1' }]
             }
-        })
+        }))
         expect(todosOnly).toBe(true)
         expect(cache.getSession(created.id)?.teamState?.teamName).toBe('crew')
     })
@@ -214,7 +214,7 @@ describe('SessionCache.applySessionPatch', () => {
             'tenant-a'
         ))
 
-        const applied = cache.applySessionPatch(created.id, { todos: { version: 1, value: [] } }, 'tenant-b')
+        const applied = (await cache.applySessionPatch(created.id, { todos: { version: 1, value: [] } }, 'tenant-b'))
         expect(applied).toBe(false)
     })
 })

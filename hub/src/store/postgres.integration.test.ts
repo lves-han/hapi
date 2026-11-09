@@ -64,6 +64,8 @@ async function seed(path: string): Promise<string> {
         await store.usage.recordScan(session.id, 1, 2, [{ sessionId: session.id, sourceKey: 'test', sourceSeq: 1, createdAt: 1, agent: 'codex', model: null, kind: 'delta', inputTokens: 1, outputTokens: 2, cacheReadTokens: 0, cacheCreationTokens: 0, lastInputTokens: null, lastOutputTokens: null, lastCacheReadTokens: null, lastCacheCreationTokens: null }], true)
         const event = await store.workGraph.insertEvent('default', { source_kind: 'session', source_ref: session.id, event_type: 'work_ad', summary: 'test', related_session_id: session.id, principal: { kind: 'human', id: '1' } })
         await store.workGraph.insertLink('default', { from_event_id: event.event.id, to_event_id: event.event.id, relation_type: 'related' })
+        await store.turns.open(session.id, 'default', 1, 'agent')
+        await store.turns.close(session.id, 2, 'idle')
         // Preserve plaintext and oversized historical content without applying ingest truncation.
         store.sqliteDatabase.prepare('INSERT INTO messages (id, session_id, content, created_at, seq, invoked_at) VALUES (?, ?, ?, 0, 3, 0)')
             .run('historical', session.id, JSON.stringify({ text: '历史'.repeat(40_000) }))
@@ -81,12 +83,15 @@ async function historicFixture(path: string, version: number): Promise<void> {
         db.exec('PRAGMA foreign_keys = OFF')
         const indexes = db.query("SELECT name, sql FROM sqlite_master WHERE type = 'index' AND sql IS NOT NULL").all() as { name: string; sql: string }[]
         for (const index of indexes) db.exec(`DROP INDEX ${index.name}`)
-        const introducedTables: Record<string, number> = { fcm_devices: 11, session_scratchlist: 12, message_epochs: 13, usage_events: 17, usage_scan_state: 19, events: 23, event_links: 23 }
+        const introducedTables: Record<string, number> = { fcm_devices: 11, session_scratchlist: 12, message_epochs: 13, usage_events: 17, usage_scan_state: 19, events: 23, event_links: 23, session_turns: 28,
+            message_content_search: 27, message_content_search_lookup: 27, message_content_search_short: 29 }
         for (const [table, introduced] of Object.entries(introducedTables)) if (version < introduced) db.exec(`DROP TABLE ${table}`)
         const introducedColumns: [string, number, string[]][] = [
             ['sessions', 4, ['team_state', 'team_state_updated_at']], ['sessions', 5, ['model']],
             ['sessions', 6, ['effort']], ['sessions', 7, ['model_reasoning_effort']], ['sessions', 10, ['service_tier']],
             ['sessions', 22, ['pinned', 'global_pinned']], ['messages', 8, ['invoked_at']],
+            ['sessions', 29, ['last_user_message_at']], ['sessions', 30, ['content_revision', 'read_revision', 'read_state_version', 'manual_unread']],
+            ['messages', 30, ['content_revision']],
             ['messages', 9, ['scheduled_at']], ['messages', 25, ['delivery_state']],
             ['fcm_devices', 24, ['push_key']], ['session_scratchlist', 15, ['attachments']],
             ['usage_events', 18, ['last_input_tokens', 'last_output_tokens', 'last_cache_read_tokens', 'last_cache_creation_tokens']]
@@ -101,7 +106,7 @@ async function historicFixture(path: string, version: number): Promise<void> {
         for (const index of indexes) {
             const table = / ON (\w+)/.exec(index.sql)?.[1]
             if (table && introducedTables[table] && version < introducedTables[table]) continue
-            if ((index.name === 'idx_messages_immediate_queued' && version < 26) || (index.name === 'idx_messages_scheduled_pending' && version < 9) || (index.name === 'idx_messages_session_position' && version < 8)) continue
+            if ((index.name === 'idx_messages_future_scheduled_queued' && version < 27) || (index.name === 'idx_messages_immediate_queued' && version < 26) || (index.name === 'idx_messages_scheduled_pending' && version < 9) || (index.name === 'idx_messages_session_position' && version < 8)) continue
             db.exec(index.sql)
         }
         db.exec(`PRAGMA user_version = ${version}`)
@@ -112,7 +117,94 @@ async function historicFixture(path: string, version: number): Promise<void> {
 }
 
 describe.skipIf(!testUrl)('PostgreSQL storage and automatic migration', () => {
-    it.each(Array.from({ length: 27 }, (_, i) => i))('upgrades and imports historical schema %i without changing its source', async version => {
+    it('matches SQLite content search for namespaces, queued messages, streaming, and session merges', async () => {
+        await isolated(async (url, dir) => {
+            const stores = [new Store(':memory:'), await openStore({ dbPath: join(dir, 'hapi.db'), dataDir: dir, databaseUrl: url })]
+            try {
+                for (const store of stores) {
+                    const first = await store.sessions.getOrCreateSession('search-first', { path: '/first' }, null, 'default')
+                    const second = await store.sessions.getOrCreateSession('search-second', { path: '/second' }, null, 'default')
+                    const other = await store.sessions.getOrCreateSession('search-other', { path: '/other' }, null, 'other')
+                    const user = (text: string) => ({ role: 'user', content: { type: 'text', text } })
+                    await store.messages.addMessage(first.id, user('中文搜索 and **KV Cache**'))
+                    await store.messages.addMessage(other.id, user('中文搜索'))
+                    expect((await store.messages.searchContent('搜索', 'default')).map(row => row.sessionId)).toEqual([first.id])
+                    expect((await store.messages.searchContent('搜索', 'other')).map(row => row.sessionId)).toEqual([other.id])
+                    expect(await store.messages.searchContent('搜索', 'default', 50, [second.id])).toEqual([])
+                    expect((await store.messages.searchContent('KV Cache', 'default'))[0]?.sessionId).toBe(first.id)
+                    expect(await store.messages.searchContent('搜', 'default')).toEqual([])
+
+                    await store.messages.addMessage(first.id, user('queued secret phrase'), 'queued')
+                    expect(await store.messages.searchContent('secret phrase', 'default')).toEqual([])
+                    await store.messages.markMessagesInvoked(first.id, ['queued'], 123)
+                    expect((await store.messages.searchContent('secret phrase', 'default'))[0]?.sessionId).toBe(first.id)
+
+                    const snapshot = (text: string, live = false) => ({ role: 'agent', content: { type: 'codex', data: {
+                        type: 'message', id: 'stream-1', message: text, streamSnapshot: true, ...(live ? { live: true } : {})
+                    } } })
+                    await store.messages.addMessage(first.id, snapshot('partial stream phrase', true))
+                    expect(await store.messages.searchContent('partial stream', 'default')).toEqual([])
+                    const terminal = await store.messages.addMessage(first.id, snapshot('final stream phrase'))
+                    expect((await store.messages.searchContent('final stream', 'default'))[0]?.messageId).toBe(terminal.id)
+                    const replacement = await store.messages.addMessage(first.id, snapshot('replacement stream phrase'))
+                    expect(await store.messages.searchContent('final stream', 'default')).toEqual([])
+                    const matches = await store.messages.searchContentInSession('phrase', 'default', first.id)
+                    expect(matches.total).toBe(2)
+                    expect(matches.matches.map(row => row.messageId)).toContain(replacement.id)
+
+                    await store.messages.mergeSessionMessages(first.id, second.id)
+                    expect((await store.messages.searchContent('secret phrase', 'default'))[0]?.sessionId).toBe(second.id)
+                    await store.sessions.deleteSession(second.id, 'default')
+                    expect(await store.messages.searchContent('secret phrase', 'default')).toEqual([])
+                }
+            } finally {
+                for (const store of stores) await store.close()
+            }
+        })
+    }, 30_000)
+
+    it('matches SQLite search coverage for truncated text and injected Claude replies', async () => {
+        await isolated(async (url, dir) => {
+            const stores = [new Store(':memory:'), await openStore({ dbPath: join(dir, 'hapi.db'), dataDir: dir, databaseUrl: url })]
+            try {
+                for (const store of stores) {
+                    const session = await store.sessions.getOrCreateSession('search-coverage', { path: '/coverage' }, null, 'default')
+                    await store.messages.addMessage(session.id, { role: 'user', content: { type: 'text', text:
+                        `${'head '.repeat(700)}middle-only-qzx ${'tail '.repeat(700)}`
+                    } })
+                    expect((await store.messages.searchContent('qzx', 'default'))[0]?.truncated).toBe(false)
+                    expect(await store.messages.searchContent('qz', 'default')).toEqual([])
+                    expect((await store.messages.searchContentInSession('qz', 'default', session.id)).hasPotentiallyIncompleteResults).toBe(true)
+                    await store.messages.addMessage(session.id, { role: 'agent', content: { type: 'output', data: {
+                        type: 'user', uuid: 'injected-turn', message: { content: '<system-reminder>...</system-reminder>' }
+                    } } })
+                    await store.messages.addMessage(session.id, { role: 'agent', content: { type: 'output', data: {
+                        type: 'assistant', parentUuid: 'injected-turn', message: { content: [{ type: 'text', text: 'No response requested.' }] }
+                    } } })
+                    expect((await store.messages.searchContentInSession('No response requested', 'default', session.id)).total).toBe(0)
+                }
+            } finally {
+                for (const store of stores) await store.close()
+            }
+        })
+    }, 30_000)
+
+    it('rolls back PostgreSQL index cleanup when deleting a session fails', async () => {
+        await isolated(async (url, dir, sql) => {
+            const store = await openStore({ dbPath: join(dir, 'hapi.db'), dataDir: dir, databaseUrl: url })
+            try {
+                const session = await store.sessions.getOrCreateSession('search-rollback', { path: '/rollback' }, null, 'default')
+                const message = await store.messages.addMessage(session.id, { role: 'user', content: { type: 'text', text: 'rollback phrase' } })
+                await sql.unsafe(`CREATE FUNCTION fail_delete() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'forced delete failure'; END $$`)
+                await sql.unsafe('CREATE TRIGGER fail_delete BEFORE DELETE ON sessions FOR EACH ROW EXECUTE FUNCTION fail_delete()')
+                await expect(store.sessions.deleteSession(session.id, 'default')).rejects.toThrow('forced delete failure')
+                expect(await store.sessions.getSession(session.id)).not.toBeNull()
+                expect((await store.messages.searchContent('rollback phrase', 'default'))[0]?.messageId).toBe(message.id)
+            } finally { await store.close() }
+        })
+    }, 30_000)
+
+    it.each(Array.from({ length: 32 }, (_, i) => i))('upgrades and imports historical schema %i without changing its source', async version => {
         await isolated(async (url, dir) => {
             const dbPath = join(dir, 'hapi.db')
             await historicFixture(dbPath, version)
@@ -126,7 +218,7 @@ describe.skipIf(!testUrl)('PostgreSQL storage and automatic migration', () => {
         })
     }, 30_000)
 
-    it('imports all 12 tables losslessly, restores identity, and preserves new writes on restart', async () => {
+    it('imports all business tables losslessly, restores identity, and preserves new writes on restart', async () => {
         await isolated(async (url, dir, sql) => {
             const dbPath = join(dir, 'hapi.db')
             const id = await seed(dbPath)
@@ -189,6 +281,38 @@ describe.skipIf(!testUrl)('PostgreSQL storage and automatic migration', () => {
                 } finally { await exported.close() }
                 expect(fileHash(dbPath)).toBe(before)
             } finally { await store.close() }
+        })
+    }, 30_000)
+
+    it('upgrades an existing PostgreSQL 26 database atomically and backfills searchable messages', async () => {
+        await isolated(async (url, dir, sql) => {
+            const dbPath = join(dir, 'missing.sqlite')
+            let store = await openStore({ dbPath, dataDir: dir, databaseUrl: url })
+            const session = await store.sessions.getOrCreateSession('upgrade', { path: '/upgrade' }, null, 'default')
+            await store.messages.addMessage(session.id, { role: 'user', content: { type: 'text', text: 'historical searchable 中文' } })
+            await store.close()
+            await sql.unsafe('DROP TABLE hapi_message_content_search; DROP TABLE session_turns; DROP INDEX idx_messages_future_scheduled_queued')
+            await sql.unsafe('ALTER TABLE sessions DROP COLUMN last_user_message_at, DROP COLUMN content_revision, DROP COLUMN read_revision, DROP COLUMN read_state_version, DROP COLUMN manual_unread')
+            await sql.unsafe('ALTER TABLE messages DROP COLUMN content_revision')
+            await sql`UPDATE hapi_store_metadata SET schema_version = 26 WHERE id = 1`
+
+            await expect(openStore({ dbPath, dataDir: dir, databaseUrl: url, checkpoint: phase => {
+                if (phase === 'upgrade-before-commit') throw new Error('injected upgrade failure')
+            } })).rejects.toThrow()
+            const [prior] = await sql`SELECT schema_version, to_regclass('public.session_turns') AS turns FROM hapi_store_metadata WHERE id = 1`
+            expect(Number(prior.schema_version)).toBe(26)
+            expect(prior.turns).toBeNull()
+
+            store = await openStore({ dbPath, dataDir: dir, databaseUrl: url })
+            try {
+                expect((await store.messages.searchContent('searchable 中文', 'default'))[0]?.sessionId).toBe(session.id)
+                expect((await store.sessions.getSession(session.id))?.lastUserMessageAt).toBeDefined()
+                await store.turns.open(session.id, 'default', 10, 'agent')
+                await store.turns.close(session.id, 20, 'idle')
+                expect(await store.turns.list('default', 0, 30)).toHaveLength(1)
+            } finally { await store.close() }
+            const [upgraded] = await sql`SELECT schema_version FROM hapi_store_metadata WHERE id = 1`
+            expect(Number(upgraded.schema_version)).toBe(31)
         })
     }, 30_000)
 
@@ -357,9 +481,9 @@ describe.skipIf(!testUrl)('PostgreSQL storage and automatic migration', () => {
             await expect(openStore({ dbPath, dataDir: dir, databaseUrl: url })).rejects.toThrow()
             await sql`DROP TABLE unrelated`
             const source = new SQLite(dbPath)
-            source.exec('PRAGMA user_version = 27')
+            source.exec('PRAGMA user_version = 32')
             await expect(openStore({ dbPath, dataDir: dir, databaseUrl: url })).rejects.toThrow()
-            source.exec('PRAGMA user_version = 26')
+            source.exec('PRAGMA user_version = 31')
             source.prepare('UPDATE messages SET content = ? WHERE id = ?').run('corrupt JSON', 'historical')
             await expect(openStore({ dbPath, dataDir: dir, databaseUrl: url })).rejects.toThrow()
             source.prepare('UPDATE messages SET content = ? WHERE id = ?').run('{}', 'historical')

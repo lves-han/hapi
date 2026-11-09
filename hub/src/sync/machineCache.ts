@@ -205,14 +205,14 @@ export class MachineCache {
 
         const wasActive = machine.active
         const previousHealth = machine.health ?? null
+        const now = Date.now()
         machine.active = true
-        machine.activeAt = Math.max(machine.activeAt, t)
+        machine.activeAt = Math.max(machine.activeAt, now)
 
         if (payload.health !== undefined) {
             machine.health = parseMachineHealth(payload.health)
         }
 
-        const now = Date.now()
         const lastBroadcastAt = this.lastBroadcastAtByMachineId.get(machine.id) ?? 0
         const healthChanged = payload.health !== undefined
             && healthDisplayChanged(previousHealth, machine.health)

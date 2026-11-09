@@ -31,13 +31,17 @@ describe('schema migration v23 to v26', () => {
 
         const migrated = new Store(dbPath)
         const internalDb = (migrated as unknown as { db: Database }).db
-        const columns = internalDb.prepare('PRAGMA table_info(fcm_devices)').all() as Array<{ name: string }>
-        const version = internalDb.prepare('PRAGMA user_version').get() as { user_version: number }
+        const columnsStatement = internalDb.prepare('PRAGMA table_info(fcm_devices)')
+        const versionStatement = internalDb.prepare('PRAGMA user_version')
+        const messageColumnsStatement = internalDb.prepare('PRAGMA table_info(messages)')
+        try {
+            const columns = columnsStatement.all() as Array<{ name: string }>
+            const version = versionStatement.get() as { user_version: number }
 
-        expect(columns.some((col) => col.name === 'push_key')).toBe(true)
-        const messageColumns = internalDb.prepare('PRAGMA table_info(messages)').all() as Array<{ name: string }>
-        expect(messageColumns.some((col) => col.name === 'delivery_state')).toBe(true)
-        expect(version.user_version).toBe(26)
+            expect(columns.some((col) => col.name === 'push_key')).toBe(true)
+            const messageColumns = messageColumnsStatement.all() as Array<{ name: string }>
+            expect(messageColumns.some((col) => col.name === 'delivery_state')).toBe(true)
+            expect(version.user_version).toBe(31)
 
         // Existing Android rows survive with a NULL push key.
         const devices = (await migrated.fcm.getDevicesByNamespace('default'))
@@ -53,7 +57,12 @@ describe('schema migration v23 to v26', () => {
             pushKey: Buffer.alloc(32, 7).toString('base64')
         })
         expect((await migrated.fcm.getDevicesByNamespace('default', ['ios']))).toHaveLength(1)
-        await migrated.close()
+        } finally {
+            columnsStatement.finalize()
+            versionStatement.finalize()
+            messageColumnsStatement.finalize()
+            await migrated.close()
+        }
     })
 
     it('adds messages.delivery_state to an already-upgraded V24 database', async () => {
@@ -64,6 +73,9 @@ describe('schema migration v23 to v26', () => {
         await new Store(dbPath).close()
         const legacy = new Database(dbPath)
         legacy.exec(`
+            -- V26/V27 indexes depend on delivery_state and did not exist in V24.
+            DROP INDEX idx_messages_immediate_queued;
+            DROP INDEX idx_messages_future_scheduled_queued;
             ALTER TABLE messages DROP COLUMN delivery_state;
             PRAGMA user_version = 24;
         `)
@@ -74,7 +86,7 @@ describe('schema migration v23 to v26', () => {
         const columns = internalDb.prepare('PRAGMA table_info(messages)').all() as Array<{ name: string }>
         const version = internalDb.prepare('PRAGMA user_version').get() as { user_version: number }
         expect(columns.some((col) => col.name === 'delivery_state')).toBe(true)
-        expect(version.user_version).toBe(26)
+        expect(version.user_version).toBe(31)
         await migrated.close()
     })
 })

@@ -19,9 +19,9 @@ export function orderedHandler<K extends keyof ClientToServerEvents>(
         const task = (tails.get(socket) ?? Promise.resolve()).then(async () => {
             if (!failed.has(socket)) await handler(...args)
         })
-        const settled = task.catch(() => {
+        const settled = task.catch((error) => {
             failed.add(socket)
-            console.error(`[CLI] ${event} failed; closing connection so the client can reconcile persisted state`)
+            console.error(`[CLI] ${event} failed; closing connection so the client can reconcile persisted state`, error)
             // A transport close lets existing clients reconnect automatically.
             socket.conn.close()
         })

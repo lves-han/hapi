@@ -785,7 +785,7 @@ export async function setSessionModel(
                 seq = seq + 1
             WHERE id = @id
               AND namespace = @namespace
-              AND model IS NOT @model
+              AND model IS DISTINCT FROM @model
         `).run({
             id,
             namespace,
@@ -818,7 +818,7 @@ export async function setSessionModelReasoningEffort(
                 seq = seq + 1
             WHERE id = @id
               AND namespace = @namespace
-              AND model_reasoning_effort IS NOT @model_reasoning_effort
+              AND model_reasoning_effort IS DISTINCT FROM @model_reasoning_effort
         `).run({
             id,
             namespace,
@@ -851,7 +851,7 @@ export async function setSessionServiceTier(
                 seq = seq + 1
             WHERE id = @id
               AND namespace = @namespace
-              AND service_tier IS NOT @service_tier
+              AND service_tier IS DISTINCT FROM @service_tier
         `).run({
             id,
             namespace,
@@ -884,7 +884,7 @@ export async function setSessionEffort(
                 seq = seq + 1
             WHERE id = @id
               AND namespace = @namespace
-              AND effort IS NOT @effort
+              AND effort IS DISTINCT FROM @effort
         `).run({
             id,
             namespace,
@@ -917,7 +917,7 @@ export async function setSessionActive(
                 seq = seq + 1
             WHERE id = @id
               AND namespace = @namespace
-              AND (active IS NOT @active OR active_at IS NULL OR active_at < @active_at)
+              AND (active IS DISTINCT FROM @active OR active_at IS NULL OR active_at < @active_at)
         `).run({
             id,
             namespace,

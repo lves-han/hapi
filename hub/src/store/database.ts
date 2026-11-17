@@ -88,16 +88,20 @@ export function postgresQuery(source: string, params: unknown[]): { sql: string;
     const named = params.length === 1 && params[0] !== null && typeof params[0] === 'object' && !ArrayBuffer.isView(params[0])
         ? params[0] as Record<string, unknown> : undefined
     let position = 0
-    // Quoted literals and comments are preserved; only actual bind tokens change.
-    sql = sql.replace(/'(?:''|[^'])*'|--[^\n]*|@[a-zA-Z_]\w*|\?/g, token => {
-        if (token[0] === "'" || token.startsWith('--')) return token
+    // Quoted literals and comments are preserved; SQLite IS [NOT] bind comparisons become IS [NOT] DISTINCT FROM, and bind tokens become $n.
+    sql = sql.replace(/'(?:''|[^'])*'|--[^\n]*|\bIS\s+NOT\s+(@[a-zA-Z_]\w*|\?)|\bIS\s+(@[a-zA-Z_]\w*|\?)|@[a-zA-Z_]\w*|\?/gi, (match, isNotBind?: string, isBind?: string) => {
+        if (match[0] === "'" || match.startsWith('--')) return match
+        const token = isNotBind ?? isBind ?? match
         let value = token === '?' ? params[position++] : named?.[token.slice(1)]
         if (value === undefined) throw new Error(`Missing SQL binding ${token}`)
         if (typeof value === 'string' && (token === '@content' || (token === '?' && position === 1 && /UPDATE messages SET content\s*=/.test(source)))) {
             value = Buffer.from(value, 'utf8')
         }
         values.push(value)
-        return `$${values.length}`
+        const placeholder = `$${values.length}`
+        if (isNotBind) return `IS DISTINCT FROM ${placeholder}`
+        if (isBind) return `IS NOT DISTINCT FROM ${placeholder}`
+        return placeholder
     })
     return { sql, values }
 }

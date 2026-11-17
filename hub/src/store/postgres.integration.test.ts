@@ -10,7 +10,10 @@ import type { StorageUsageResponse } from '@hapi/protocol/apiTypes'
 import type { WebAppEnv } from '../web/middleware/auth'
 import { createStorageRoutes } from '../web/routes/storage'
 import { Store } from './index'
+import { postgresQuery } from './database'
 import { openStore } from './openStore'
+import { RpcRegistry } from '../socket/rpcRegistry'
+import { SyncEngine } from '../sync/syncEngine'
 import { businessTables } from './postgresSchema'
 import { exportPostgres } from './exportPostgres'
 import { readScratchlistAttachmentFile, resolveScratchlistStoragePath, writeScratchlistAttachmentFile } from '../scratchlistAttachments/storage'
@@ -688,6 +691,86 @@ describe.skipIf(!testUrl)('PostgreSQL storage and automatic migration', () => {
             expect((await store.scratchlist.list(id))[0].attachments).toEqual([attachment])
             expect((await readScratchlistAttachmentFile(dir, attachment.path))?.buffer.toString()).toBe('retained')
             await store.close()
+        })
+    }, 30_000)
+
+    it('supports session-alive and null-safe session column updates on both SQLite and PostgreSQL', async () => {
+        expect(postgresQuery(
+            "SELECT 'IS NOT @ignored' AS literal FROM sessions WHERE model IS NOT @model AND effort IS @effort AND active IS NOT NULL -- IS @comment",
+            [{ model: 'gpt-5', effort: null }]
+        )).toEqual({
+            sql: "SELECT 'IS NOT @ignored' AS literal FROM sessions WHERE model IS DISTINCT FROM $1 AND effort IS NOT DISTINCT FROM $2 AND active IS NOT NULL -- IS @comment",
+            values: ['gpt-5', null]
+        })
+        expect(postgresQuery(
+            'SELECT id FROM sessions WHERE model IS NOT ? AND effort IS ?',
+            ['gpt-5', null]
+        )).toEqual({
+            sql: 'SELECT id FROM sessions WHERE model IS DISTINCT FROM $1 AND effort IS NOT DISTINCT FROM $2',
+            values: ['gpt-5', null]
+        })
+
+        await isolated(async (url, dir) => {
+            const stores = [new Store(':memory:'), await openStore({ dbPath: join(dir, 'hapi.db'), dataDir: dir, databaseUrl: url })]
+            try {
+                for (const store of stores) {
+                    const session = await store.sessions.getOrCreateSession('alive-parity', { path: '/alive' }, null, 'default')
+                    expect(await store.sessions.setSessionModel(session.id, null, 'default')).toBe(false)
+                    expect(await store.sessions.setSessionModel(session.id, 'claude-opus-4-7', 'default')).toBe(true)
+                    expect(await store.sessions.setSessionModel(session.id, 'claude-opus-4-7', 'default')).toBe(false)
+                    expect(await store.sessions.setSessionModel(session.id, null, 'default')).toBe(true)
+
+                    expect(await store.sessions.setSessionModelReasoningEffort(session.id, 'high', 'default')).toBe(true)
+                    expect(await store.sessions.setSessionModelReasoningEffort(session.id, 'high', 'default')).toBe(false)
+                    expect(await store.sessions.setSessionModelReasoningEffort(session.id, null, 'default')).toBe(true)
+
+                    expect(await store.sessions.setSessionServiceTier(session.id, 'priority', 'default')).toBe(true)
+                    expect(await store.sessions.setSessionServiceTier(session.id, 'priority', 'default')).toBe(false)
+                    expect(await store.sessions.setSessionServiceTier(session.id, null, 'default')).toBe(true)
+
+                    expect(await store.sessions.setSessionEffort(session.id, 'max', 'default')).toBe(true)
+                    expect(await store.sessions.setSessionEffort(session.id, 'max', 'default')).toBe(false)
+                    expect(await store.sessions.setSessionEffort(session.id, null, 'default')).toBe(true)
+
+                    const t0 = Date.now() - 2_000
+                    expect(await store.sessions.setSessionActive(session.id, true, t0, 'default')).toBe(true)
+                    expect(await store.sessions.setSessionActive(session.id, true, t0 - 1, 'default')).toBe(false)
+                    expect(await store.sessions.setSessionActive(session.id, false, t0, 'default')).toBe(true)
+                    expect(await store.sessions.setSessionActive(session.id, false, t0, 'default')).toBe(false)
+
+                    const io = { of: () => ({ to: () => ({ emit() {} }) }) }
+                    const engine = await SyncEngine.create(store, io as never, new RpcRegistry(), { broadcast() {} } as never)
+                    try {
+                        await engine.handleSessionAlive({
+                            sid: session.id,
+                            time: Date.now(),
+                            thinking: false,
+                            model: 'gpt-5.4',
+                            modelReasoningEffort: 'xhigh',
+                            serviceTier: 'flex',
+                            effort: 'high'
+                        })
+                        expect(await engine.getSession(session.id)).toMatchObject({
+                            active: true,
+                            model: 'gpt-5.4',
+                            modelReasoningEffort: 'xhigh',
+                            serviceTier: 'flex',
+                            effort: 'high'
+                        })
+                        const persisted = await store.sessions.getSession(session.id)
+                        expect(persisted).toMatchObject({
+                            model: 'gpt-5.4',
+                            modelReasoningEffort: 'xhigh',
+                            serviceTier: 'flex',
+                            effort: 'high'
+                        })
+                    } finally {
+                        await engine.stop()
+                    }
+                }
+            } finally {
+                for (const store of stores) await store.close()
+            }
         })
     }, 30_000)
 })

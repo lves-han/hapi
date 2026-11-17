@@ -6,6 +6,7 @@ import { decodeMessageContent } from './contentCodec'
 import type { StoredMessage } from './types'
 import {
     addMessage,
+    upsertToolCallMessage,
     syncNativeQueuedMessage,
     addImportedMessage,
     cancelQueuedMessage,
@@ -45,10 +46,12 @@ import {
     getMessageSeqById,
     getMessageById,
     truncateMessagesFromLocalId,
+    truncateOpenCodeRewind,
     type CancelQueuedMessageResult,
     type LookupQueuedMessageResult,
     type LocalMessageState,
     type MessagePosition,
+    type UpsertToolCallResult,
 } from './messages'
 import {
     hasPotentiallyIncompleteMessageContent,
@@ -67,8 +70,16 @@ export class MessageStore {
         this.db = db
     }
 
+    async truncateOpenCodeRewind(sessionId: string, cutoffSeq: number, boundaryId: string): Promise<number> {
+        return this.db.operation(() => truncateOpenCodeRewind(this.db, sessionId, cutoffSeq, boundaryId), true)
+    }
+
     async addMessage(sessionId: string, content: unknown, localId?: string, scheduledAt?: number | null, createdAt?: number): Promise<StoredMessage> {
         return this.db.operation(() => addMessage(this.db, sessionId, content, localId, scheduledAt, createdAt), true)
+    }
+
+    async upsertToolCallMessage(sessionId: string, content: unknown, callId: string, localId?: string, createdAt?: number): Promise<UpsertToolCallResult> {
+        return this.db.operation(() => upsertToolCallMessage(this.db, sessionId, content, callId, localId, createdAt), true)
     }
 
     async syncNativeQueuedMessage(sessionId: string, localId: string, text: string): Promise<StoredMessage> {

@@ -68,6 +68,11 @@ working connection. Prefer HTTPS on both platforms.
 Camera pairing is optional. Use manual entry on an iOS Simulator or any device
 without a usable scanner.
 
+After you pair a device with the access token, you can add a passkey for that hub in **Settings → Passkeys**. iOS syncs it through iCloud Keychain, and Android 9+ through Google Password Manager. On another device, choose **Sign in with a passkey** on the pairing screen and enter only the hub URL.
+
+- Web and App passkeys use the shared `auth.hapi.run` relying party. Register once in either client to sign in to that same Hub from both. Configure the Hub’s `HAPI_PUBLIC_URL` as its canonical HTTPS origin; no association files are needed on your own domain.
+- Rotating the hub's access token, or deleting the passkey, signs out every device that signed in with it.
+
 ## Sessions and everyday use
 
 Start an agent on your computer with `hapi` and choose an installed agent, or
@@ -114,14 +119,18 @@ attachment behavior applies: leaving the chat discards unsent attachments.
 ### Session-list parity
 
 Android and iOS use the shared base session-list order: global-pinned sessions,
-project-pinned sessions, active sessions, pending-request priority among active
-sessions, then `updatedAt` descending. Ties preserve their incoming order. The
-Web sidebar may apply additional directory grouping and client-side search
-ranking; it also exposes text, date-range and unread-only session-list filters.
-Both native apps offer machine filtering and relevance-ranked text search.
-Android adds a date range; iOS adds an unread-only lens and **Mark All as
-Read**. Android and iOS README files describe their platform-specific filter
-presentation and session-row differences.
+project-pinned sessions, then your most recent input (`lastUserMessageAt`,
+falling back to creation time) descending, with creation time and session ID
+breaking ties; see [Session list](./session-list.md#ordering-and-grouping). The
+Web sidebar adds directory grouping, client-side search ranking and a sort and
+filter menu. Both native apps mirror that menu: sort by last message or date
+created, **Active first** (on by default; manual pins still come first), show
+all, active or archived sessions, and an unread-only lens, alongside machine
+filtering and relevance-ranked text search. Android adds a date range; iOS adds
+**Mark All as Read**. Rows in all three clients use the same presence badges
+and show a running [attached job](./session-jobs.md). Android and iOS README
+files describe their platform-specific filter presentation and session-row
+differences.
 
 Selecting an attachment starts its upload after preparation, before you send
 the message or save the Scratchlist entry. Removing it requests cleanup of

@@ -202,6 +202,7 @@ export async function startHub(options: StartHubOptions = {}): Promise<HubInstan
         onSessionReady: async (payload) => (await syncEngine?.handleSessionReady(payload)),
         onSessionEnd: async (payload) => (await syncEngine?.handleSessionEnd(payload)),
         onMachineAlive: async (payload) => (await syncEngine?.handleMachineAlive(payload)),
+        onSessionChildExited: async (payload) => (await syncEngine?.handleSessionChildExited(payload)),
         onBackgroundTasks: async (sessionId, tasks) => (await syncEngine?.handleBackgroundTasks(sessionId, tasks)),
         onSessionActivity: async (sessionId, updatedAt) => (await syncEngine?.recordSessionActivity(sessionId, updatedAt)),
         onAgentProgress: (sessionId, at) => syncEngine?.recordAgentProgress(sessionId, at),

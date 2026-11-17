@@ -40,71 +40,15 @@ import { cleanupUploadDir, preserveUploadDirOnExit } from '../modules/common/han
 import { TerminalManager } from '@/terminal/TerminalManager'
 import { applyVersionedAck } from './versionedUpdate'
 import { buildHubRequestHeaders, buildSocketIoExtraHeaderOptions } from './hubExtraHeaders'
+import { extractRawUserTextContent, isExternalUserMessage } from '@/claude/utils/transcriptEntry'
 
-/**
- * XML tags that Claude Code injects as `type:'user'` messages.
- * These are internal bookkeeping, not text the human actually typed.
- */
-const SYSTEM_INJECTION_PREFIXES = [
-    '<task-notification>',
-    '<command-name>',
-    '<local-command-caveat>',
-    '<system-reminder>',
-]
+// Transcript entry classification moved to @/claude/utils/transcriptEntry;
+// re-exported here so existing importers of the old name keep working.
+export { isExternalUserMessage } from '@/claude/utils/transcriptEntry'
 
 // Cap for the runner-side in-memory agent-terminal screen buffer (matches the
 // hub's scrollback ring). The tail always holds the latest full-screen redraw.
 const AGENT_TERMINAL_LOCAL_BUFFER_BYTES = 256 * 1024
-
-function extractRawUserTextContent(content: unknown): string | null {
-    if (typeof content === 'string') {
-        return content
-    }
-
-    if (!Array.isArray(content)) {
-        return null
-    }
-
-    const parts = content
-        .map((block) => {
-            if (!block || typeof block !== 'object' || Array.isArray(block)) return null
-            const record = block as Record<string, unknown>
-            return record.type === 'text' && typeof record.text === 'string'
-                ? record.text
-                : null
-        })
-        .filter((text): text is string => text !== null)
-
-    return parts.length > 0 ? parts.join('\n') : null
-}
-
-/**
- * Returns true if a JSONL message should be classified as a user-role message
- * (i.e., text typed by a real human) rather than an agent-role message.
- *
- * Claude Code injects system messages (task notifications, command caveats, …)
- * into the JSONL log as `type:'user'` entries so the model sees them in
- * context.  All metadata fields (`userType`, `isMeta`, …) are identical to
- * genuine user messages, so the only reliable signal is the message content
- * itself: injected messages always start with a well-known XML tag.
- */
-export function isExternalUserMessage(body: RawJSONLines): body is Extract<RawJSONLines, { type: 'user' }> {
-    if (body.type !== 'user') return false
-    // Defensive: a malformed/minimal user line may lack `.message`. Treat it as
-    // a non-external (forwardable) message rather than throwing.
-    const message = (body as { message?: { content?: unknown } }).message
-    if (!message || typeof message !== 'object') return false
-    const text = extractRawUserTextContent(message.content)
-    if (text === null) return false
-    if (body.isSidechain === true) return false
-    if (body.isMeta === true) return false
-
-    const trimmed = text.trimStart()
-    for (const prefix of SYSTEM_INJECTION_PREFIXES) {
-        if (trimmed.startsWith(prefix)) return false
-    }
-    return true
-}
 
 /**
  * Dedup filter for messages arriving on the realtime socket and via reconnect
@@ -127,6 +71,13 @@ export class IncomingMessageFilter {
 
     cursorSeq(): number | null {
         return this.lastSeenSeq
+    }
+
+    /** Keep ID deduplication, but stop skipping sequence numbers reused after rewind. */
+    rewindCursor(lastRetainedSeq: number): void {
+        if (this.lastSeenSeq !== null) {
+            this.lastSeenSeq = Math.min(this.lastSeenSeq, lastRetainedSeq)
+        }
     }
 
     /** Returns true if this message should be processed; false to drop as a duplicate. */
@@ -255,6 +206,10 @@ export class ApiSessionClient extends EventEmitter {
     private cancelQueuedMessageCallback: ((localId: string) => QueueCancelResult | Promise<QueueCancelResult>) | null = null
     private retryQueuedMessageCallback: ((localId: string) => boolean | Promise<boolean>) | null = null
     private readonly incomingFilter = new IncomingMessageFilter()
+    private reconciledRewindOperationId: string | undefined
+    private incomingCursorEpoch = 0
+    private pendingRewindBackfill: { operationId: string; epoch: number; afterSeq: number } | null = null
+    private rewindBackfillScheduled = false
     private backfillInFlight: Promise<void> | null = null
     private needsBackfill = false
     private hasConnectedOnce = false
@@ -297,6 +252,7 @@ export class ApiSessionClient extends EventEmitter {
         this.token = token
         this.sessionId = session.id
         this.metadata = session.metadata
+        this.reconcileCommittedRewindCursor(this.metadata)
         this.metadataVersion = session.metadataVersion
         this.agentState = session.agentState
         this.agentStateVersion = session.agentStateVersion
@@ -340,6 +296,7 @@ export class ApiSessionClient extends EventEmitter {
 
         this.socket.on('connect', () => {
             logger.debug('Socket connected successfully')
+            this.emit('connection-start')
             this.awaitingMaterializedConnection = false
             this.rpcHandlerManager.onSocketConnect(this.socket)
             const isReconnect = this.hasConnectedOnce
@@ -354,6 +311,7 @@ export class ApiSessionClient extends EventEmitter {
                 : Promise.resolve()
             void afterMeta.finally(() => {
                 void this.backfillIfNeeded()
+                if (this.state === 'active' && this.allowReconnect) this.emit('connected')
             })
             this.hasConnectedOnce = true
             this.reconnectHandler?.()
@@ -551,6 +509,11 @@ export class ApiSessionClient extends EventEmitter {
         return this.state === 'pending' || this.state === 'materializing'
     }
 
+    /** Whether hub reads are served live: a null read then is a transient miss, not a waiting socket. */
+    isActive(): boolean {
+        return this.state === 'active'
+    }
+
     private isClosed(): boolean {
         return this.state === 'closed'
     }
@@ -605,6 +568,7 @@ export class ApiSessionClient extends EventEmitter {
                     || !hasSameJsonValue(materialized.agentState, latestAgentState)
 
                 this.metadata = materialized.metadata
+                this.reconcileCommittedRewindCursor(this.metadata)
                 this.metadataVersion = materialized.metadataVersion
                 this.agentState = materialized.agentState
                 this.agentStateVersion = materialized.agentStateVersion
@@ -842,11 +806,55 @@ export class ApiSessionClient extends EventEmitter {
         }
         try {
             await this.backfillMessages()
-            this.needsBackfill = false
+            this.needsBackfill = this.pendingRewindBackfill !== null
         } catch (error) {
             logger.debug('[API] Backfill failed', error)
             this.needsBackfill = true
         }
+    }
+
+    private reconcileCommittedRewindCursor(metadata: Metadata | null): void {
+        const operation = metadata?.opencodeRewind
+        if (operation?.phase !== 'committed') {
+            this.scheduleRewindBackfill()
+            return
+        }
+        // A same-process reconnect must see prompts queued while disconnected,
+        // even if Hub truncation reused a sequence below the old cursor. Repeated
+        // metadata for the committed tombstone must not rewind later deliveries.
+        if (operation.operationId !== this.reconciledRewindOperationId) {
+            this.reconciledRewindOperationId = operation.operationId
+            // Invocation order can remove rows below the boundary's insertion
+            // seq too. New inputs may reuse those slots, so rescan from zero.
+            this.incomingFilter.rewindCursor(0)
+            // A newer rewind cannot retire an earlier, still-unscanned prefix.
+            const previousFloor = this.pendingRewindBackfill?.afterSeq
+            const cursor = this.incomingFilter.cursorSeq()
+            const afterSeq = previousFloor === undefined ? cursor : Math.min(previousFloor, cursor ?? previousFloor)
+            this.incomingCursorEpoch += 1
+            this.pendingRewindBackfill = afterSeq === null ? null : {
+                operationId: operation.operationId, epoch: this.incomingCursorEpoch, afterSeq
+            }
+        }
+        this.scheduleRewindBackfill()
+    }
+
+    private scheduleRewindBackfill(): void {
+        if (!this.pendingRewindBackfill || this.state !== 'active' || this.rewindBackfillPaused()
+            || this.rewindBackfillScheduled) return
+        this.needsBackfill = true
+        this.rewindBackfillScheduled = true
+        queueMicrotask(() => {
+            this.rewindBackfillScheduled = false
+            if (this.pendingRewindBackfill && this.state === 'active' && !this.rewindBackfillPaused()) {
+                void this.backfillIfNeeded()
+            }
+        })
+    }
+
+    private rewindBackfillPaused(): boolean {
+        const phase = this.metadata?.opencodeRewind?.phase
+        return !this.socket?.connected || phase === 'reserved' || phase === 'prepared' || phase === 'unknown'
     }
 
     /**
@@ -865,6 +873,7 @@ export class ApiSessionClient extends EventEmitter {
         const wasHubArchived = this.metadata?.lifecycleState === 'archived'
             && this.metadata?.archivedBy === 'hub'
         this.metadata = parsed.data
+        this.reconcileCommittedRewindCursor(this.metadata)
         this.metadataVersion = version
         // #1910: hub may archive via metadata when KillSession cannot reach
         // this CLI. Stop reconnect immortality and let runners exit instead
@@ -886,6 +895,17 @@ export class ApiSessionClient extends EventEmitter {
     }
 
     /** Refresh Hub-owned metadata before an explicit tool action or after reconnect. */
+    async reportOpenCodeRewind(report: import('@hapi/protocol/apiTypes').OpenCodeRewindReport): Promise<import('@hapi/protocol/schemas').OpenCodeRewindOperation> {
+        const before = await this.readRewindMetadata()
+        if (!before) throw new Error('Cannot reconcile Hub rewind reservation')
+        const response = await axios.post(`${configuration.apiUrl}/cli/sessions/${encodeURIComponent(this.sessionId)}/opencode-rewind`,
+            { report, expectedVersion: before.version }, { headers: buildHubRequestHeaders({ Authorization: `Bearer ${this.token}`, 'Content-Type': 'application/json' }), timeout: 15_000 })
+        const { OpenCodeRewindSchema } = await import('@hapi/protocol/schemas')
+        const operation = OpenCodeRewindSchema.parse(response.data?.operation)
+        if (!await this.readRewindMetadata()) throw new Error('Cannot confirm authoritative rewind state')
+        return operation
+    }
+
     async refreshMetadata(): Promise<boolean> {
         try {
             const response = await axios.get(
@@ -904,10 +924,32 @@ export class ApiSessionClient extends EventEmitter {
             if (session.metadataVersion >= this.metadataVersion) {
                 this.applyRemoteMetadata(session.metadataVersion, session.metadata)
             }
+            this.scheduleRewindBackfill()
             return true
         } catch (error) {
             logger.debug('[API] Session metadata reconcile failed', error)
             return false
+        }
+    }
+
+    /** Read the exact validated REST snapshot for rewind admission decisions. */
+    async readRewindMetadata(): Promise<{ metadata: Metadata; version: number } | null> {
+        if (this.state !== 'active') return null
+        try {
+            const response = await axios.get(`${configuration.apiUrl}/cli/sessions/${encodeURIComponent(this.sessionId)}`, {
+                headers: buildHubRequestHeaders({ Authorization: `Bearer ${this.token}`, 'Content-Type': 'application/json' }),
+                timeout: 15_000
+            })
+            const session = response.data?.session
+            if (this.state !== 'active' || !session || !Number.isSafeInteger(session.metadataVersion) || session.metadataVersion < this.metadataVersion
+                || session.metadata === null) return null
+            const parsed = MetadataSchema.safeParse(session.metadata)
+            if (!parsed.success) return null
+            if (session.metadataVersion > this.metadataVersion) this.applyRemoteMetadata(session.metadataVersion, parsed.data)
+            return { metadata: parsed.data, version: session.metadataVersion }
+        } catch (error) {
+            logger.debug('[API] Strict rewind metadata reconcile failed', error)
+            return null
         }
     }
 
@@ -917,16 +959,20 @@ export class ApiSessionClient extends EventEmitter {
             return
         }
 
-        const startSeq = this.incomingFilter.cursorSeq()
+        const startSeq = this.pendingRewindBackfill?.afterSeq ?? this.incomingFilter.cursorSeq()
         if (startSeq === null) {
             logger.debug('[API] Skipping backfill because no last-seen message sequence is available')
             return
         }
 
         const limit = 200
+        let attemptedEpoch = this.incomingCursorEpoch
         const run = async () => {
             let cursor = startSeq
+            let cursorEpoch = this.incomingCursorEpoch
             while (true) {
+                if (this.pendingRewindBackfill && this.rewindBackfillPaused()) return
+                attemptedEpoch = cursorEpoch
                 const response = await axios.get(
                     `${configuration.apiUrl}/cli/sessions/${encodeURIComponent(this.sessionId)}/messages`,
                     {
@@ -938,6 +984,13 @@ export class ApiSessionClient extends EventEmitter {
                         timeout: 15_000
                     }
                 )
+
+                if (this.pendingRewindBackfill && this.rewindBackfillPaused()) return
+                if (cursorEpoch !== this.incomingCursorEpoch) {
+                    cursor = this.pendingRewindBackfill?.afterSeq ?? this.incomingFilter.cursorSeq() ?? 0
+                    cursorEpoch = this.incomingCursorEpoch
+                    continue
+                }
 
                 const parsed = CliMessagesResponseSchema.safeParse(response.data)
                 if (!parsed.success) {
@@ -956,17 +1009,40 @@ export class ApiSessionClient extends EventEmitter {
                             maxSeq = message.seq
                         }
                     }
+                    if (this.pendingRewindBackfill && message.invokedAt != null
+                        && UserMessageSchema.safeParse(message.content).success) {
+                        // Hub's queued delivery state also includes durable
+                        // invocation ACKs. A backward rewind scan can outlive
+                        // the bounded ID LRU; never enqueue that input again.
+                        this.incomingFilter.accept({ id: message.id, seq: message.seq })
+                        continue
+                    }
                     this.handleIncomingMessage(message)
                 }
 
+                if (this.pendingRewindBackfill && this.rewindBackfillPaused()) return
+                if (cursorEpoch !== this.incomingCursorEpoch) {
+                    cursor = this.pendingRewindBackfill?.afterSeq ?? this.incomingFilter.cursorSeq() ?? 0
+                    cursorEpoch = this.incomingCursorEpoch
+                    continue
+                }
+
+                // Revisited IDs stay deduplicated, but their scanned positions
+                // still count as progress after a rewind reset the cursor.
+                if (this.pendingRewindBackfill) this.incomingFilter.accept({ seq: maxSeq })
                 const observedSeq = this.incomingFilter.cursorSeq() ?? maxSeq
-                const nextCursor = Math.max(maxSeq, observedSeq)
+                // Do not let a live high-seq delivery skip unread pages in the
+                // post-rewind prefix. The filter still retains that progress.
+                const nextCursor = this.pendingRewindBackfill !== null
+                    ? maxSeq
+                    : Math.max(maxSeq, observedSeq)
                 if (nextCursor <= cursor) {
                     logger.debug('[API] Backfill stopped due to non-advancing cursor', {
                         cursor,
                         maxSeq,
                         observedSeq
                     })
+                    if (this.pendingRewindBackfill) throw new Error('Rewind backfill did not advance')
                     break
                 }
 
@@ -975,10 +1051,18 @@ export class ApiSessionClient extends EventEmitter {
                     break
                 }
             }
+            if (this.pendingRewindBackfill?.epoch === cursorEpoch && !this.rewindBackfillPaused()) {
+                this.pendingRewindBackfill = null
+            }
         }
 
         this.backfillInFlight = run().finally(() => {
             this.backfillInFlight = null
+            // A failed old request must not consume the wake for a newer
+            // committed epoch. Retry that new epoch once, not the failed one.
+            if (this.pendingRewindBackfill && this.pendingRewindBackfill.epoch !== attemptedEpoch) {
+                this.scheduleRewindBackfill()
+            }
         })
 
         await this.backfillInFlight
@@ -1131,6 +1215,17 @@ export class ApiSessionClient extends EventEmitter {
         tokensBefore?: number
         tokensAfter?: number
         estimatedTokensAfter?: number
+    } | {
+        type: 'modelError'
+        kind: string
+        transient: boolean
+        rawSnippet: string
+        priorAssistantClaimsDone: boolean
+    } | {
+        type: 'modelErrorBridged'
+        kind: string
+        auto: boolean
+        eventId: string
     }, id?: string, options?: { localId: string }): void {
         const content = {
             role: 'agent',
@@ -1359,6 +1454,7 @@ export class ApiSessionClient extends EventEmitter {
                             const wasHubArchived = this.metadata?.lifecycleState === 'archived'
                                 && this.metadata?.archivedBy === 'hub'
                             this.metadata = value
+                            this.reconcileCommittedRewindCursor(this.metadata)
                             if (
                                 !wasHubArchived
                                 && value?.lifecycleState === 'archived'

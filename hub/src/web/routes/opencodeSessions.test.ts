@@ -182,17 +182,17 @@ describe('OpenCode session import', () => {
         const first = transcript('native-delta', [
             userMessage('native-delta', 'msg-1', 'one', 1_000)
         ])
-        const initial = (await importOpencodeSession({ store, engine, namespace: 'default', machine: machine('machine-1'), transcript: first }))
+        const initial = await importOpencodeSession({ store, engine, namespace: 'default', machine: machine('machine-1'), transcript: first })
         expect(initial).toMatchObject({ action: 'created', appended: 1 })
 
-        const unchanged = (await importOpencodeSession({ store, engine, namespace: 'default', machine: machine('machine-1'), transcript: first }))
+        const unchanged = await importOpencodeSession({ store, engine, namespace: 'default', machine: machine('machine-1'), transcript: first })
         expect(unchanged).toMatchObject({ action: 'unchanged', appended: 0 })
 
         const extended = transcript('native-delta', [
             userMessage('native-delta', 'msg-1', 'one', 1_000),
             userMessage('native-delta', 'msg-2', 'two', 2_000)
         ])
-        const updated = (await importOpencodeSession({ store, engine, namespace: 'default', machine: machine('machine-1'), transcript: extended }))
+        const updated = await importOpencodeSession({ store, engine, namespace: 'default', machine: machine('machine-1'), transcript: extended })
         expect(updated).toMatchObject({ hapiSessionId: initial.hapiSessionId, action: 'updated', appended: 1 })
         expect((await store.messages.getAllMessages(initial.hapiSessionId!))).toHaveLength(2)
     })
@@ -207,7 +207,7 @@ describe('OpenCode session import', () => {
             return original(...args)
         }
 
-        const result = (await importOpencodeSession({
+        const result = await importOpencodeSession({
             store,
             engine,
             namespace: 'default',
@@ -216,7 +216,7 @@ describe('OpenCode session import', () => {
                 userMessage('native-rollback', 'msg-1', 'one', 1_000),
                 userMessage('native-rollback', 'msg-2', 'two', 2_000)
             ])
-        }))
+        })
 
         expect(result.error?.code).toBe('import_failed')
         expect((await store.sessions.getSessionsByNamespace('default'))).toHaveLength(0)
@@ -227,7 +227,7 @@ describe('OpenCode session import', () => {
         const source = transcript('native-diverged', [
             userMessage('native-diverged', 'msg-1', 'one', 1_000)
         ])
-        const first = (await importOpencodeSession({ store, engine, namespace: 'default', machine: machine('machine-1'), transcript: source }))
+        const first = await importOpencodeSession({ store, engine, namespace: 'default', machine: machine('machine-1'), transcript: source })
         const before = (await store.sessions.getSession(first.hapiSessionId!))!
 
         const rewritten = transcript('native-diverged', [
@@ -235,7 +235,7 @@ describe('OpenCode session import', () => {
         ])
         rewritten.cwd = '/tmp/rejected-diverged'
         rewritten.title = 'Rejected divergent title'
-        const result = (await importOpencodeSession({ store, engine, namespace: 'default', machine: machine('machine-1'), transcript: rewritten }))
+        const result = await importOpencodeSession({ store, engine, namespace: 'default', machine: machine('machine-1'), transcript: rewritten })
         expect(result.error?.code).toBe('transcript_diverged')
         expect(result.hapiSessionId).toBe(first.hapiSessionId)
         expect((await store.messages.getAllMessages(first.hapiSessionId!))).toHaveLength(1)
@@ -249,7 +249,7 @@ describe('OpenCode session import', () => {
 
     it('fails when new native entries are inserted ahead of the imported boundary', async () => {
         const { store, engine } = setup()
-        const first = (await importOpencodeSession({
+        const first = await importOpencodeSession({
             store,
             engine,
             namespace: 'default',
@@ -258,10 +258,10 @@ describe('OpenCode session import', () => {
                 userMessage('native-insert', 'msg-1', 'one', 1_000),
                 userMessage('native-insert', 'msg-2', 'two', 2_000)
             ])
-        }))
+        })
         expect(first).toMatchObject({ action: 'created' })
 
-        const reordered = (await importOpencodeSession({
+        const reordered = await importOpencodeSession({
             store,
             engine,
             namespace: 'default',
@@ -271,28 +271,28 @@ describe('OpenCode session import', () => {
                 userMessage('native-insert', 'msg-1', 'one', 1_000),
                 userMessage('native-insert', 'msg-2', 'two', 2_000)
             ])
-        }))
+        })
         expect(reordered.error?.code).toBe('transcript_diverged')
     })
 
     it('fails closed when HAPI continuation happened after an import and native history advanced', async () => {
         const { store, engine } = setup()
-        const first = (await importOpencodeSession({
+        const first = await importOpencodeSession({
             store,
             engine,
             namespace: 'default',
             machine: machine('machine-1'),
             transcript: transcript('native-tail', [userMessage('native-tail', 'msg-1', 'one', 1_000)])
-        }))
+        })
         expect(first.hapiSessionId).toBeTruthy()
-        const continuation = (await store.messages.addImportedMessage(first.hapiSessionId!, {
+        const continuation = await store.messages.addImportedMessage(first.hapiSessionId!, {
             role: 'user',
             content: { type: 'text', text: 'live follow-up' },
             meta: { sentFrom: 'web' as const }
-        }, 'hapi-live-msg-1', 5_000))
+        }, 'hapi-live-msg-1', 5_000)
         expect(continuation.inserted).toBe(true)
 
-        const extended = (await importOpencodeSession({
+        const extended = await importOpencodeSession({
             store,
             engine,
             namespace: 'default',
@@ -301,7 +301,7 @@ describe('OpenCode session import', () => {
                 userMessage('native-tail', 'msg-1', 'one', 1_000),
                 userMessage('native-tail', 'msg-2', 'two', 2_000)
             ])
-        }))
+        })
         expect(extended.error?.code).toBe('transcript_diverged')
         expect((await store.messages.getAllMessages(first.hapiSessionId!))).toHaveLength(2)
     })
@@ -532,13 +532,13 @@ describe('OpenCode session import', () => {
 
     it('fails with session_active when the target session is active and new messages exist', async () => {
         const { store, engine } = setup()
-        const first = (await importOpencodeSession({
+        const first = await importOpencodeSession({
             store,
             engine,
             namespace: 'default',
             machine: machine('machine-1'),
             transcript: transcript('native-active', [userMessage('native-active', 'msg-1', 'one', 1_000)])
-        }))
+        })
         const staleInactive = (await store.sessions.getSession(first.hapiSessionId!))!
         await store.sessions.setSessionActive(first.hapiSessionId!, true, 2_000, 'default')
         const before = (await store.sessions.getSession(first.hapiSessionId!))!
@@ -549,14 +549,14 @@ describe('OpenCode session import', () => {
         extended.cwd = '/tmp/rejected-active'
         extended.title = 'Rejected active title'
 
-        const result = (await importOpencodeSession({
+        const result = await importOpencodeSession({
             store,
             engine,
             namespace: 'default',
             machine: machine('machine-1'),
             transcript: extended,
             existingSession: staleInactive
-        }))
+        })
         expect(result).toMatchObject({ error: { code: 'session_active' }, appended: 0 })
         expect((await store.messages.getAllMessages(first.hapiSessionId!))).toHaveLength(1)
         const after = (await store.sessions.getSession(first.hapiSessionId!))!
@@ -567,18 +567,18 @@ describe('OpenCode session import', () => {
     it('fails closed when a captured existing session disappears before import', async () => {
         const { store, engine } = setup()
         const source = transcript('native-disappeared', [userMessage('native-disappeared', 'msg-1', 'one', 1_000)])
-        const first = (await importOpencodeSession({ store, engine, namespace: 'default', machine: machine('machine-1'), transcript: source }))
+        const first = await importOpencodeSession({ store, engine, namespace: 'default', machine: machine('machine-1'), transcript: source })
         const stale = (await store.sessions.getSession(first.hapiSessionId!))!
         await store.sessions.deleteSession(stale.id, 'default')
 
-        const result = (await importOpencodeSession({
+        const result = await importOpencodeSession({
             store,
             engine,
             namespace: 'default',
             machine: machine('machine-1'),
             transcript: source,
             existingSession: stale
-        }))
+        })
 
         expect(result).toMatchObject({ error: { code: 'import_failed', message: 'Imported HAPI session disappeared' } })
         expect(result.hapiSessionId).toBeUndefined()

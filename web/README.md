@@ -55,9 +55,11 @@ See `src/router.tsx` for route definitions.
 ### Session list (`src/components/SessionList.tsx`)
 
 - Active/inactive status indicator.
+- Title-side activity/unread indicator: grey spinner while a foreground turn runs with all output read, blue spinner while it runs with unread output, a blue static dot while only background tasks remain, and a theme-foreground dot for unread content when no work is running. Reading clears the unread state without stopping the spinner. Permission/input requests keep their own symbols; the title indicator does not certify a successful turn outcome, and background work is owned by the title rather than duplicated on the agent icon.
 - Session title from name, summary, or path.
 - Todo progress display.
 - Pending permission request count.
+- Pending-request status and session-row symbols distinguish questions from approvals and locate the correlated card; async questions open the live question panel.
 - Agent name and model display.
 - Metadata search with relevance ranking, wildcard matching, and date/unread/machine filters.
 - Stable user-input ordering across sessions and machine/project groups; agent output and status updates do not reorder ordinary rows.
@@ -78,6 +80,8 @@ The Hub persists and enforces the lock across clients, restarts, and resume.
 - Message thread with infinite scroll.
 - Concise view (header toggle or `/settings/chat`, per device): shows only user input and each round's final reply (`src/chat/conciseView.ts`). Permission requests, questions, plan proposals, user shell commands, and errors stay visible; the full thread returns while a search target is active.
 - Composer for sending messages.
+- Composer send shortcut: Alt+S (independent of the Enter behavior setting).
+- A collapsible **Awaiting your reply** section above the composer collects all live non-blocking `request_user_input` questions, including those outside the loaded transcript. Answer there or dismiss individual questions without sending an answer or stopping the agent. Collapsing preserves drafts; blocking permissions retain their existing controls.
 - Permission mode and model selection for supported agents.
   Cursor Auto uses CLI Auto for new/resumed sessions configured with Auto. Switching a live session to Auto when ACP does not advertise a literal Auto option relaunches the Cursor ACP process in place under `--model auto` while preserving the hub session id.
 - Session abort and handoff controls.
@@ -139,6 +143,12 @@ Optional, not a requirement for every feature or a reason to expand a bug fix.
 - Opt in per feature; skip the wrapper if an upstream component already supplies onboarding.
 - Working example: `ScratchlistToggleButton` in `src/components/AssistantChat/ComposerButtons.tsx`. Use the source rather than maintaining a copied example here.
 
+### Browser settings export/import
+
+Settings → About exports and imports browser-local settings as JSON. Only keys in `SETTINGS_STORAGE_KEYS` (`src/lib/settingsTransfer.ts`) move; import replaces them and reloads.
+
+A new `hapi*` localStorage key must be classified: in `SETTINGS_STORAGE_KEYS` if the user chose it to configure the app and it makes sense in another browser on the same hub, otherwise in `NOT_SETTINGS_KEYS` (`src/lib/settingsTransfer.test.ts`). Data, drafts, last-used values, per-session or per-path UI state, dismissals, device-bound state, credentials, and trust grants are not settings. The test fails on unclassified keys.
+
 ## Authentication
 
 See `src/hooks/useAuth.ts` and `src/hooks/useAuthSource.ts`.
@@ -162,6 +172,19 @@ See `src/hooks/useSSE.ts`.
 - SSE connection to `/api/events`.
 - Session/message/machine update events.
 - Automatic cache invalidation on events.
+
+## Syntax highlighting
+
+Code fences load their Shiki grammar on demand and reuse one highlighter. Plain
+text and unknown languages fetch no grammars; aliases, line wrapping and the
+150 ms streaming debounce are retained. A Markdown source fence loads the full
+supported set to preserve its embedded-language colors. Failed loads or rendering
+fall back to the current plain text instead of retaining an older code block.
+
+The PWA caches optional grammar/theme chunks after use, outside its install-time
+precache. Previously used grammars remain available offline; an unseen language
+falls back to plain text while offline. Only successful JavaScript responses are
+cached, so SSO HTML/redirects cannot replace a grammar module.
 
 ## Stack
 
@@ -234,3 +257,36 @@ bun run build:web -- --base /<repo>/
 4. Open the static site, click the top-right Hub button on the login screen, and enter the hapi hub origin.
 
 Clear the hub override in the same dialog to return to same-origin behavior.
+
+## Shared Passkeys
+
+Web and native apps use RP ID `auth.hapi.run`. Web registration/sign-in opens
+a popup on the isolated static authentication origin; the Hub performs all
+verification. The opener keeps the PKCE verifier and exchanges only a short-lived
+authorization code. Configure `HAPI_PUBLIC_URL` as the canonical HTTPS Hub origin.
+Separately hosted web apps need an explicit Hub `CORS_ORIGINS` entry for their
+callback origin. Wildcards do not authorize authentication callbacks. Popups
+and the opener relationship must be allowed; do not set COOP headers that sever
+the cross-origin popup/opener relationship on either site.
+
+Build the independent authentication site with `bun run build:passkey-site`.
+Deploy **only `website/dist/auth/`** to `auth.hapi.run`, not the marketing app.
+Serve the supplied `_headers` policies (or equivalent host configuration),
+including CSP, frame restrictions, origin-only referrers and no-store, and preserve the
+`.well-known` files. No third-party scripts, analytics, or service worker belong
+on this origin. The Hub callback path `/passkey/callback` must serve the web
+app shell (including on separately hosted static deployments).
+
+See the [authentication contract](../docs/api/client-contract/auth.md#passkeys-web)
+for transaction, challenge/account binding, and code-exchange details.
+
+The bridge uses `Referrer-Policy: strict-origin`: only the authentication origin
+is disclosed, never its fragment or path. Do not replace it with `no-referrer`:
+Chromium otherwise serializes a cross-origin form POST's `Origin` as `null`,
+which the Hub correctly rejects. Hub ceremony responses remain `no-referrer`.
+
+Browser regression: `bun run test:passkey:browser` uses Chromium's virtual
+authenticator against the production Hub and built static site, with all page
+requests intercepted locally. It checks both web-created → native and
+native-created → web authentication. Install the normal Playwright Chromium
+build, or use an existing Chrome with `PLAYWRIGHT_CHANNEL=chrome`.

@@ -13,8 +13,11 @@ import type { StoredMessage } from './types'
 import { PushStore } from './pushStore'
 import { FcmStore } from './fcmStore'
 import { ScratchlistStore } from './scratchlistStore'
+import { SessionJobsStore } from './sessionJobsStore'
+import { SessionRedirectStore } from './sessionRedirectStore'
 import { SessionStore } from './sessionStore'
 import { UserStore } from './userStore'
+import { PASSKEY_CREDENTIALS_TABLE_SQL, PasskeyStore } from './passkeyStore'
 import { TurnStore } from './turnStore'
 import { UsageStore } from './usageStore'
 import { WorkGraphStore } from './workGraphStore'
@@ -33,6 +36,7 @@ export type {
     StoredPushSubscription,
     StoredFcmDevice,
     StoredScratchlistEntry,
+    StoredSessionJob,
     StoredSession,
     StoredUser,
     VersionedUpdateResult
@@ -43,8 +47,11 @@ export { MessageStore } from './messageStore'
 export { PushStore } from './pushStore'
 export { FcmStore } from './fcmStore'
 export { ScratchlistStore } from './scratchlistStore'
+export { SessionJobsStore } from './sessionJobsStore'
 export { SessionStore } from './sessionStore'
 export { UserStore } from './userStore'
+export { PasskeyStore } from './passkeyStore'
+export type { StoredPasskeyCredential } from './passkeyStore'
 export { TurnStore } from './turnStore'
 export type { SessionTurn, SessionTurnEndReason, SessionTurnTrigger } from './turns'
 export { UsageStore } from './usageStore'
@@ -55,7 +62,7 @@ export {
     WorkGraphValidationError
 } from './workGraph'
 
-const SCHEMA_VERSION: number = 31
+const SCHEMA_VERSION: number = 36
 const REQUIRED_TABLES = [
     'sessions',
     'machines',
@@ -68,11 +75,14 @@ const REQUIRED_TABLES = [
     'push_subscriptions',
     'fcm_devices',
     'session_scratchlist',
+    'session_jobs',
     'usage_events',
     'usage_scan_state',
     'events',
     'event_links',
-    'session_turns'
+    'session_turns',
+    'session_redirects',
+    'passkey_credentials'
 ] as const
 
 export class Store {
@@ -85,9 +95,12 @@ export class Store {
     readonly machines: MachineStore
     readonly messages: MessageStore
     readonly users: UserStore
+    readonly passkeys: PasskeyStore
     readonly push: PushStore
     readonly fcm: FcmStore
     readonly scratchlist: ScratchlistStore
+    readonly sessionJobs: SessionJobsStore
+    readonly sessionRedirects: SessionRedirectStore
     readonly usage: UsageStore
     readonly turns: TurnStore
     readonly workGraph: WorkGraphStore
@@ -144,9 +157,12 @@ export class Store {
         this.machines = new MachineStore(this.runtimeDb)
         this.messages = new MessageStore(this.runtimeDb)
         this.users = new UserStore(this.runtimeDb)
+        this.passkeys = new PasskeyStore(this.runtimeDb)
         this.push = new PushStore(this.runtimeDb)
         this.fcm = new FcmStore(this.runtimeDb)
         this.scratchlist = new ScratchlistStore(this.runtimeDb)
+        this.sessionJobs = new SessionJobsStore(this.runtimeDb)
+        this.sessionRedirects = new SessionRedirectStore(this.runtimeDb)
         this.usage = new UsageStore(this.runtimeDb)
         this.turns = new TurnStore(this.runtimeDb)
         this.workGraph = new WorkGraphStore(this.runtimeDb)
@@ -394,6 +410,16 @@ export class Store {
             18: () => this.migrateFromV18ToV19(),
             19: () => this.migrateFromV19ToV20(),
             20: () => this.migrateFromV20ToV21(),
+            // Upstream #1115 dual-pin at v21→v22; #1467 A2A events at v22→v23;
+            // iOS push_key at v23→v24; steer delivery_state at v24→v25;
+            // immediate-queue heartbeat index at v25→v26;
+            // upstream future-scheduled index at v26→v27;
+            // upstream session_turns at v27→v28; last_user_message_at at v28→v29;
+            // upstream read-state at v29→v30;
+            // #1404 session_jobs at v31→v32 (after upstream FTS v30→v31); run_id fence at v32→v33;
+            // #1489 wake-on-terminal at v33→v34; session_redirects at v34→v35;
+            // passkey_credentials at v35→v36
+            // (jobs remapped again after upstream took 28/29/30).
             21: () => this.migrateFromV21ToV22(),
             22: () => this.migrateFromV22ToV23(),
             23: () => this.migrateFromV23ToV24(),
@@ -404,6 +430,11 @@ export class Store {
             28: () => this.migrateFromV28ToV29(),
             29: () => this.migrateFromV29ToV30(),
             30: () => this.migrateFromV30ToV31(),
+            31: () => this.migrateFromV31ToV32(),
+            32: () => this.migrateFromV32ToV33(),
+            33: () => this.migrateFromV33ToV34(),
+            34: () => this.migrateFromV34ToV35(),
+            35: () => this.migrateFromV35ToV36(),
         })
 
         if (currentVersion === 0) {
@@ -422,11 +453,13 @@ export class Store {
                 // Backfill any *missing* tables (sessions, machines, ...) that
                 // a partially-built legacy DB may not have yet.
                 this.createSchema()
+                this.ensureUsageScanParserVersion()
                 this.setUserVersion(SCHEMA_VERSION)
                 return
             }
 
             this.createSchema()
+            this.ensureUsageScanParserVersion()
             this.setUserVersion(SCHEMA_VERSION)
             return
         }
@@ -441,6 +474,12 @@ export class Store {
             this.migrateFromV26ToV30()
             this.migrateFromV29ToV30()
             this.migrateFromV30ToV31()
+            this.migrateFromV31ToV32()
+            this.migrateFromV32ToV33()
+            this.migrateFromV33ToV34()
+            this.migrateFromV34ToV35()
+            this.migrateFromV35ToV36()
+            this.ensureUsageScanParserVersion()
             this.setUserVersion(SCHEMA_VERSION)
             return
         }
@@ -450,6 +489,7 @@ export class Store {
                 if (!step) throw this.buildSchemaMismatchError(currentVersion)
                 step()
             }
+            this.ensureUsageScanParserVersion()
             this.setUserVersion(SCHEMA_VERSION)
             return
         }
@@ -459,6 +499,7 @@ export class Store {
         }
 
         this.assertRequiredTablesPresent()
+        this.ensureUsageScanParserVersion()
     }
 
     private createSchema(): void {
@@ -599,6 +640,40 @@ export class Store {
             CREATE INDEX IF NOT EXISTS idx_session_scratchlist_session_created
                 ON session_scratchlist(session_id, created_at DESC);
 
+            CREATE TABLE IF NOT EXISTS session_jobs (
+                session_id TEXT NOT NULL,
+                job_key TEXT NOT NULL,
+                label TEXT NOT NULL,
+                status TEXT NOT NULL,
+                done REAL,
+                total REAL,
+                remaining REAL,
+                unit TEXT,
+                detail TEXT,
+                run_id TEXT,
+                wake_on_terminal INTEGER NOT NULL DEFAULT 0,
+                wake_prompt TEXT,
+                wake_emitted_run_id TEXT,
+                heartbeat_at INTEGER NOT NULL,
+                started_at INTEGER NOT NULL,
+                updated_at INTEGER NOT NULL,
+                PRIMARY KEY (session_id, job_key),
+                FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE
+            );
+            CREATE INDEX IF NOT EXISTS idx_session_jobs_session_status_updated
+                ON session_jobs(session_id, status, updated_at DESC);
+
+            CREATE TABLE IF NOT EXISTS session_redirects (
+                old_id TEXT PRIMARY KEY,
+                new_id TEXT NOT NULL,
+                namespace TEXT NOT NULL,
+                created_at INTEGER NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_session_redirects_namespace_new
+                ON session_redirects(namespace, new_id);
+
+            ${PASSKEY_CREDENTIALS_TABLE_SQL}
+
             CREATE TABLE IF NOT EXISTS usage_events (
                 session_id TEXT NOT NULL,
                 source_key TEXT NOT NULL,
@@ -627,6 +702,7 @@ export class Store {
                 session_id TEXT PRIMARY KEY,
                 message_epoch INTEGER NOT NULL DEFAULT 0,
                 last_seq INTEGER NOT NULL DEFAULT 0,
+                parser_version INTEGER NOT NULL DEFAULT 2,
                 FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE
             );
 
@@ -1022,6 +1098,7 @@ export class Store {
                 session_id TEXT PRIMARY KEY,
                 message_epoch INTEGER NOT NULL DEFAULT 0,
                 last_seq INTEGER NOT NULL DEFAULT 0,
+                parser_version INTEGER NOT NULL DEFAULT 2,
                 FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE
             );
             DELETE FROM usage_events;
@@ -1041,6 +1118,7 @@ export class Store {
                 session_id TEXT PRIMARY KEY,
                 message_epoch INTEGER NOT NULL DEFAULT 0,
                 last_seq INTEGER NOT NULL DEFAULT 0,
+                parser_version INTEGER NOT NULL DEFAULT 2,
                 FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE
             );
             DELETE FROM usage_scan_state;
@@ -1058,6 +1136,7 @@ export class Store {
     }
 
     private migrateFromV21ToV22(): void {
+        // Upstream #1115 dual-pin columns.
         const columns = this.getSessionColumnNames()
         if (columns.size === 0) return
         if (!columns.has('pinned')) {
@@ -1253,6 +1332,103 @@ export class Store {
     private getMessageColumnNames(): Set<string> {
         const rows = this.db.prepare('PRAGMA table_info(messages)').all() as Array<{ name: string }>
         return new Set(rows.map((row) => row.name))
+    }
+
+    /**
+     * v31→v32: #1404 session-attached jobs (after upstream took v30→v31 for FTS).
+     * Also repairs session_turns + last_user_message_at for fork DBs that
+     * previously burned those version numbers on an earlier jobs remap —
+     * both ensures are idempotent.
+     */
+    private migrateFromV31ToV32(): void {
+        this.migrateFromV27ToV28()
+        this.migrateFromV28ToV29()
+        this.db.exec(`
+            CREATE TABLE IF NOT EXISTS session_jobs (
+                session_id TEXT NOT NULL,
+                job_key TEXT NOT NULL,
+                label TEXT NOT NULL,
+                status TEXT NOT NULL,
+                done REAL,
+                total REAL,
+                remaining REAL,
+                unit TEXT,
+                detail TEXT,
+                wake_on_terminal INTEGER NOT NULL DEFAULT 0,
+                wake_prompt TEXT,
+                wake_emitted_run_id TEXT,
+                heartbeat_at INTEGER NOT NULL,
+                started_at INTEGER NOT NULL,
+                updated_at INTEGER NOT NULL,
+                PRIMARY KEY (session_id, job_key),
+                FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE
+            );
+            CREATE INDEX IF NOT EXISTS idx_session_jobs_session_status_updated
+                ON session_jobs(session_id, status, updated_at DESC);
+        `)
+    }
+
+    /**
+     * v32→v33: supervisor run generation — CAS fence for key reuse (#1424).
+     * Also ensures message-content FTS for fork DBs that already sat at tip 32
+     * (jobs+run_id) before this merge absorbed upstream v30→v31 search.
+     * Also ensures upstream read-state columns for older fork tips.
+     */
+    private migrateFromV32ToV33(): void {
+        this.migrateFromV29ToV30()
+        this.migrateFromV30ToV31()
+        const cols = this.db.prepare('PRAGMA table_info(session_jobs)').all() as Array<{ name: string }>
+        if (cols.length > 0 && !cols.some((c) => c.name === 'run_id')) {
+            this.db.exec('ALTER TABLE session_jobs ADD COLUMN run_id TEXT')
+        }
+    }
+
+    /**
+     * v33→v34: tiann/hapi#1489 — opt-in terminal wake + one-shot claim marker.
+     */
+    private migrateFromV33ToV34(): void {
+        const cols = this.db.prepare('PRAGMA table_info(session_jobs)').all() as Array<{ name: string }>
+        const names = new Set(cols.map((c) => c.name))
+        if (!names.has('wake_on_terminal')) {
+            this.db.exec('ALTER TABLE session_jobs ADD COLUMN wake_on_terminal INTEGER NOT NULL DEFAULT 0')
+        }
+        if (!names.has('wake_prompt')) {
+            this.db.exec('ALTER TABLE session_jobs ADD COLUMN wake_prompt TEXT')
+        }
+        if (!names.has('wake_emitted_run_id')) {
+            this.db.exec('ALTER TABLE session_jobs ADD COLUMN wake_emitted_run_id TEXT')
+        }
+    }
+
+    /**
+     * v34→v35: durable redirects from merged-away session ids to the surviving
+     * row, so links and peer references to a merged session keep resolving.
+     */
+    private migrateFromV34ToV35(): void {
+        this.db.exec(`
+            CREATE TABLE IF NOT EXISTS session_redirects (
+                old_id TEXT PRIMARY KEY,
+                new_id TEXT NOT NULL,
+                namespace TEXT NOT NULL,
+                created_at INTEGER NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_session_redirects_namespace_new
+                ON session_redirects(namespace, new_id);
+        `)
+    }
+
+    /** v35→v36: WebAuthn credentials that can be exchanged for a web JWT. */
+    private migrateFromV35ToV36(): void {
+        this.db.exec(PASSKEY_CREDENTIALS_TABLE_SQL)
+    }
+
+    private ensureUsageScanParserVersion(): void {
+        const columns = this.db.prepare('PRAGMA table_info(usage_scan_state)').all() as Array<{ name: string }>
+        if (columns.length === 0) return
+        if (!columns.some((col) => col.name === 'parser_version')) {
+            this.db.exec('ALTER TABLE usage_scan_state ADD COLUMN parser_version INTEGER NOT NULL DEFAULT 2')
+            this.db.exec('DELETE FROM usage_scan_state')
+        }
     }
 
     private getUserVersion(): number {

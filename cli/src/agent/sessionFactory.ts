@@ -160,7 +160,9 @@ function pickExistingSessionMetadata(metadata: Metadata | null | undefined): Par
     if (metadata.summary !== undefined) preserved.summary = metadata.summary
     if (metadata.acpManualTitle !== undefined) preserved.acpManualTitle = metadata.acpManualTitle
     if (metadata.claudeSessionId !== undefined) preserved.claudeSessionId = metadata.claudeSessionId
+    if (metadata.claudeSessionIdHistory !== undefined) preserved.claudeSessionIdHistory = metadata.claudeSessionIdHistory
     if (metadata.codexSessionId !== undefined) preserved.codexSessionId = metadata.codexSessionId
+    if (metadata.codexRuntime !== undefined) preserved.codexRuntime = metadata.codexRuntime
     if (metadata.codexSourceSessionId !== undefined) preserved.codexSourceSessionId = metadata.codexSourceSessionId
     if (metadata.geminiSessionId !== undefined) preserved.geminiSessionId = metadata.geminiSessionId
     if (metadata.opencodeSessionId !== undefined) preserved.opencodeSessionId = metadata.opencodeSessionId
@@ -189,6 +191,10 @@ function pickExistingSessionMetadata(metadata: Metadata | null | undefined): Par
     if (metadata.conversationHistoryIndexes !== undefined) {
         preserved.conversationHistoryIndexes = metadata.conversationHistoryIndexes
     }
+    if (metadata.opencodeHistoryCheckpoint !== undefined) preserved.opencodeHistoryCheckpoint = metadata.opencodeHistoryCheckpoint
+    if (metadata.opencodeRewind !== undefined) preserved.opencodeRewind = metadata.opencodeRewind
+    if (metadata.opencodeWorkerId !== undefined) preserved.opencodeWorkerId = metadata.opencodeWorkerId
+    if (metadata.opencodeForkPending !== undefined) preserved.opencodeForkPending = metadata.opencodeForkPending
     if (metadata.conversationHistoryTurns !== undefined) {
         preserved.conversationHistoryTurns = metadata.conversationHistoryTurns
     }
@@ -400,6 +406,14 @@ export async function bootstrapExistingSession(options: {
     })
 
     const sessionInfo = await api.getSession(options.sessionId)
+    if (sessionInfo.metadata?.codexRuntime?.kind === 'attached') {
+        if (options.metadataOverrides?.codexRuntime?.kind !== 'attached') {
+            throw new Error('Externally attached Codex sessions require hapi attach, not an owned cold resume')
+        }
+        if (sessionInfo.metadata.conversationHistoryDiverged) {
+            throw new Error('Native history changed; use hapi attach --new-view to create a fresh projection')
+        }
+    }
     // Shared Codex cold-resume calls bootstrap while holding native ownership.
     // The source reservation outlives the native fork through child startup.
     if (options.flavor === 'codex' && sessionInfo.metadata?.codexArchivedFork) {

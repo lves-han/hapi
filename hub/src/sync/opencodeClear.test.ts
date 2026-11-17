@@ -90,6 +90,60 @@ describe('SyncEngine.clearOpenCodeSession', () => {
         } finally { await engine.stop() }
     })
 
+    it('transfers a running attached job to the clear replacement so source id PATCHes land', async () => {
+        const { store, engine } = await createEngine()
+        try {
+            const source = await engine.getOrCreateSession('job-clear-source', {
+                path: '/tmp/project', host: 'host', machineId: 'machine-1', flavor: 'opencode', startedBy: 'runner'
+            }, null, 'default')
+            await engine.handleSessionAlive({ sid: source.id, time: Date.now() })
+            const upserted = await store.sessionJobs.upsert(source.id, 'beets', {
+                label: 'beets import',
+                status: 'running',
+                remaining: 11
+            })
+            expect(upserted.outcome).toBe('upserted')
+            const runId = upserted.outcome === 'upserted' ? upserted.job.runId : undefined
+            expect(runId).toBeTruthy()
+
+            const reserved = await engine.reserveOpenCodeClearSession(source.id, 'default')
+            expect(reserved.type).toBe('success')
+            if (reserved.type !== 'success') throw new Error('reservation failed')
+            expect((await engine.confirmOpenCodeClearCleanup(source.id, 'default', reserved.sessionId))).toMatchObject({
+                type: 'success'
+            })
+            const metadataBeforeEnd = (await engine.getSessionByNamespace(source.id, 'default'))!.metadata!
+            await engine.handleSessionEnd({ sid: source.id, time: Date.now(), reason: 'cleared' })
+            const storedAfterEnd = (await store.sessions.getSessionByNamespace(source.id, 'default'))!
+            await store.sessions.updateSessionMetadata(
+                source.id,
+                { ...metadataBeforeEnd, lifecycleState: 'archived', archiveReason: 'Cleared by /clear' },
+                storedAfterEnd.metadataVersion,
+                'default'
+            )
+            await (engine as unknown as { sessionCache: { refreshSession(id: string): Promise<unknown> } }).sessionCache.refreshSession(source.id)
+
+            const spawnSession = mock(async (...args: unknown[]) => ({ type: 'success' as const, sessionId: args[12] as string }))
+            setSpawn(engine, spawnSession)
+            await expect(engine.clearOpenCodeSession(source.id, 'default')).resolves.toEqual({
+                type: 'success',
+                sessionId: reserved.sessionId
+            })
+
+            expect((await store.sessionJobs.getPrimaryRunning(source.id))).toBeNull()
+            expect((await store.sessionJobs.getPrimaryRunning(reserved.sessionId))?.key).toBe('beets')
+            expect((await engine.resolveAttachedJobSessionId(source.id, 'default'))).toBe(reserved.sessionId)
+
+            const ownerId = await engine.resolveAttachedJobSessionId(source.id, 'default')
+            const patched = await store.sessionJobs.patch(ownerId, 'beets', {
+                remaining: 4,
+                expectedRunId: runId
+            })
+            expect(patched.outcome).toBe('patched')
+            expect((await store.sessionJobs.get(reserved.sessionId, 'beets'))?.remaining).toBe(4)
+        } finally { await engine.stop() }
+    })
+
     it('atomically redirects messages arriving after reservation to the replacement', async () => {
         const { store, engine } = (await createEngine())
         try {
@@ -153,12 +207,12 @@ describe('SyncEngine.clearOpenCodeSession', () => {
                 return { type: 'success' as const, sessionId: args[12] as string }
             }))
 
-            const reconcile = ((engine as unknown as { reconcileOpenCodeClears(): Promise<void> }).reconcileOpenCodeClears())
+            const reconcile = (engine as unknown as { reconcileOpenCodeClears(): Promise<void> }).reconcileOpenCodeClears()
             while (!spawnStarted) await Promise.resolve()
             expect((await store.isOpenCodeClearDeliveryGated(reserved.sessionId))).toBe(true)
             await engine.handleSessionAlive({ sid: reserved.sessionId, time: Date.now() })
             await engine.handleSessionAlive({ sid: reserved.sessionId, time: Date.now() + 1 })
-            ;(engine as unknown as { messageService: { releaseMatureScheduledMessages(now: number): void } })
+            await (engine as unknown as { messageService: { releaseMatureScheduledMessages(now: number): Promise<void> } })
                 .messageService.releaseMatureScheduledMessages(Date.now())
             expect(emitted.filter((update) => update.body?.message)).toEqual([])
 
@@ -316,7 +370,7 @@ describe('SyncEngine.clearOpenCodeSession', () => {
             cached.activeAt = Date.now() - 120_000
             const spawnSession = mock(async () => ({ type: 'success' as const, sessionId: 'must-not-spawn' }))
             setSpawn(engine, spawnSession)
-            ;(engine as unknown as { expireInactive(): void }).expireInactive()
+            await (engine as unknown as { expireInactive(): Promise<void> }).expireInactive()
             await (engine as unknown as { reconcileOpenCodeClears(): Promise<void> }).reconcileOpenCodeClears()
             expect((await engine.getSessionByNamespace(source.id, 'default'))?.active).toBe(false)
             expect((await engine.getSessionByNamespace(source.id, 'default'))?.metadata?.opencodeClearOperation?.state).toBe('reserved')
@@ -349,15 +403,16 @@ describe('SyncEngine.clearOpenCodeSession', () => {
             if (reserved.type !== 'success') throw new Error('reservation failed')
             const cached = (await engine.getSessionByNamespace(source.id, 'default')) as unknown as { activeAt: number }
             cached.activeAt = Date.now() - 120_000
-            ;(engine as unknown as { expireInactive(): void }).expireInactive()
+            await (engine as unknown as { expireInactive(): Promise<void> }).expireInactive()
             let release!: () => void
             const stop = new Promise<void>((resolve) => { release = resolve })
             ;(engine as unknown as { rpcGateway: { stopRunnerSession: unknown } }).rpcGateway.stopRunnerSession = mock(async () => {
                 await stop
                 return 'already_gone' as const
             })
-            const recovery = ((engine as unknown as { recoverInactiveReservedClear(session: unknown, namespace: string): Promise<boolean> })
-                .recoverInactiveReservedClear((await engine.getSessionByNamespace(source.id, 'default'))!, 'default'))
+            const settledSession = (await engine.getSessionByNamespace(source.id, 'default'))!
+            const recovery = (engine as unknown as { recoverInactiveReservedClear(session: unknown, namespace: string): Promise<boolean> })
+                .recoverInactiveReservedClear(settledSession, 'default')
             await Promise.resolve()
             if (winner === 'confirm') {
                 expect((await engine.confirmOpenCodeClearCleanup(source.id, 'default', (await currentReplacementId(engine, source.id))))).toMatchObject({ type: 'success' })

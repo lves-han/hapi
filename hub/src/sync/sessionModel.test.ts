@@ -3297,6 +3297,48 @@ describe('session model', () => {
         }
     })
 
+    it('fresh-spawns Cursor when the recorded thread never persisted a store', async () => {
+        const store = new Store(':memory:')
+        const engine = await SyncEngine.create(store, {} as never, new RpcRegistry(), { broadcast() {} } as never)
+        try {
+            const session = await engine.getOrCreateSession(
+                'cursor-empty-store',
+                {
+                    path: '/tmp/project',
+                    host: 'cursor-host',
+                    machineId: 'cursor-machine',
+                    flavor: 'cursor',
+                    cursorSessionId: 'cursor-thread-empty',
+                    cursorSessionProtocol: 'acp'
+                },
+                null,
+                'default'
+            )
+            await engine.getOrCreateMachine(
+                'cursor-machine',
+                { host: 'cursor-host', platform: 'linux', happyCliVersion: '0.1.0' },
+                null,
+                'default'
+            )
+            await engine.handleMachineAlive({ machineId: 'cursor-machine', time: Date.now() })
+
+            let resumeArg: unknown = 'unset'
+            ;(engine as any).rpcGateway.getCursorChatStoreStatus = async () => ({ onDisk: true, store: 'empty' })
+            ;(engine as any).rpcGateway.spawnSession = async (...args: Parameters<SyncEngine['spawnSession']>) => {
+                resumeArg = args[8]
+                return { type: 'success', sessionId: session.id }
+            }
+            ;(engine as any).waitForSessionActive = async () => true
+
+            const result = await engine.resumeSession(session.id, 'default')
+
+            expect(result).toEqual({ type: 'success', sessionId: session.id })
+            expect(resumeArg).toBeUndefined()
+        } finally {
+            await engine.stop()
+        }
+    })
+
     it('refuses Cursor resume before spawning when the recorded chat store is missing', async () => {
         const store = new Store(':memory:')
         const engine = await SyncEngine.create(
@@ -3641,7 +3683,7 @@ describe('session model', () => {
 
     it('does not resume a native OpenCode session on a same-host machine when its recorded machine is offline', async () => {
         const store = new Store(':memory:')
-        const engine = new SyncEngine(
+        const engine = await SyncEngine.create(
             store,
             {} as never,
             new RpcRegistry(),
@@ -3696,7 +3738,7 @@ describe('session model', () => {
 
     it('does not resume a native DSH session on a same-host machine when its recorded machine is offline', async () => {
         const store = new Store(':memory:')
-        const engine = new SyncEngine(
+        const engine = await SyncEngine.create(
             store,
             {} as never,
             new RpcRegistry(),
@@ -4090,6 +4132,81 @@ describe('session model', () => {
             expect(cache.getSession(s2.id)).toBeDefined()
             await store.close()
         })
+
+        for (const [flavor, field] of [['codex', 'codexSessionId'], ['claude', 'claudeSessionId']] as const) {
+            it(`does not merge the same ${flavor} session id across different machines`, async () => {
+                const store = new Store(':memory:')
+                const events: SyncEvent[] = []
+                const cache = new SessionCache(store, createPublisher(events))
+                const s1 = await cache.getOrCreateSession(
+                    `${flavor}-tag-1`,
+                    { path: '/tmp/project', host: 'one', machineId: 'machine-1', flavor, [field]: 'native-id' },
+                    null,
+                    'default'
+                )
+                const s2 = await cache.getOrCreateSession(
+                    `${flavor}-tag-2`,
+                    { path: '/tmp/project', host: 'two', machineId: 'machine-2', flavor, [field]: 'native-id' },
+                    null,
+                    'default'
+                )
+
+                await cache.deduplicateByAgentSessionId(s2.id)
+
+                expect(cache.getSession(s1.id)).toBeDefined()
+                expect(cache.getSession(s2.id)).toBeDefined()
+                await store.close()
+            })
+
+            it(`still merges the same ${flavor} session id when one side has no machine`, async () => {
+                const store = new Store(':memory:')
+                const events: SyncEvent[] = []
+                const cache = new SessionCache(store, createPublisher(events))
+                const s1 = await cache.getOrCreateSession(
+                    `${flavor}-tag-1`,
+                    { path: '/tmp/project', host: 'one', flavor, [field]: 'native-id' },
+                    null,
+                    'default'
+                )
+                const s2 = await cache.getOrCreateSession(
+                    `${flavor}-tag-2`,
+                    { path: '/tmp/project', host: 'two', machineId: 'machine-2', flavor, [field]: 'native-id' },
+                    null,
+                    'default'
+                )
+
+                await cache.deduplicateByAgentSessionId(s2.id)
+
+                expect([cache.getSession(s1.id), cache.getSession(s2.id)].filter(Boolean)).toHaveLength(1)
+                await store.close()
+            })
+
+            it(`runs a ${flavor} dedup triggered on another machine while one pass is in flight`, async () => {
+                const store = new Store(':memory:')
+                const events: SyncEvent[] = []
+                const cache = new SessionCache(store, createPublisher(events))
+                const create = (tag: string, machineId: string) => cache.getOrCreateSession(
+                    tag,
+                    { path: '/tmp/project', host: machineId, machineId, flavor, [field]: 'native-id' },
+                    null,
+                    'default'
+                )
+                const a1 = await create(`${flavor}-a1`, 'machine-a')
+                const a2 = await create(`${flavor}-a2`, 'machine-a')
+                const b1 = await create(`${flavor}-b1`, 'machine-b')
+                const b2 = await create(`${flavor}-b2`, 'machine-b')
+
+                // Machine A's pass is still merging when machine B's trigger
+                // arrives; the follow-up pass must cover machine B's pair.
+                const first = await cache.deduplicateByAgentSessionId(a2.id)
+                const second = await cache.deduplicateByAgentSessionId(b2.id)
+                await Promise.all([first, second])
+
+                expect([cache.getSession(a1.id), cache.getSession(a2.id)].filter(Boolean)).toHaveLength(1)
+                expect([cache.getSession(b1.id), cache.getSession(b2.id)].filter(Boolean)).toHaveLength(1)
+                await store.close()
+            })
+        }
 
         it('does not merge across namespaces', async () => {
             const store = new Store(':memory:')

@@ -11,7 +11,7 @@ import { Store } from './index'
 import { PostgresDatabase } from './database'
 import { validateMessageContent } from './contentCodec'
 import { businessTables, postgresSchema, postgresSchemaVersion } from './postgresSchema'
-import { backfillPostgresMessageState, createPostgresSearchSchema, upgradePostgresFrom26 } from './postgresUpgrade'
+import { backfillPostgresMessageState, createPostgresSearchSchema, upgradePostgresSchema } from './postgresUpgrade'
 
 const sqliteSearchTables = new Set([
     'message_content_search', 'message_content_search_config', 'message_content_search_content',
@@ -140,7 +140,7 @@ async function importTable(tx: TransactionSQL, db: SQLite, table: string, checkp
                     }
                 }
                 if (table === 'messages') validateMessageContent(row.content as string | Uint8Array)
-                for (const column of ['metadata', 'agent_state', 'runner_state', 'todos', 'team_state', 'attachments', 'artifact_refs', 'tags', 'payload_json', 'principal_json', 'metadata_json']) {
+                for (const column of ['metadata', 'agent_state', 'runner_state', 'todos', 'team_state', 'attachments', 'artifact_refs', 'tags', 'payload_json', 'principal_json', 'metadata_json', 'transports']) {
                     if (typeof row[column] === 'string') JSON.parse(row[column] as string)
                 }
                 hashRow(expected, row, copyColumns)
@@ -203,17 +203,18 @@ export async function openStore(options: Options): Promise<Store> {
         const [meta] = await reserved`SELECT to_regclass('public.hapi_store_metadata') AS name`
         if (meta.name) {
             const [record] = await reserved`SELECT * FROM hapi_store_metadata WHERE id = 1`
-            if (!record || ![26, postgresSchemaVersion].includes(Number(record.schema_version))) throw new Error('Unsupported PostgreSQL schema metadata')
+            const priorSchema = Number(record?.schema_version)
+            if (!record || ![26, 31, postgresSchemaVersion].includes(priorSchema)) throw new Error('Unsupported PostgreSQL schema metadata')
             if (record.source_fingerprint && existsSync(options.dbPath)) {
                 source = new SQLite(options.dbPath, { readonly: true })
                 if (await fingerprint(source) !== record.source_fingerprint) throw new Error('SQLite source changed after PostgreSQL migration; stop the old Hub writer and reconcile both databases')
             }
-            if (Number(record.schema_version) === 26) {
+            if (priorSchema < postgresSchemaVersion) {
                 report.phase = 'upgrade-postgresql'
                 canonical = new Store(':memory:')
                 const schema = postgresSchema(canonical.sqliteDatabase)
                 await reserved.begin(async tx => {
-                    await upgradePostgresFrom26(database!, tx, schema)
+                    await upgradePostgresSchema(database!, tx, priorSchema, schema)
                     await options.checkpoint?.('upgrade-before-commit')
                 })
             }

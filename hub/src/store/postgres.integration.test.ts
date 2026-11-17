@@ -66,6 +66,28 @@ async function seed(path: string): Promise<string> {
         await store.workGraph.insertLink('default', { from_event_id: event.event.id, to_event_id: event.event.id, relation_type: 'related' })
         await store.turns.open(session.id, 'default', 1, 'agent')
         await store.turns.close(session.id, 2, 'idle')
+        await store.sessionJobs.upsert(session.id, 'seed-job', {
+            label: 'Seed job 中文',
+            status: 'running',
+            done: 1,
+            total: 2,
+            runId: 'run-1',
+            wakeOnTerminal: true,
+            wakePrompt: 'Wake prompt 中文'
+        }, 10)
+        await store.sessionRedirects.record('old-seed-session', session.id, 'default', 10)
+        await store.passkeys.add({
+            id: 'seed-cred',
+            namespace: 'default',
+            rpId: 'localhost',
+            publicKey: new Uint8Array([1, 2, 3, 254, 255]),
+            counter: 7,
+            transports: ['internal', 'hybrid'],
+            tokenFingerprint: 'seed-fingerprint',
+            name: 'Seed Passkey 中文',
+            createdAt: 10
+        })
+        await store.passkeys.recordUse('seed-cred', 8, 20)
         // Preserve plaintext and oversized historical content without applying ingest truncation.
         store.sqliteDatabase.prepare('INSERT INTO messages (id, session_id, content, created_at, seq, invoked_at) VALUES (?, ?, ?, 0, 3, 0)')
             .run('historical', session.id, JSON.stringify({ text: '历史'.repeat(40_000) }))
@@ -84,7 +106,7 @@ async function historicFixture(path: string, version: number): Promise<void> {
         const indexes = db.query("SELECT name, sql FROM sqlite_master WHERE type = 'index' AND sql IS NOT NULL").all() as { name: string; sql: string }[]
         for (const index of indexes) db.exec(`DROP INDEX ${index.name}`)
         const introducedTables: Record<string, number> = { fcm_devices: 11, session_scratchlist: 12, message_epochs: 13, usage_events: 17, usage_scan_state: 19, events: 23, event_links: 23, session_turns: 28,
-            message_content_search: 27, message_content_search_lookup: 27, message_content_search_short: 29 }
+            message_content_search: 27, message_content_search_lookup: 27, message_content_search_short: 29, session_jobs: 32, session_redirects: 35, passkey_credentials: 36 }
         for (const [table, introduced] of Object.entries(introducedTables)) if (version < introduced) db.exec(`DROP TABLE ${table}`)
         const introducedColumns: [string, number, string[]][] = [
             ['sessions', 4, ['team_state', 'team_state_updated_at']], ['sessions', 5, ['model']],
@@ -94,7 +116,10 @@ async function historicFixture(path: string, version: number): Promise<void> {
             ['messages', 30, ['content_revision']],
             ['messages', 9, ['scheduled_at']], ['messages', 25, ['delivery_state']],
             ['fcm_devices', 24, ['push_key']], ['session_scratchlist', 15, ['attachments']],
-            ['usage_events', 18, ['last_input_tokens', 'last_output_tokens', 'last_cache_read_tokens', 'last_cache_creation_tokens']]
+            ['usage_events', 18, ['last_input_tokens', 'last_output_tokens', 'last_cache_read_tokens', 'last_cache_creation_tokens']],
+            ['session_jobs', 33, ['run_id']],
+            ['session_jobs', 34, ['wake_on_terminal', 'wake_prompt', 'wake_emitted_run_id']],
+            ['usage_scan_state', 36, ['parser_version']]
         ]
         for (const [table, introduced, columns] of introducedColumns) {
             if (version >= introduced || (introducedTables[table] && version < introducedTables[table])) continue
@@ -204,7 +229,7 @@ describe.skipIf(!testUrl)('PostgreSQL storage and automatic migration', () => {
         })
     }, 30_000)
 
-    it.each(Array.from({ length: 32 }, (_, i) => i))('upgrades and imports historical schema %i without changing its source', async version => {
+    it.each(Array.from({ length: 37 }, (_, i) => i))('upgrades and imports historical schema %i without changing its source', async version => {
         await isolated(async (url, dir) => {
             const dbPath = join(dir, 'hapi.db')
             await historicFixture(dbPath, version)
@@ -230,6 +255,23 @@ describe.skipIf(!testUrl)('PostgreSQL storage and automatic migration', () => {
             expect(await store.messages.getAllMessages(id)).toEqual(expected)
             expect(await store.messages.getMessageEpoch(id)).toBe(1)
             expect((await store.sessions.getSession(id))?.metadata).toMatchObject({ unknown: { unicode: '中文 👋' } })
+            expect((await store.sessionJobs.get(id, 'seed-job'))).toMatchObject({
+                key: 'seed-job',
+                label: 'Seed job 中文',
+                runId: 'run-1',
+                wakeOnTerminal: true,
+                wakePrompt: 'Wake prompt 中文'
+            })
+            expect(await store.sessionRedirects.resolve('old-seed-session', 'default')).toBe(id)
+            const importedCred = await store.passkeys.get('seed-cred')
+            expect(importedCred).toMatchObject({
+                rpId: 'localhost',
+                counter: 8,
+                transports: ['internal', 'hybrid'],
+                name: 'Seed Passkey 中文',
+                lastUsedAt: 20
+            })
+            expect(Array.from(importedCred!.publicKey)).toEqual([1, 2, 3, 254, 255])
             const [meta] = await sql`SELECT * FROM hapi_store_metadata`
             expect(Object.keys(JSON.parse(meta.summaries))).toEqual([...businessTables])
             for (const table of businessTables) {
@@ -248,6 +290,9 @@ describe.skipIf(!testUrl)('PostgreSQL storage and automatic migration', () => {
             await exportPostgres(url, exportedPath)
             const exported = new Store(exportedPath)
             expect(await exported.messages.getAllMessages(id)).toEqual(await store.messages.getAllMessages(id))
+            expect(Array.from((await exported.passkeys.get('seed-cred'))!.publicKey)).toEqual([1, 2, 3, 254, 255])
+            expect(await exported.sessionRedirects.resolve('old-seed-session', 'default')).toBe(id)
+            expect((await exported.sessionJobs.get(id, 'seed-job'))?.label).toBe('Seed job 中文')
             await exported.close()
             await expect(exportPostgres(url, exportedPath)).rejects.toThrow('already exists')
             await store.close()
@@ -291,7 +336,8 @@ describe.skipIf(!testUrl)('PostgreSQL storage and automatic migration', () => {
             const session = await store.sessions.getOrCreateSession('upgrade', { path: '/upgrade' }, null, 'default')
             await store.messages.addMessage(session.id, { role: 'user', content: { type: 'text', text: 'historical searchable 中文' } })
             await store.close()
-            await sql.unsafe('DROP TABLE hapi_message_content_search; DROP TABLE session_turns; DROP INDEX idx_messages_future_scheduled_queued')
+            await sql.unsafe('DROP TABLE passkey_credentials; DROP TABLE session_redirects; DROP TABLE session_jobs; DROP TABLE hapi_message_content_search; DROP TABLE session_turns; DROP INDEX idx_messages_future_scheduled_queued')
+            await sql.unsafe('ALTER TABLE usage_scan_state DROP COLUMN parser_version')
             await sql.unsafe('ALTER TABLE sessions DROP COLUMN last_user_message_at, DROP COLUMN content_revision, DROP COLUMN read_revision, DROP COLUMN read_state_version, DROP COLUMN manual_unread')
             await sql.unsafe('ALTER TABLE messages DROP COLUMN content_revision')
             await sql`UPDATE hapi_store_metadata SET schema_version = 26 WHERE id = 1`
@@ -299,9 +345,10 @@ describe.skipIf(!testUrl)('PostgreSQL storage and automatic migration', () => {
             await expect(openStore({ dbPath, dataDir: dir, databaseUrl: url, checkpoint: phase => {
                 if (phase === 'upgrade-before-commit') throw new Error('injected upgrade failure')
             } })).rejects.toThrow()
-            const [prior] = await sql`SELECT schema_version, to_regclass('public.session_turns') AS turns FROM hapi_store_metadata WHERE id = 1`
+            const [prior] = await sql`SELECT schema_version, to_regclass('public.session_turns') AS turns, to_regclass('public.session_jobs') AS jobs FROM hapi_store_metadata WHERE id = 1`
             expect(Number(prior.schema_version)).toBe(26)
             expect(prior.turns).toBeNull()
+            expect(prior.jobs).toBeNull()
 
             store = await openStore({ dbPath, dataDir: dir, databaseUrl: url })
             try {
@@ -310,9 +357,55 @@ describe.skipIf(!testUrl)('PostgreSQL storage and automatic migration', () => {
                 await store.turns.open(session.id, 'default', 10, 'agent')
                 await store.turns.close(session.id, 20, 'idle')
                 expect(await store.turns.list('default', 0, 30)).toHaveLength(1)
+                await store.sessionJobs.upsert(session.id, 'upgraded-job', { label: 'Upgraded', status: 'running' })
+                expect((await store.sessionJobs.get(session.id, 'upgraded-job'))?.label).toBe('Upgraded')
             } finally { await store.close() }
             const [upgraded] = await sql`SELECT schema_version FROM hapi_store_metadata WHERE id = 1`
-            expect(Number(upgraded.schema_version)).toBe(31)
+            expect(Number(upgraded.schema_version)).toBe(36)
+        })
+    }, 30_000)
+
+    it('upgrades an existing PostgreSQL 31 database atomically to schema 36 and resets usage scan state', async () => {
+        await isolated(async (url, dir, sql) => {
+            const dbPath = join(dir, 'missing.sqlite')
+            let store = await openStore({ dbPath, dataDir: dir, databaseUrl: url })
+            const session = await store.sessions.getOrCreateSession('upgrade-v31', { path: '/upgrade-v31' }, null, 'default')
+            await store.usage.recordScan(session.id, 1, 5, [], true)
+            await store.close()
+
+            await sql.unsafe('DROP TABLE passkey_credentials; DROP TABLE session_redirects; DROP TABLE session_jobs')
+            await sql.unsafe('ALTER TABLE usage_scan_state DROP COLUMN parser_version')
+            await sql`UPDATE hapi_store_metadata SET schema_version = 31 WHERE id = 1`
+
+            await expect(openStore({ dbPath, dataDir: dir, databaseUrl: url, checkpoint: phase => {
+                if (phase === 'upgrade-before-commit') throw new Error('injected v31 upgrade failure')
+            } })).rejects.toThrow()
+            const [prior] = await sql`SELECT schema_version, to_regclass('public.passkey_credentials') AS passkeys FROM hapi_store_metadata WHERE id = 1`
+            expect(Number(prior.schema_version)).toBe(31)
+            expect(prior.passkeys).toBeNull()
+
+            store = await openStore({ dbPath, dataDir: dir, databaseUrl: url })
+            try {
+                expect(await store.usage.getScanStates([session.id])).toEqual(new Map())
+                await store.usage.recordScan(session.id, 1, 6, [], true)
+                expect(await store.usage.getScanStates([session.id])).toEqual(new Map([[session.id, { messageEpoch: 1, lastSeq: 6 }]]))
+                await store.sessionRedirects.record('legacy-id', session.id, 'default')
+                expect(await store.sessionRedirects.resolve('legacy-id', 'default')).toBe(session.id)
+                await store.passkeys.add({
+                    id: 'v31-cred',
+                    namespace: 'default',
+                    rpId: 'localhost',
+                    publicKey: new Uint8Array([9, 8, 7]),
+                    counter: 1,
+                    transports: ['usb'],
+                    tokenFingerprint: 'fp',
+                    name: 'YubiKey',
+                    createdAt: 100
+                })
+                expect(Array.from((await store.passkeys.get('v31-cred'))!.publicKey)).toEqual([9, 8, 7])
+            } finally { await store.close() }
+            const [upgraded] = await sql`SELECT schema_version FROM hapi_store_metadata WHERE id = 1`
+            expect(Number(upgraded.schema_version)).toBe(36)
         })
     }, 30_000)
 
@@ -412,6 +505,42 @@ describe.skipIf(!testUrl)('PostgreSQL storage and automatic migration', () => {
                     expect((await store.fcm.getDevicesByNamespace('default'))[0].token).toBe('token')
                     await store.push.addPushSubscription('default', { endpoint: 'https://example.invalid', p256dh: 'key', auth: 'auth' })
                     expect((await store.push.getPushSubscriptionsByNamespace('default'))[0].endpoint).toBe('https://example.invalid')
+                    expect(await store.sessionJobs.upsert('missing-session', 'job-1', { label: 'Missing', status: 'running' })).toEqual({ outcome: 'session-not-found' })
+                    const createdJob = await store.sessionJobs.upsert(a.id, 'job-1', {
+                        label: 'Build',
+                        status: 'running',
+                        done: 0,
+                        total: 2,
+                        runId: 'run-a',
+                        wakeOnTerminal: true,
+                        wakePrompt: 'Wake me'
+                    }, 100)
+                    expect(createdJob.outcome).toBe('upserted')
+                    expect((await store.sessionJobs.patch(a.id, 'job-1', { expectedRunId: 'wrong', done: 1 }, 110)).outcome).toBe('run-mismatch')
+                    expect((await store.sessionJobs.patch(a.id, 'job-1', { expectedRunId: 'run-a', status: 'completed', done: 2 }, 120)).outcome).toBe('patched')
+                    const claimed = await store.sessionJobs.claimTerminalWake(a.id, 'job-1')
+                    expect(claimed?.wakeEmittedRunId).toBe('pending:run-a')
+                    expect(await store.sessionJobs.claimTerminalWake(a.id, 'job-1')).toBeNull()
+                    expect(await store.sessionJobs.markTerminalWakeDelivered(a.id, 'job-1', 'run-a')).toBe(true)
+                    expect(await store.sessionJobs.listPendingTerminalWakes()).toEqual([])
+                    await store.sessionRedirects.record('r1', 'r2', 'default', 1)
+                    await store.sessionRedirects.record('r2', b.id, 'default', 2)
+                    expect(await store.sessionRedirects.resolve('r1', 'default')).toBe(b.id)
+                    await store.passkeys.add({
+                        id: 'pk-1',
+                        namespace: 'default',
+                        rpId: 'localhost',
+                        publicKey: new Uint8Array([0, 128, 255]),
+                        counter: 0,
+                        transports: ['internal'],
+                        tokenFingerprint: 'fp-1',
+                        name: 'Device',
+                        createdAt: 50
+                    })
+                    await store.passkeys.recordUse('pk-1', 3, 60)
+                    expect((await store.passkeys.listByNamespace('default'))[0]).toMatchObject({ counter: 3, lastUsedAt: 60 })
+                    expect(await store.passkeys.remove('pk-1', 'other')).toBe(false)
+                    expect(await store.passkeys.remove('pk-1', 'default')).toBe(true)
                 } finally { await store.close() }
             })
         }, 30_000)
@@ -481,9 +610,9 @@ describe.skipIf(!testUrl)('PostgreSQL storage and automatic migration', () => {
             await expect(openStore({ dbPath, dataDir: dir, databaseUrl: url })).rejects.toThrow()
             await sql`DROP TABLE unrelated`
             const source = new SQLite(dbPath)
-            source.exec('PRAGMA user_version = 32')
+            source.exec('PRAGMA user_version = 37')
             await expect(openStore({ dbPath, dataDir: dir, databaseUrl: url })).rejects.toThrow()
-            source.exec('PRAGMA user_version = 31')
+            source.exec('PRAGMA user_version = 36')
             source.prepare('UPDATE messages SET content = ? WHERE id = ?').run('corrupt JSON', 'historical')
             await expect(openStore({ dbPath, dataDir: dir, databaseUrl: url })).rejects.toThrow()
             source.prepare('UPDATE messages SET content = ? WHERE id = ?').run('{}', 'historical')

@@ -3,6 +3,7 @@ import { extractInjectedTurnUuid, extractMessageRenderKey, isLiveStreamSnapshot 
 import { decodeMessageContent } from './contentCodec'
 import { PostgresDatabase } from './database'
 import { postgresSearchEntry, postgresSearchSchema, type PostgresSearchEntry } from './messageContentSearchRuntime'
+import { postgresSchemaVersion } from './postgresSchema'
 import { isUserInputMessage } from './sessionUserActivity'
 
 type MessageRow = {
@@ -77,7 +78,7 @@ export async function backfillPostgresMessageState(db: PostgresDatabase, tx: Tra
     })
 }
 
-export async function upgradePostgresFrom26(
+async function upgradePostgres26To31(
     db: PostgresDatabase,
     tx: TransactionSQL,
     schema: { tables: string[]; indexes: string[] }
@@ -96,4 +97,41 @@ export async function upgradePostgresFrom26(
     await createPostgresSearchSchema(tx)
     await backfillPostgresMessageState(db, tx, true)
     await tx.unsafe('UPDATE hapi_store_metadata SET schema_version = 31 WHERE id = 1 AND schema_version = 26')
+}
+
+async function upgradePostgres31To36(
+    tx: TransactionSQL,
+    schema: { tables: string[]; indexes: string[] }
+): Promise<void> {
+    for (const table of ['session_jobs', 'session_redirects', 'passkey_credentials']) {
+        const ddl = schema.tables.find(statement => new RegExp(`^CREATE TABLE (?:IF NOT EXISTS )?${table}\\s*\\(`, 'i').test(statement))
+        if (!ddl) throw new Error(`Canonical ${table} schema is missing`)
+        await tx.unsafe(ddl)
+    }
+    for (const statement of schema.indexes) {
+        if (/idx_session_jobs_|idx_session_redirects_|idx_passkey_credentials_/.test(statement)) {
+            await tx.unsafe(statement)
+        }
+    }
+    await tx.unsafe('ALTER TABLE usage_scan_state ADD COLUMN parser_version BIGINT NOT NULL DEFAULT 2')
+    await tx.unsafe('DELETE FROM usage_scan_state')
+    await tx.unsafe(`UPDATE hapi_store_metadata SET schema_version = ${postgresSchemaVersion} WHERE id = 1 AND schema_version = 31`)
+}
+
+export async function upgradePostgresSchema(
+    db: PostgresDatabase,
+    tx: TransactionSQL,
+    fromVersion: number,
+    schema: { tables: string[]; indexes: string[] }
+): Promise<void> {
+    if (fromVersion === 26) {
+        await upgradePostgres26To31(db, tx, schema)
+        await upgradePostgres31To36(tx, schema)
+        return
+    }
+    if (fromVersion === 31) {
+        await upgradePostgres31To36(tx, schema)
+        return
+    }
+    throw new Error(`Unsupported PostgreSQL upgrade source schema: ${fromVersion}`)
 }

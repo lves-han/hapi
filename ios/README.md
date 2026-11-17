@@ -159,6 +159,23 @@ The app supports multiple hubs with one active selection. See the
   an already-paired hub can be selected directly.
 - **Simulator:** use manual entry because `DataScannerViewController` is
   unavailable. Camera pairing is optional on physical devices too.
+- **Passkeys:** Settings → Hubs → Passkeys manages this namespace's credentials.
+  Web and App credentials share RP ID `auth.hapi.run`: a credential created in
+  either client signs in to the same Hub from both. Configure the Hub's
+  `HAPI_PUBLIC_URL` as its canonical HTTPS origin. Native sign-in uses
+  `/health` → `POST /api/passkey/login/options {client:"native"}` → validate
+  RP/Hub/operation/channel → system sheet → verify. The allowlist limits the
+  sheet to this Hub's valid credentials; `404 no_passkeys` falls back to pairing.
+  A passkey session replaces the access token in secure per-Hub storage;
+  silent re-auth exchanges `{passkeySession}` and treats its 401 as terminal.
+  Registration also validates the Hub-bound user handle before system UI.
+  Ceremonies need a signed build with Associated Domains enabled and
+  `webcredentials:auth.hapi.run`, backed by
+  `https://auth.hapi.run/.well-known/apple-app-site-association` (source:
+  `web/passkey-site/.well-known/`). No association file is needed on a user's
+  Hub domain. `PasskeysTests`, `PasskeyAuthTests`, and `PasskeyHubBindingTests`
+  cover the wire flow and isolation rules. CryptoKit-backed registration tests
+  run on macOS; non-Apple builds fail closed for registration without CryptoKit.
 - **Hubs:** Settings → Hubs switches between paired hubs and adds another.
 - **Sign out:** Settings → Hubs → Sign Out removes that hub's credentials and
   falls back to another paired hub or pairing. A rejected access token, or a freshly
@@ -221,10 +238,10 @@ provider credentials as described below.
   the generic alert unchanged. The appex links nothing beyond the SDK — it
   carries an SDK-only copy of the HapiKit `PushEnvelope` decrypt, kept honest
   by the shared test vector.
-- **Actions.** `permission-request` → Allow / Deny; `ready` and
-  `task-notification` → inline Reply. `input-request` previews the first
-  question, remaining question count and session name, with tap-to-open only
-  (no approval or Reply action). Apple Watch mirrors the preview; answer on
+- **Actions.** `permission-request` → Allow / Deny; `ready` → inline
+  Reply. `input-request` previews the first question, remaining question
+  count and session name, with tap-to-open only (no approval or Reply
+  action). Apple Watch mirrors the preview; answer on
   the phone. Handlers run in the notification
   delegate's async completion and resolve the owning hub Android-style
   (active hub first, then the roster; 404 "Session not found" / 403 = try
@@ -704,17 +721,34 @@ TEST_RUNNER_HAPI_TOOL_CAPTURE=/tmp/hapi-tool-review \
 ### Home filtering
 
 Home keeps a fixed Sessions title: hub switching on the leading edge,
-Filters and New Session on the trailing edge. The native menu offers an
-**Unread Only** lens, machine single-selection (two or more machines) and
-**Mark All as Read** (shared read state, confirmed first); only applied filters
-add a summary line. The unread lens keeps the iPad's selected chat listed.
+**Sort & Filter** and New Session on the trailing edge. The native menu mirrors
+the web sort and filter menu: **Sort By** last message (default) or date
+created, **Active First** (on by default: connected sessions lead the pinned
+and recent sections, below manual pins), **Show** all / active only / archived
+only, an **Unread Only** lens, a **Machine** submenu (two or more machines)
+and **Mark All as Read** (shared read state, confirmed first). Only applied
+filters add a summary line; a non-default order just tints the menu button.
+The status and unread filters keep the iPad's selected chat listed.
 The search field (`.searchable`) ranks matches with the web relevance rules
 (`SessionListSearch`: title, worktree, summary, agent, machine, path and id;
-every word must match; `*`/`?` wildcards) while keeping pinned sections first.
-Filters and search are transient per home/hub and never select a new session's machine.
+every word must match; `*`/`?` wildcards) while keeping pinned sections first;
+relevance ties use the base order, not the chosen sort, as on web.
+Sort and Active First persist app-wide (`SessionListOrderPrefs`). Filters and
+search are transient per home/hub and never select a new session's machine.
 Options/counts come from all session summaries, including historical machines;
 the online roster supplies names only. Missing names use a labeled short ID.
 Session-count updates do not reorder options or reset the list's scroll position.
+
+Each row's agent icon carries the web presence badge (one mark per state):
+solid green pulsing while working, solid blue pulsing when only background
+tasks run, a green ring when connected and waiting, and a power mark when
+stopped or archived. Pending requests stay a separate attention symbol on the
+second line. A running [attached job](../docs/guide/session-jobs.md) counts as
+working even when the agent is idle or disconnected, keeps the session under
+**Active Only**, and replaces the project on the second line with
+`label · remaining or percent · elapsed` (amber `no heartbeat` after 15
+minutes; no progress bar). Job patches are versioned like web's: a lagged
+heartbeat cannot resurrect a cleared job.
 
 App-hosted filter tests use observable in-memory stores (no network or pairing).
 Optional layout captures are test specimens, not live or App Store screenshots:

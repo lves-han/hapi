@@ -11,6 +11,7 @@ import { describe, expect, it } from 'bun:test'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { AGENT_MESSAGE_PAYLOAD_TYPE } from '@hapi/protocol'
 import { MessageService } from './messageService'
 import type { EventPublisher } from './eventPublisher'
 import { Store } from '../store'
@@ -547,6 +548,58 @@ describe('MessageService message pagination', () => {
         expect(await makeService(store).getMessageContext(otherSession.id, target.id)).toBeNull()
     })
 
+    it('resolves a pending tool-call anchor to the stored message that contains it', async () => {
+        const store = makeStore()
+        const session = await makeSession(store, 'tool-call-context')
+        await store.messages.addMessage(session.id, { role: 'user', content: { type: 'text', text: 'before' } }, 'before')
+        const target = await store.messages.addMessage(session.id, {
+            role: 'agent',
+            content: [{
+                type: 'tool-call',
+                id: 'call-question',
+                name: 'request_user_input',
+                input: { questions: [{ id: 'choice', question: 'Pick one' }] },
+                description: null,
+                uuid: 'agent-message',
+                parentUUID: null,
+            }],
+        }, 'target')
+        await store.messages.addMessage(session.id, { role: 'user', content: { type: 'text', text: 'after' } }, 'after')
+
+        const context = await makeService(store).getMessageContext(session.id, 'tool-call:call-question')
+
+        expect(context?.targetMessageId).toBe(target.id)
+        expect(context?.messages.map(message => message.id)).toContain(target.id)
+    })
+
+    it('resolves a Claude tool_use anchor to its stored message', async () => {
+        const store = makeStore()
+        const session = await makeSession(store, 'claude-tool-use-context')
+        await store.messages.addMessage(session.id, { role: 'user', content: { type: 'text', text: 'before' } }, 'before')
+        const target = await store.messages.addMessage(session.id, {
+            role: 'agent',
+            content: {
+                type: 'output',
+                data: {
+                    type: 'assistant',
+                    message: {
+                        content: [{
+                            type: 'tool_use',
+                            id: 'call-claude-question',
+                            name: 'AskUserQuestion',
+                            input: { questions: [{ id: 'choice', question: 'Pick one' }] }
+                        }]
+                    }
+                }
+            }
+        }, 'target')
+        await store.messages.addMessage(session.id, { role: 'user', content: { type: 'text', text: 'after' } }, 'after')
+
+        const context = await makeService(store).getMessageContext(session.id, 'tool-call:call-claude-question')
+
+        expect(context?.targetMessageId).toBe(target.id)
+        expect(context?.messages.map(message => message.id)).toContain(target.id)
+    })
     it('includes pending local messages without changing the context pagination cursor', async () => {
         const store = makeStore()
         const session = await makeSession(store, 'page-context-pending')
@@ -1954,6 +2007,47 @@ describe('MessageService.sweepImmediateQueuedOnSessionEnd — scheduled rows are
         ).toBeUndefined()
     })
 
+    it('job-wake row (hapi-job-wake: localId) is exempt: session-end cannot confirm an unconsumed wake, replay preserves pending (#1489)', async () => {
+        const store = makeStore()
+        const session = await makeSession(store, 'job-wake-sweep-exempt')
+        const publisher = makePublisher()
+        const now = Date.now()
+        const wakeLocalId = 'hapi-job-wake:batch:claim-abc'
+
+        await store.messages.addMessage(
+            session.id,
+            { role: 'user', content: { type: 'text', text: '[hapi job] Attached job reached completed' } },
+            wakeLocalId
+        )
+        await store.messages.addMessage(
+            session.id,
+            { role: 'user', content: { type: 'text', text: 'ordinary' } },
+            'local-ordinary'
+        )
+
+        const service = new MessageService(store, makeNoopIo(), publisher as any)
+        const result = await service.sweepImmediateQueuedOnSessionEnd(session.id, now)
+
+        expect(result?.localIds).toEqual(['local-ordinary'])
+        const consumed = publisher.events.filter(e => e.type === 'messages-consumed')
+        expect(consumed).toHaveLength(1)
+        expect((consumed[0] as { localIds: string[] }).localIds).toEqual(['local-ordinary'])
+
+        const stillQueued = await store.messages.getUninvokedLocalMessages(session.id)
+        expect(stillQueued.find((m) => m.localId === wakeLocalId)?.invokedAt).toBeNull()
+
+        const { io, cliEmitted } = makeTrackingIo()
+        const service2 = new MessageService(store, io, publisher as any)
+        expect(await service2.replayImmediateQueuedMessages(session.id)).toBe(1)
+        expect(cliEmitted).toHaveLength(1)
+
+        await store.messages.markMessagesInvoked(session.id, [wakeLocalId], now + 1000)
+        expect(
+            (await store.messages.getUninvokedLocalMessages(session.id))
+                .find((m) => m.localId === wakeLocalId)
+        ).toBeUndefined()
+    })
+
     it('duplicate ACK on a peer row preserves the original consumption timestamp (first-write-wins)', async () => {
         const store = makeStore()
         const session = await makeSession(store, 'peer-dup-ack')
@@ -1977,6 +2071,104 @@ describe('MessageService.sweepImmediateQueuedOnSessionEnd — scheduled rows are
             (await store.messages.getMessages(session.id))
                 .find((m) => m.localId === 'ping-peer-dup1')?.invokedAt
         ).toBe(now)
+    })
+    it('future scheduled (scheduled_at > now) is also preserved by the sweep', async () => {
+        const store = makeStore()
+        const session = await makeSession(store, 'r4-future-sweep')
+        const publisher = makePublisher()
+        const now = Date.now()
+        const future = now + 60_000
+
+        await store.messages.addMessage(
+            session.id,
+            { role: 'user', content: { type: 'text', text: 'future' } },
+            'local-future',
+            future
+        )
+
+        const service = new MessageService(store, makeNoopIo(), publisher as any)
+        const result = await service.sweepImmediateQueuedOnSessionEnd(session.id, now)
+        expect(result).toBeNull()
+        expect(publisher.events.filter(e => e.type === 'messages-consumed')).toHaveLength(0)
+
+        const stillQueued = await store.messages.getUninvokedLocalMessages(session.id)
+        expect(stillQueued.find((m) => m.localId === 'local-future')?.invokedAt).toBeNull()
+    })
+
+    it('agent session events with a localId keep invoked_at NULL and their position across the sweep', async () => {
+        // Session events (opencode compaction ":started") carry a stable localId but
+        // have no ack path, so they used to match the sweep's "immediate queued"
+        // selection and got force-invoked at every session end. That restamped their
+        // position_at (COALESCE(invoked_at, created_at)) to the reopen time, which
+        // resurfaced days-old events at the bottom of the thread as if new. The
+        // sweep's contract is queued USER prompts; agent event rows must keep their
+        // original invoked_at/position.
+        const store = makeStore()
+        const session = await makeSession(store, 'r4-agent-event-sweep')
+        const publisher = makePublisher()
+        const now = Date.now()
+        const oldCreated = now - 2 * 24 * 60 * 60 * 1000
+
+        const localId = 'opencode:ses_x:compaction:msg_1b40439c:started'
+        await store.messages.addMessage(
+            session.id,
+            { role: 'agent', content: { id: 'e1', type: 'event', data: { type: 'message', message: '📦 Compaction started' } } },
+            localId,
+            undefined,
+            oldCreated
+        )
+
+        const service = new MessageService(store, makeNoopIo(), publisher as any)
+        const result = await service.sweepImmediateQueuedOnSessionEnd(session.id, now)
+        expect(result).toBeNull()
+        expect(publisher.events.filter(e => e.type === 'messages-consumed')).toHaveLength(0)
+
+        const row = (await store.messages.getMessages(session.id)).find((m) => m.localId === localId)
+        expect(row?.invokedAt).toBeNull()
+        expect(row?.createdAt).toBe(oldCreated)
+    })
+
+    it('an enveloped user prompt with a lost ack is still swept and replayed', async () => {
+        // Role detection must match the sibling delivery logic: some rows carry the
+        // role inside an envelope ({message: …}, {data:{message}}, {payload:{message}})
+        // rather than at the top level, and unwrapRoleWrappedRecordEnvelope is the
+        // one unwrapper both paths should agree on.
+        const store = makeStore()
+        const session = await makeSession(store, 'r4-enveloped-sweep')
+        const { io, cliEmitted } = makeTrackingIo()
+        const service = new MessageService(store, io, makePublisher() as any)
+
+        const enveloped = { message: { role: 'user', content: { type: 'text', text: 'enveloped prompt' } } }
+        await store.messages.addMessage(session.id, enveloped, 'enveloped-lost-ack')
+
+        // Replay delivers it to the CLI room like any queued prompt.
+        expect(await service.replayImmediateQueuedMessages(session.id)).toBe(1)
+        expect(cliEmitted).toHaveLength(1)
+
+        // The session-end sweep force-invokes it once the CLI is gone.
+        const sweepAt = Date.now()
+        const swept = await service.sweepImmediateQueuedOnSessionEnd(session.id, sweepAt)
+        expect(swept?.localIds).toEqual(['enveloped-lost-ack'])
+        expect((await store.messages.getLocalMessageStates(session.id, ['enveloped-lost-ack']))[0]?.invokedAt).toBe(sweepAt)
+    })
+
+    it('attach-time replay skips agent session-event rows instead of re-delivering them', async () => {
+        const store = makeStore()
+        const session = await makeSession(store, 'r4-enveloped-replay-excludes-events')
+        const { io, cliEmitted } = makeTrackingIo()
+        const service = new MessageService(store, io, makePublisher() as any)
+
+        await store.messages.addMessage(
+            session.id,
+            { role: 'agent', content: { id: 'e1', type: 'event', data: { type: 'message', message: '📦 Compaction started' } } },
+            'opencode:ses_x:compaction:msg_1:started'
+        )
+
+        expect(await service.replayImmediateQueuedMessages(session.id)).toBe(0)
+        expect(cliEmitted).toHaveLength(0)
+        // The event row itself is untouched — still stored, still uninvoked.
+        const row = (await store.messages.getMessages(session.id)).find((m) => m.localId === 'opencode:ses_x:compaction:msg_1:started')
+        expect(row?.invokedAt).toBeNull()
     })
 })
 
@@ -2021,5 +2213,36 @@ describe('observed read revision receipts', () => {
             expect((await service.getMessagesPage(id, { limit: 20, before: until })).page.readThroughRevision).toBeUndefined()
             expect(first.page.readThroughRevision).toBe(1)
         } finally { await store.close() }
+    })
+})
+
+describe('tool-call upsert write skip', () => {
+    function toolCallContent(callId: string, fields: { input?: unknown; status?: string } = {}): unknown {
+        return {
+            role: 'agent',
+            content: {
+                type: AGENT_MESSAGE_PAYLOAD_TYPE,
+                data: {
+                    type: 'tool-call',
+                    callId,
+                    name: 'Bash',
+                    ...(fields.input !== undefined ? { input: fields.input } : {}),
+                    ...(fields.status !== undefined ? { status: fields.status } : {})
+                }
+            }
+        }
+    }
+
+    it('does not rewrite the row when a re-emitted tick changes nothing', async () => {
+        const store = makeStore()
+        const session = await makeSession(store, 'toolcall-noop-tick')
+
+        const first = await store.messages.upsertToolCallMessage(session.id, toolCallContent('call-1', { input: { command: 'ls' }, status: 'in_progress' }), 'call-1')
+        const repeat = await store.messages.upsertToolCallMessage(session.id, toolCallContent('call-1', { input: { command: 'ls' }, status: 'in_progress' }), 'call-1')
+
+        expect(repeat.updated).toBe(true)
+        expect(repeat.message.id).toBe(first.message.id)
+        expect(await store.messages.getAllMessages(session.id)).toHaveLength(1)
+        await store.close()
     })
 })

@@ -6,6 +6,8 @@ The web app and PWA are free and full-featured. This page
 covers browser installation. For the paid iOS and Android apps, see
 [Native apps (iOS / Android)](./native-apps.md).
 
+For Markdown image requirements, native-client differences, and display-tool guidance, see [Displaying images](./agents.md#displaying-images).
+
 ## What is PWA?
 
 A Progressive Web App (PWA) is a web application that can be installed on your device and works like a native app:
@@ -97,6 +99,16 @@ Companions that cannot use Web Share Target (for example a native app on a heads
 
 See [Web Share Target](https://developer.chrome.com/docs/capabilities/web-apis/web-share-target) for the POST vs GET distinction.
 
+### Passkey sign-in
+
+After you sign in with the access token once, open **Settings → Passkeys → Add passkey** to register Face ID, Touch ID, Windows Hello, or a security key. Next time, choose **Sign in with a passkey** on the login screen. The browser then no longer keeps your access token.
+
+- Configure the Hub's `HAPI_PUBLIC_URL` as its canonical HTTPS origin and open the web app over HTTPS. Allow the authentication popup.
+- Registration and sign-in open the isolated static page at `auth.hapi.run`. Passkeys created from the web and the official apps work in both, for the same Hub.
+- A separately hosted web app must have its exact origin in the Hub's `CORS_ORIGINS`; a wildcard is not enough for authentication callbacks.
+- Rotating `CLI_API_TOKEN` disables all passkeys. Sign in with the new token and add them again.
+- Credentials from the previous domain-specific/`hapi.run` RP design must be registered again.
+
 ## Caching Strategy
 
 HAPI uses intelligent caching:
@@ -127,7 +139,6 @@ HAPI supports push notifications to alert you when agents need attention.
 |------|-----------|
 | Permission Request | Agent needs your approval |
 | Ready | Agent finished and awaits input |
-| Task completed / Task failed | A background task finishes (success or failure) |
 
 ### Native app notifications
 

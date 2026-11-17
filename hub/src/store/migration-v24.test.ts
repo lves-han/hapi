@@ -13,7 +13,7 @@ afterEach(() => {
     }
 })
 
-describe('schema migration v23 to v26', () => {
+describe('schema migrations through v36', () => {
     it('adds fcm_devices.push_key to a V23 database and keeps existing rows', async () => {
         const dir = mkdtempSync(join(tmpdir(), 'hapi-migration-v24-'))
         tempDirs.push(dir)
@@ -41,7 +41,7 @@ describe('schema migration v23 to v26', () => {
             expect(columns.some((col) => col.name === 'push_key')).toBe(true)
             const messageColumns = messageColumnsStatement.all() as Array<{ name: string }>
             expect(messageColumns.some((col) => col.name === 'delivery_state')).toBe(true)
-            expect(version.user_version).toBe(31)
+            expect(version.user_version).toBe(36)
 
         // Existing Android rows survive with a NULL push key.
         const devices = (await migrated.fcm.getDevicesByNamespace('default'))
@@ -83,10 +83,24 @@ describe('schema migration v23 to v26', () => {
 
         const migrated = new Store(dbPath)
         const internalDb = (migrated as unknown as { db: Database }).db
-        const columns = internalDb.prepare('PRAGMA table_info(messages)').all() as Array<{ name: string }>
-        const version = internalDb.prepare('PRAGMA user_version').get() as { user_version: number }
-        expect(columns.some((col) => col.name === 'delivery_state')).toBe(true)
-        expect(version.user_version).toBe(31)
-        await migrated.close()
+        const columnsStatement = internalDb.prepare('PRAGMA table_info(messages)')
+        const versionStatement = internalDb.prepare('PRAGMA user_version')
+        const indexesStatement = internalDb.prepare('PRAGMA index_list(messages)')
+        try {
+            const columns = columnsStatement.all() as Array<{ name: string }>
+            const version = versionStatement.get() as { user_version: number }
+            const indexes = indexesStatement.all() as Array<{ name: string }>
+            expect(columns.some((col) => col.name === 'delivery_state')).toBe(true)
+            expect(version.user_version).toBe(36)
+            expect(indexes.map((index) => index.name)).toEqual(expect.arrayContaining([
+                'idx_messages_immediate_queued',
+                'idx_messages_future_scheduled_queued'
+            ]))
+        } finally {
+            columnsStatement.finalize()
+            versionStatement.finalize()
+            indexesStatement.finalize()
+            await migrated.close()
+        }
     })
 })

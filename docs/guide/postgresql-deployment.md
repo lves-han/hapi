@@ -2,7 +2,7 @@
 
 本 fork 支持 SQLite 和 PostgreSQL。`DATABASE_URL` 仅从环境读取；配置后 Hub 在启动时完成迁移与验证，再开放 HTTP、Socket.IO、SSE 和后台任务。省略该变量时沿用 SQLite。
 
-已验证 schema 0 至 31 的合成 SQLite 迁移样本，以及实际 v0.29.0（schema 25）和 v0.30.7（schema 26）数据库结构。已有 PostgreSQL schema 26 可在启动时事务升级到 schema 31。[早期验证记录](../performance/postgresql-validation-2026-10-22.md)列出当时的客户端覆盖范围与性能样本。
+已验证 schema 0 至 36 的合成 SQLite 迁移样本，以及实际 v0.29.0（schema 25）和 v0.30.7（schema 26）数据库结构。已有 PostgreSQL schema 26 与 schema 31 可在启动时事务升级到 schema 36。[早期验证记录](../performance/postgresql-validation-2026-10-22.md)列出当时的客户端覆盖范围与性能样本。
 
 ## 准备原目录与连接
 
@@ -12,7 +12,7 @@
 
 迁移预检要求快照目录的可用空间至少为 SQLite 主库逻辑页大小的三倍；还需为 PostgreSQL 表、索引和 WAL 留足空间。旧 Hub 在整个迁移期间保持停写，同一数据目录和目标库只运行一个业务 Hub。
 
-升级已有 PostgreSQL 部署前，停止 Hub 写入并备份 PostgreSQL。schema 26 升级到 31 后，旧版 Hub 不能直接使用升级后的数据库；保留的原 SQLite 也不包含切换到 PostgreSQL 后的写入。
+升级已有 PostgreSQL 部署前，停止 Hub 写入并备份 PostgreSQL。schema 26 或 31 升级到 36 后，旧版 Hub 不能直接使用升级后的数据库；保留的原 SQLite 也不包含切换到 PostgreSQL 后的写入。
 
 ## Docker Compose 升级
 
@@ -69,9 +69,9 @@ docker compose --env-file deployment/.env -f deployment/compose.yml up -d --no-b
 
 | 情况 | 结果 |
 | --- | --- |
-| 空目标、存在旧 SQLite | 快照 → 工作副本历史升级 → 事务导入 13 张业务表并重建搜索数据 → 摘要/外键/编码校验 → 提交 → ANALYZE → 开放服务 |
+| 空目标、存在旧 SQLite | 快照 → 工作副本历史升级 → 事务导入 16 张业务表并重建搜索数据 → 摘要/外键/编码校验 → 提交 → ANALYZE → 开放服务 |
 | 空目标、默认 SQLite 路径缺失 | 初始化全新 PostgreSQL 库 |
-| 目标为已有 PostgreSQL schema 26 | 校验源库指纹后，在事务中升级到 schema 31 并回填派生数据；失败则回滚 |
+| 目标为已有 PostgreSQL schema 26 或 31 | 校验源库指纹后，在事务中升级到 schema 36 并回填派生数据；失败则回滚 |
 | 目标已有完成记录 | 校验版本、必要表及仍保留的源库指纹，继续使用已提交的 PostgreSQL 数据 |
 | 目标有表且缺少完成记录 | 停止启动，报告目标冲突 |
 | 连接失败、权限不足、坏 JSON/压缩内容、附件缺失、超前 schema | 停止启动并保留诊断报告 |
@@ -101,9 +101,9 @@ docker compose --env-file deployment/.env -f deployment/compose.yml run --rm --n
   bun run hub/dist/export-postgres-to-sqlite.js /原HAPI_HOME/rollback.sqlite
 ```
 
-将示例输出路径替换为挂载目录内真实路径。导出通过 PostgreSQL 一致性只读事务和写入互斥锁读取全部 13 张业务表，校验摘要、外键、内容和整数范围，恢复消息/事件顺序并重建搜索数据。输出文件已存在时明确失败，成功附带 `rollback.sqlite.report.json`。
+将示例输出路径替换为挂载目录内真实路径。导出通过 PostgreSQL 一致性只读事务和写入互斥锁读取全部 16 张业务表，校验摘要、外键、内容和整数范围，恢复消息/事件顺序并重建搜索数据。输出文件已存在时明确失败，成功附带 `rollback.sqlite.report.json`。
 
-导出结果为 schema 31。使用支持 schema 31 的本 fork 版本以 SQLite 模式启动，设置 `DB_PATH=/原HAPI_HOME/rollback.sqlite` 并移除 `DATABASE_URL`；v0.30.7 等 schema 26 旧版不能直接打开此导出文件。继续沿用原配置、密钥和附件。先核对历史、新增消息、定时消息和权限状态，再恢复业务流量。使用新路径可同时保留切换前源库和对应 WAL/SHM。
+导出结果为 schema 36。使用支持 schema 36 的本 fork 版本以 SQLite 模式启动，设置 `DB_PATH=/原HAPI_HOME/rollback.sqlite` 并移除 `DATABASE_URL`；v0.30.7 等 schema 26 旧版不能直接打开此导出文件。继续沿用原配置、密钥和附件。先核对历史、新增消息、定时消息和权限状态，再恢复业务流量。使用新路径可同时保留切换前源库和对应 WAL/SHM。
 
 本地源码也可执行：
 

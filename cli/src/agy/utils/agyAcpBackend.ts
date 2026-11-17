@@ -23,6 +23,11 @@ export function createAgyAcpBackend(): AcpSdkBackend {
         command: getAgentLaunchCommand('agy'),
         args: ['acp'],
         env: buildAgyAcpEnv(),
-        flavor: 'agy'
+        flavor: 'agy',
+        // agy streams agent_message_chunk as pure deltas; overlap-dedupe would eat
+        // a repeated character at a chunk boundary (73-8 + 800 -> 73-800).
+        textChunkMode: 'delta',
+        // agy then asks its ask_question questions as form elicitations.
+        elicitationForm: true
     });
 }

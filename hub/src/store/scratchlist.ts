@@ -76,6 +76,18 @@ export async function countScratchlistEntries(db: Database, sessionId: string): 
     return row?.n ?? 0
 }
 
+/** Return session ids that have at least one scratchlist entry in a namespace. */
+export async function listScratchlistSessionIdsByNamespace(db: Database, namespace: string): Promise<string[]> {
+    const rows = await db.prepare(
+        `SELECT DISTINCT scratchlist.session_id
+         FROM session_scratchlist AS scratchlist
+         INNER JOIN sessions AS session ON session.id = scratchlist.session_id
+         WHERE session.namespace = ?
+         ORDER BY scratchlist.session_id`
+    ).all(namespace) as Array<{ session_id: string }>
+    return rows.map((row) => row.session_id)
+}
+
 export async function getScratchlistEntry(
     db: Database,
     sessionId: string,

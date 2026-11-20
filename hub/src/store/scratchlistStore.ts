@@ -6,6 +6,7 @@ import {
     createScratchlistEntry,
     deleteScratchlistEntry,
     getScratchlistEntry,
+    listScratchlistSessionIdsByNamespace,
     listScratchlistEntries,
     sumScratchlistAttachmentBytesForSession,
     transferScratchlistEntries,
@@ -26,6 +27,10 @@ export class ScratchlistStore {
 
     async count(sessionId: string): Promise<number> {
         return this.db.operation(() => countScratchlistEntries(this.db, sessionId), false)
+    }
+
+    async listSessionIdsByNamespace(namespace: string): Promise<string[]> {
+        return this.db.operation(() => listScratchlistSessionIdsByNamespace(this.db, namespace), false)
     }
 
     async get(sessionId: string, entryId: string): Promise<StoredScratchlistEntry | null> {

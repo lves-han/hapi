@@ -28,6 +28,26 @@ describe('truncateMessagesFromLocalId', () => {
     })
 })
 
+describe('truncateMessagesFromLocalId upToSeq', () => {
+    it('keeps rows created after the captured bound', async () => {
+        const store = new Store(':memory:')
+        const session = await store.sessions.getOrCreateSession('t-bound', { path: '/tmp' }, null, 'default')
+        await store.messages.addMessage(session.id, { role: 'user', content: { type: 'text', text: 'one' } }, 'local-1')
+        await store.messages.markMessagesInvoked(session.id, ['local-1'], Date.now())
+        await store.messages.addMessage(session.id, { role: 'user', content: { type: 'text', text: 'two' } }, 'local-2')
+        await store.messages.markMessagesInvoked(session.id, ['local-2'], Date.now())
+        const bound = Math.max(...(await store.messages.getAllMessages(session.id)).map((m) => m.seq))
+        await store.messages.addMessage(session.id, { role: 'user', content: { type: 'text', text: 'later' } }, 'local-3')
+        await store.messages.markMessagesInvoked(session.id, ['local-3'], Date.now())
+
+        const result = await store.messages.truncateMessagesFromLocalId(session.id, 'local-2', [], bound)
+
+        expect(result.deleted).toBe(1)
+        expect((await store.messages.getAllMessages(session.id)).map((message) => message.localId)).toEqual(['local-1', 'local-3'])
+        await store.close()
+    })
+})
+
 describe('truncateOpenCodeRewind invocation position', () => {
     for (const cutoffFirst of [true, false]) {
         it(`removes the invocation suffix when ${cutoffFirst ? 'the boundary' : 'a later turn'} was inserted first`, async () => {

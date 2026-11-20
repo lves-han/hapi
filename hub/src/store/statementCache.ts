@@ -1,3 +1,4 @@
+import type { Database as SqliteDatabase, Statement as SqliteStatement } from 'bun:sqlite'
 import type { Database, AsyncStatement as Statement } from './database'
 
 // Prepared-statement cache keyed by Database instance, then SQL text.
@@ -13,7 +14,7 @@ import type { Database, AsyncStatement as Statement } from './database'
 // preparing inline because they `finalize()` their statement).
 //
 // Keyed weakly so a reopened/replaced Database drops its statements with it.
-const statementsByDb = new WeakMap<Database, Map<string, Statement>>()
+const statementsByDb = new WeakMap<Database | SqliteDatabase, Map<string, Statement | SqliteStatement>>()
 
 // Retention bound. Every current call site passes one of ~80 static SQL
 // strings, so the cap is never reached in practice; it exists so a future
@@ -22,7 +23,9 @@ const statementsByDb = new WeakMap<Database, Map<string, Statement>>()
 // is prepared per call — uncached, still correct.
 const MAX_CACHED_STATEMENTS = 512
 
-export function prepareCached(db: Database, sql: string): Statement {
+export function prepareCached(db: SqliteDatabase, sql: string): SqliteStatement
+export function prepareCached(db: Database, sql: string): Statement
+export function prepareCached(db: Database | SqliteDatabase, sql: string): Statement | SqliteStatement {
     let bySql = statementsByDb.get(db)
     if (!bySql) {
         bySql = new Map()
@@ -30,16 +33,17 @@ export function prepareCached(db: Database, sql: string): Statement {
     }
     let statement = bySql.get(sql)
     if (!statement) {
-        statement = db.prepare(sql)
+        const prepared = (db as { prepare(sql: string): Statement | SqliteStatement }).prepare(sql)
         if (bySql.size < MAX_CACHED_STATEMENTS) {
-            bySql.set(sql, statement)
+            bySql.set(sql, prepared)
         }
+        return prepared
     }
     return statement
 }
 
 /** Finalize cached statements before closing a file-backed database. */
-export function clearCachedStatements(db: Database): void {
+export function clearCachedStatements(db: Database | SqliteDatabase): void {
     const bySql = statementsByDb.get(db)
     if (!bySql) return
 

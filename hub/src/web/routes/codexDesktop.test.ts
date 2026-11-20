@@ -148,6 +148,7 @@ describe('Codex Desktop import routes', () => {
             expect(result.success).toBe(true)
             const session = (await store.sessions.getSessionsByNamespace('default'))[0]
             expect(session).toBeDefined()
+            expect((await engine.getSession(session.id))?.metadata?.codexImportedAt).toEqual(expect.any(Number))
             expect((await engine.getSession(session.id))?.hasConversationContent).toBe(true)
             const messages = await store.messages.getAllMessages(session.id)
             expect(messages).toHaveLength(2)

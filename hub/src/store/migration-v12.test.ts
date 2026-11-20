@@ -212,6 +212,22 @@ describe('ScratchlistStore: CRUD through the typed-table wrapper', () => {
         expect((await store.scratchlist.count(sessionId))).toBe(1)
     })
 
+    it('lists sessions with entries while excluding other namespaces', async () => {
+        const store = new Store(':memory:')
+        const defaultA = await store.sessions.getOrCreateSession('a', { path: '/a' }, null, 'default')
+        const defaultB = await store.sessions.getOrCreateSession('b', { path: '/b' }, null, 'default')
+        const other = await store.sessions.getOrCreateSession('other', { path: '/other' }, null, 'other')
+
+        await store.scratchlist.create(defaultA.id, 'A note', { entryId: 'a-1' })
+        await store.scratchlist.create(defaultA.id, 'A second note', { entryId: 'a-2' })
+        await store.scratchlist.create(other.id, 'Other note', { entryId: 'other-1' })
+
+        expect(await store.scratchlist.listSessionIdsByNamespace('default')).toEqual([defaultA.id])
+        expect(await store.scratchlist.listSessionIdsByNamespace('other')).toEqual([other.id])
+        expect(await store.scratchlist.listSessionIdsByNamespace('missing')).toEqual([])
+        expect(await store.scratchlist.listSessionIdsByNamespace('default')).not.toContain(defaultB.id)
+    })
+
     it('entries from session A are not visible to session B', async () => {
         const store = new Store(':memory:')
         const a = (await store.sessions.getOrCreateSession('a', { path: '/a' }, null, 'default'))

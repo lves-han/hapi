@@ -17,7 +17,7 @@ import { SyncEngine } from '../sync/syncEngine'
 import { businessTables } from './postgresSchema'
 import { exportPostgres } from './exportPostgres'
 import { readScratchlistAttachmentFile, resolveScratchlistStoragePath, writeScratchlistAttachmentFile } from '../scratchlistAttachments/storage'
-import { parseHubScratchlistAttachmentPath } from '@hapi/protocol'
+import { AGENT_MESSAGE_PAYLOAD_TYPE, parseHubScratchlistAttachmentPath } from '@hapi/protocol'
 import releases from './fixtures/releases-sqlite.json'
 
 const testUrl = process.env.HAPI_TEST_DATABASE_URL
@@ -92,8 +92,9 @@ async function seed(path: string): Promise<string> {
         })
         await store.passkeys.recordUse('seed-cred', 8, 20)
         // Preserve plaintext and oversized historical content without applying ingest truncation.
-        store.sqliteDatabase.prepare('INSERT INTO messages (id, session_id, content, created_at, seq, invoked_at) VALUES (?, ?, ?, 0, 3, 0)')
-            .run('historical', session.id, JSON.stringify({ text: '历史'.repeat(40_000) }))
+        store.sqliteDatabase.run('INSERT INTO messages (id, session_id, content, created_at, seq, invoked_at) VALUES (?, ?, ?, 0, 3, 0)',
+            ['historical', session.id, JSON.stringify({ text: '历史'.repeat(40_000) })])
+        store.sqliteDatabase.exec('PRAGMA wal_checkpoint(TRUNCATE)')
         return session.id
     } finally { await store.close() }
 }
@@ -773,4 +774,166 @@ describe.skipIf(!testUrl)('PostgreSQL storage and automatic migration', () => {
             }
         })
     }, 30_000)
+
+    it('matches upstream v0.36.5+ message/tail/search/scratchlist behavior on both SQLite and PostgreSQL', async () => {
+        expect(postgresQuery(
+            'SELECT seq, content FROM messages WHERE session_id = ? AND seq > ? ORDER BY seq ASC LIMIT 16',
+            ['s1', -1]
+        )).toEqual({
+            sql: 'SELECT seq, content, content_encoding FROM messages WHERE session_id = $1 AND seq > $2 ORDER BY seq ASC LIMIT 16',
+            values: ['s1', -1]
+        })
+        expect(postgresQuery(
+            'SELECT id, seq, content FROM messages WHERE session_id = ? ORDER BY seq DESC LIMIT ?',
+            ['s1', 200]
+        )).toEqual({
+            sql: 'SELECT id, seq, content, content_encoding FROM messages WHERE session_id = $1 ORDER BY seq DESC LIMIT $2',
+            values: ['s1', 200]
+        })
+
+        await isolated(async (url, dir) => {
+            const stores = [new Store(':memory:'), await openStore({ dbPath: join(dir, 'hapi.db'), dataDir: dir, databaseUrl: url })]
+            try {
+                for (const store of stores) {
+                    // 1. Live text + reasoning snapshot sweeps & standalone deleteLiveTextSnapshots
+                    const sweepSess = await store.sessions.getOrCreateSession('sweep-parity', { path: '/sweep' }, null, 'default')
+                    const t1 = await store.messages.addMessageSweepingLiveSnapshots(sweepSess.id, {
+                        role: 'agent',
+                        content: { type: AGENT_MESSAGE_PAYLOAD_TYPE, data: { type: 'message', message: 'unindexed_live_text_token', id: 'txt-1', streamSnapshot: true, live: true } }
+                    })
+                    expect(await store.messages.searchContent('unindexed_live_text_token', 'default')).toHaveLength(0)
+
+                    const t2 = await store.messages.addMessageSweepingLiveSnapshots(sweepSess.id, {
+                        role: 'agent',
+                        content: { type: AGENT_MESSAGE_PAYLOAD_TYPE, data: { type: 'message', message: 'settled_text_stream_token', id: 'txt-1', streamSnapshot: true } }
+                    })
+                    expect(t1.sweptSnapshots).toBe(0)
+                    expect(t2.sweptSnapshots).toBe(1)
+                    expect(await store.messages.searchContent('unindexed_live_text_token', 'default')).toHaveLength(0)
+                    expect((await store.messages.searchContentInSession('settled_text_stream_token', 'default', sweepSess.id)).matches.map((m) => m.messageId)).toEqual([t2.message.id])
+
+                    await store.messages.addMessage(sweepSess.id, {
+                        role: 'agent',
+                        content: { type: AGENT_MESSAGE_PAYLOAD_TYPE, data: { type: 'message', message: 'orphan-live', id: 'txt-orphan', streamSnapshot: true, live: true } }
+                    })
+                    expect(await store.messages.deleteLiveTextSnapshots(sweepSess.id, 'txt-orphan')).toBe(1)
+                    expect(await store.messages.deleteLiveTextSnapshots(sweepSess.id, 'txt-orphan')).toBe(0)
+
+                    // 2. Reasoning live snapshot skipped in search & content index while settled row remains in transcript
+                    const liveReason = await store.messages.addMessageSweepingLiveSnapshots(sweepSess.id, {
+                        role: 'agent',
+                        content: { type: AGENT_MESSAGE_PAYLOAD_TYPE, data: { type: 'reasoning', message: 'unindexed_live_reasoning_token', id: 'r-1', live: true } }
+                    })
+                    expect(liveReason.sweptSnapshots).toBe(0)
+                    expect((await store.messages.searchContentInSession('unindexed_live_reasoning_token', 'default', sweepSess.id)).matches).toHaveLength(0)
+
+                    const settledReason = await store.messages.addMessageSweepingLiveSnapshots(sweepSess.id, {
+                        role: 'agent',
+                        content: { type: AGENT_MESSAGE_PAYLOAD_TYPE, data: { type: 'reasoning', message: 'settled_reasoning_token', id: 'r-1' } }
+                    })
+                    expect(settledReason.sweptSnapshots).toBe(1)
+                    expect((await store.messages.searchContent('unindexed_live_reasoning_token', 'default'))).toHaveLength(0)
+                    expect((await store.messages.getAllMessages(sweepSess.id)).map((m) => m.id)).toEqual([t2.message.id, settledReason.message.id])
+
+                    // 3. liveTailCache 200-row replenish + upsertToolCallMessage + deleteLiveReasoningSnapshots
+                    const tailSess = await store.sessions.getOrCreateSession('tail-parity', { path: '/tail' }, null, 'default')
+                    const boundaryCall = await store.messages.upsertToolCallMessage(tailSess.id, {
+                        role: 'agent',
+                        content: { type: AGENT_MESSAGE_PAYLOAD_TYPE, data: { type: 'tool-call', callId: 'call-boundary', name: 'Read', status: 'in_progress' } }
+                    }, 'call-boundary')
+                    for (let i = 0; i < 198; i += 1) {
+                        await store.messages.addMessage(tailSess.id, {
+                            role: 'agent',
+                            content: { type: AGENT_MESSAGE_PAYLOAD_TYPE, data: { type: 'event', payload: { idx: i } } }
+                        })
+                    }
+                    await store.messages.addMessage(tailSess.id, {
+                        role: 'agent',
+                        content: { type: AGENT_MESSAGE_PAYLOAD_TYPE, data: { type: 'reasoning', message: 'edge-live', id: 'r-edge', live: true } }
+                    })
+                    const settledEdge = await store.messages.addMessage(tailSess.id, {
+                        role: 'agent',
+                        content: { type: AGENT_MESSAGE_PAYLOAD_TYPE, data: { type: 'reasoning', message: 'edge-final', id: 'r-edge' } }
+                    })
+                    expect(await store.messages.deleteLiveReasoningSnapshots(tailSess.id, 'r-edge', settledEdge.id)).toBe(1)
+                    const mergedBoundary = await store.messages.upsertToolCallMessage(tailSess.id, {
+                        role: 'agent',
+                        content: { type: AGENT_MESSAGE_PAYLOAD_TYPE, data: { type: 'tool-call', callId: 'call-boundary', name: 'Read', status: 'completed' } }
+                    }, 'call-boundary')
+                    expect(mergedBoundary.updated).toBe(true)
+                    expect(mergedBoundary.message.id).toBe(boundaryCall.message.id)
+
+                    // 4. getLiveToolWork parity (ACP + Claude tool_use / tool_result / result)
+                    const workSess = await store.sessions.getOrCreateSession('work-parity', { path: '/work' }, null, 'default')
+                    expect(await store.messages.getLiveToolWork(workSess.id)).toBe(false)
+                    await store.messages.upsertToolCallMessage(workSess.id, {
+                        role: 'agent',
+                        content: { type: AGENT_MESSAGE_PAYLOAD_TYPE, data: { type: 'tool-call', callId: 'w-1', name: 'Bash', status: 'in_progress' } }
+                    }, 'w-1')
+                    expect(await store.messages.getLiveToolWork(workSess.id)).toBe(true)
+                    await store.messages.addMessage(workSess.id, {
+                        role: 'agent',
+                        content: { type: AGENT_MESSAGE_PAYLOAD_TYPE, data: { type: 'tool-call-result', callId: 'w-1', output: 'ok' } }
+                    })
+                    expect(await store.messages.getLiveToolWork(workSess.id)).toBe(false)
+                    await store.messages.addMessage(workSess.id, {
+                        role: 'agent',
+                        content: { type: 'output', data: { type: 'assistant', message: { role: 'assistant', content: [{ type: 'tool_use', id: 'tu-1', name: 'Bash', input: {} }] } } }
+                    })
+                    expect(await store.messages.getLiveToolWork(workSess.id)).toBe(true)
+                    await store.messages.addMessage(workSess.id, {
+                        role: 'agent',
+                        content: { type: 'output', data: { type: 'result', subtype: 'success', is_error: false, result: 'done', uuid: 'r1' } }
+                    })
+                    expect(await store.messages.getLiveToolWork(workSess.id)).toBe(false)
+
+                    // 5. hasConversationContent cursor pagination (>16 rows) across plaintext json and >256-char zstd payloads
+                    const contentJsonSess = await store.sessions.getOrCreateSession('content-json-parity', { path: '/cj' }, null, 'default')
+                    const contentZstdSess = await store.sessions.getOrCreateSession('content-zstd-parity', { path: '/cz' }, null, 'default')
+                    for (let i = 0; i < 18; i += 1) {
+                        await store.messages.addMessage(contentJsonSess.id, {
+                            role: 'agent',
+                            content: { type: AGENT_MESSAGE_PAYLOAD_TYPE, data: { type: 'event', idx: i } }
+                        })
+                        await store.messages.addMessage(contentZstdSess.id, {
+                            role: 'agent',
+                            content: { type: AGENT_MESSAGE_PAYLOAD_TYPE, data: { type: 'event', idx: i, pad: 'z'.repeat(300) } }
+                        })
+                    }
+                    expect(await store.messages.hasConversationContent(contentJsonSess.id)).toBe(false)
+                    expect(await store.messages.hasConversationContent(contentZstdSess.id)).toBe(false)
+                    await store.messages.addMessage(contentJsonSess.id, { role: 'user', content: { type: 'text', text: 'hi' } })
+                    await store.messages.addMessage(contentZstdSess.id, { role: 'user', content: { type: 'text', text: 'hi '.repeat(120) } })
+                    expect(await store.messages.hasConversationContent(contentJsonSess.id)).toBe(true)
+                    expect(await store.messages.hasConversationContent(contentZstdSess.id)).toBe(true)
+
+                    // 6. scratchlist.listSessionIdsByNamespace namespace isolation
+                    const emptyNsSess = await store.sessions.getOrCreateSession('scratch-empty', { path: '/se' }, null, 'default')
+                    const otherNsSess = await store.sessions.getOrCreateSession('scratch-other', { path: '/so' }, null, 'other-ns')
+                    await store.scratchlist.create(sweepSess.id, 'default entry', { entryId: 'e-1' })
+                    await store.scratchlist.create(otherNsSess.id, 'other entry', { entryId: 'e-2' })
+                    const defaultIds = await store.scratchlist.listSessionIdsByNamespace('default')
+                    expect(defaultIds).toContain(sweepSess.id)
+                    expect(defaultIds).not.toContain(emptyNsSess.id)
+                    expect(defaultIds).not.toContain(otherNsSess.id)
+                    expect(await store.scratchlist.listSessionIdsByNamespace('other-ns')).toEqual([otherNsSess.id])
+
+                    // 7. truncateMessagesFromLocalId(..., upToSeq) preserving higher-seq rows
+                    const truncSess = await store.sessions.getOrCreateSession('trunc-parity', { path: '/tr' }, null, 'default')
+                    await store.messages.addMessage(truncSess.id, { role: 'user', content: { type: 'text', text: 'one' } }, 'loc-1')
+                    await store.messages.markMessagesInvoked(truncSess.id, ['loc-1'], Date.now())
+                    await store.messages.addMessage(truncSess.id, { role: 'user', content: { type: 'text', text: 'two' } }, 'loc-2')
+                    await store.messages.markMessagesInvoked(truncSess.id, ['loc-2'], Date.now())
+                    const bound = await store.messages.getMaxSeq(truncSess.id)
+                    await store.messages.addMessage(truncSess.id, { role: 'user', content: { type: 'text', text: 'three' } }, 'loc-3')
+                    await store.messages.markMessagesInvoked(truncSess.id, ['loc-3'], Date.now())
+                    const truncated = await store.messages.truncateMessagesFromLocalId(truncSess.id, 'loc-2', [], bound)
+                    expect(truncated.deleted).toBe(1)
+                    expect((await store.messages.getAllMessages(truncSess.id)).map((m) => m.localId)).toEqual(['loc-1', 'loc-3'])
+                }
+            } finally {
+                for (const store of stores) await store.close()
+            }
+        })
+    }, 60_000)
 })

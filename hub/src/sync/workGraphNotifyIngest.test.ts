@@ -243,6 +243,98 @@ describe('ingestNotifySummaryFromMessage', () => {
         expect((await store.workGraph.listByRelatedSession('default', session.id))).toHaveLength(0)
     })
 
+    it('warns when a near-miss footer costs the turn its status', async () => {
+        const store = new Store(':memory:')
+        const session = await store.sessions.getOrCreateSession('sess-near', {}, null, 'default')
+        const warnings: unknown[][] = []
+        const original = console.warn
+        console.warn = (...args: unknown[]) => { warnings.push(args) }
+        try {
+            // Truncated mid-value: the closing brace never arrived.
+            const result = await ingestNotify(
+                store,
+                session.id,
+                'default',
+                assistantOutput('Done.\nAGENT_NOTIFY_SUMMARY {"version":1,"status":"done","summary":"ok'),
+                'msg-near'
+            )
+            expect(result).toBeNull()
+        } finally {
+            console.warn = original
+        }
+
+        expect(warnings).toHaveLength(1)
+        expect(String(warnings[0][0])).toContain('AGENT_NOTIFY_SUMMARY')
+        expect(warnings[0][1]).toMatchObject({
+            reason: 'unterminated-json',
+            removedFromDisplay: true,
+            sessionId: session.id,
+            messageId: 'msg-near'
+        })
+    })
+
+    it('reports a kept quoted example as lost status, not as a malformed footer', async () => {
+        // The line is correct prose about the contract and stays on screen, so
+        // the log must not call it malformed or claim it was ignored - but the
+        // turn still recorded no status, which is the thing worth finding.
+        const store = new Store(':memory:')
+        const session = await store.sessions.getOrCreateSession('sess-example', {}, null, 'default')
+        const warnings: unknown[][] = []
+        const original = console.warn
+        console.warn = (...args: unknown[]) => { warnings.push(args) }
+        try {
+            const result = await ingestNotify(
+                store,
+                session.id,
+                'default',
+                assistantOutput('Use `AGENT_NOTIFY_SUMMARY {"status":"done"}` at the end.'),
+                'msg-example'
+            )
+            expect(result).toBeNull()
+        } finally {
+            console.warn = original
+        }
+
+        expect(warnings).toHaveLength(1)
+        const message = String(warnings[0][0])
+        expect(message).toContain('AGENT_NOTIFY_SUMMARY')
+        expect(message).not.toContain('malformed')
+        expect(message).not.toContain('ignored')
+        expect(warnings[0][1]).toMatchObject({
+            reason: 'trailing-content',
+            removedFromDisplay: false,
+            messageId: 'msg-example'
+        })
+    })
+
+    it('stays quiet for prose, mid-stream snapshots and well-formed footers', async () => {
+        const store = new Store(':memory:')
+        const session = await store.sessions.getOrCreateSession('sess-quiet', {}, null, 'default')
+        const warnings: unknown[][] = []
+        const original = console.warn
+        console.warn = (...args: unknown[]) => { warnings.push(args) }
+        try {
+            await ingestNotify(store, session.id, 'default', assistantOutput('Just prose, no footer.'), 'msg-prose')
+            await ingestNotify(store, session.id, 'default', assistantOutput(notifyFooter('Shipped')), 'msg-good')
+            await ingestNotify(store, session.id, 'default', {
+                role: 'agent',
+                content: {
+                    type: 'codex',
+                    data: {
+                        type: 'message',
+                        streamSnapshot: true,
+                        live: true,
+                        message: 'Working.\nAGENT_NOTIFY_SUMMARY {"version":1,"stat'
+                    }
+                }
+            }, 'msg-live')
+        } finally {
+            console.warn = original
+        }
+
+        expect(warnings).toHaveLength(0)
+    })
+
     it('does not require a chat display setting — capture always runs when well-formed', async () => {
         // Kill criterion: display-off does not block capture. This path has no
         // display gate at all; presence of a footer is sufficient.

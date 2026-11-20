@@ -1,5 +1,5 @@
 import type { TransactionSQL } from 'bun'
-import { extractInjectedTurnUuid, extractMessageRenderKey, isLiveStreamSnapshot } from '@hapi/protocol/messages'
+import { extractInjectedTurnUuid, extractMessageRenderKey, getLiveReasoningStreamId, isLiveStreamSnapshot } from '@hapi/protocol/messages'
 import { decodeMessageContent } from './contentCodec'
 import { PostgresDatabase } from './database'
 import { postgresSearchEntry, postgresSearchSchema, type PostgresSearchEntry } from './messageContentSearchRuntime'
@@ -61,7 +61,7 @@ export async function backfillPostgresMessageState(db: PostgresDatabase, tx: Tra
         try {
             for await (const row of indexSource.iterate()) {
                 const content = decodeMessageContent(row.content)
-                if (isLiveStreamSnapshot(content)) continue
+                if (isLiveStreamSnapshot(content) || getLiveReasoningStreamId(content) !== null) continue
                 const renderKey = extractMessageRenderKey(content)
                 const key = renderKey ? `${row.session_id}:${renderKey}` : row.id
                 batch.set(key, postgresSearchEntry({ id: row.id, sessionId: row.session_id, content, seq: row.seq,

@@ -13,6 +13,25 @@ async function createEngine(store: Store, events: SyncEvent[]) {
 }
 
 describe('session conversation content', () => {
+    it('clears the durable import label after admitting new input', async () => {
+        const store = new Store(':memory:')
+        const engine = await createEngine(store, [])
+        let reloaded: SyncEngine | undefined
+        try {
+            const session = await engine.getOrCreateSession('imported', {
+                path: '/work', host: 'test', flavor: 'codex', codexImportedAt: 123
+            }, null, 'default')
+            await engine.sendMessage(session.id, { text: 'Continue', localId: 'continue' })
+            expect((await engine.getSession(session.id))?.metadata?.codexImportedAt).toBeNull()
+            reloaded = await createEngine(store, [])
+            expect((await reloaded.getSession(session.id))?.metadata?.codexImportedAt).toBeNull()
+        } finally {
+            await reloaded?.stop()
+            await engine.stop()
+            await store.close()
+        }
+    })
+
     it('derives content from stored transcripts on reload, independently of titles', async () => {
         const store = new Store(':memory:')
         const empty = (await store.sessions.getOrCreateSession('empty', { path: '/work', host: 'test', name: 'Named stub' }, null, 'default'))

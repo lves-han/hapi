@@ -1233,3 +1233,124 @@ describe('tool-call upsert', () => {
         await store.close()
     })
 })
+
+describe('text snapshot sweep', () => {
+    function textMessage(streamId: string, text: string, live: boolean) {
+        return {
+            role: 'agent',
+            content: {
+                type: AGENT_MESSAGE_PAYLOAD_TYPE,
+                data: {
+                    type: 'message',
+                    message: text,
+                    id: streamId,
+                    streamSnapshot: true,
+                    ...(live ? { live: true } : {})
+                }
+            }
+        }
+    }
+
+    async function textBodies(store: Store, sessionId: string): Promise<string[]> {
+        return (await store.messages.getAllMessages(sessionId))
+            .map((message) => message.content as { content: { data: { type: string; message?: string } } })
+            .filter((content) => content.content.data.type === 'message')
+            .map((content) => content.content.data.message as string)
+    }
+
+    it('collapses a live text stream into its newest row via the combined store call', async () => {
+        const store = makeStore()
+        const session = await makeSession(store, 'text-snapshot-collapse')
+
+        // The handler walks a stream exactly like this: every stream message
+        // is stored and sweeps its own predecessors in one transaction.
+        for (const text of ['an', 'answ', 'answer i', 'answer in progress']) {
+            await store.messages.addMessageSweepingLiveSnapshots(session.id, textMessage('stream-1', text, true))
+        }
+        await store.messages.addMessageSweepingLiveSnapshots(session.id, textMessage('stream-1', 'answer in progress, done', false))
+
+        expect(await textBodies(store, session.id)).toEqual(['answer in progress, done'])
+    })
+
+    it('keeps the settled boundary message and never treats it as live', async () => {
+        const store = makeStore()
+        const session = await makeSession(store, 'text-snapshot-settled-kept')
+
+        await store.messages.addMessage(session.id, textMessage('stream-1', 'partial', true))
+        const removed = await store.messages.deleteLiveTextSnapshots(session.id, 'stream-1')
+
+        expect(removed).toBe(1)
+        // The settled shape (streamSnapshot without live) must never match.
+        await store.messages.addMessage(session.id, textMessage('stream-1', 'final', false))
+        expect(await store.messages.deleteLiveTextSnapshots(session.id, 'stream-1')).toBe(0)
+        expect(await textBodies(store, session.id)).toEqual(['final'])
+    })
+
+    it('sweeps only rows of the same stream id and session', async () => {
+        const store = makeStore()
+        const session = await makeSession(store, 'text-snapshot-scope')
+        const other = await makeSession(store, 'text-snapshot-other')
+
+        await store.messages.addMessage(session.id, textMessage('stream-1', 'first', true))
+        await store.messages.addMessage(session.id, textMessage('stream-2', 'second', true))
+        await store.messages.addMessage(other.id, textMessage('stream-1', 'theirs', true))
+
+        const kept = await store.messages.addMessageSweepingLiveSnapshots(session.id, textMessage('stream-2', 'second more', true))
+
+        expect(kept.sweptSnapshots).toBe(1)
+        expect(await textBodies(store, session.id)).toEqual(['first', 'second more'])
+        expect(await textBodies(store, other.id)).toEqual(['theirs'])
+    })
+
+    it('never lets a stream pass through zero rows', async () => {
+        const store = makeStore()
+        const session = await makeSession(store, 'text-snapshot-never-empty')
+
+        let expectedSwept = 0
+        for (const text of ['a', 'ab', 'abc']) {
+            const stored = await store.messages.addMessageSweepingLiveSnapshots(session.id, textMessage('stream-1', text, true))
+            // The first snapshot has no predecessor; every later one retires
+            // exactly its predecessor while keeping the stream non-empty.
+            expect(stored.sweptSnapshots).toBe(expectedSwept)
+            expectedSwept = 1
+            expect(await textBodies(store, session.id)).toEqual([text])
+        }
+    })
+
+    it('leaves plain id-less text messages alone', async () => {
+        const store = makeStore()
+        const session = await makeSession(store, 'text-snapshot-plain')
+
+        const first = await store.messages.addMessageSweepingLiveSnapshots(session.id, {
+            role: 'agent',
+            content: { type: AGENT_MESSAGE_PAYLOAD_TYPE, data: { type: 'message', message: 'old plain' } }
+        })
+        const second = await store.messages.addMessageSweepingLiveSnapshots(session.id, {
+            role: 'agent',
+            content: { type: AGENT_MESSAGE_PAYLOAD_TYPE, data: { type: 'message', message: 'new plain' } }
+        })
+
+        expect(first.sweptSnapshots).toBe(0)
+        expect(second.sweptSnapshots).toBe(0)
+        expect(await textBodies(store, session.id)).toEqual(['old plain', 'new plain'])
+    })
+
+    it('retires live reasoning snapshots of the same content in the same transaction', async () => {
+        const store = makeStore()
+        const session = await makeSession(store, 'sweep-mixed-streams')
+
+        // Sanity that the combined call still sweeps reasoning streams, which
+        // previously ran as a second transaction after addMessage.
+        const reasoning = { role: 'agent', content: { type: AGENT_MESSAGE_PAYLOAD_TYPE, data: { type: 'reasoning', message: 'th', id: 'r-1', live: true } } }
+        await store.messages.addMessageSweepingLiveSnapshots(session.id, reasoning)
+        const settled = await store.messages.addMessageSweepingLiveSnapshots(session.id, {
+            role: 'agent',
+            content: { type: AGENT_MESSAGE_PAYLOAD_TYPE, data: { type: 'reasoning', message: 'thinking', id: 'r-1' } }
+        })
+
+        expect(settled.sweptSnapshots).toBe(1)
+        const rows = await store.messages.getAllMessages(session.id)
+        expect(rows).toHaveLength(1)
+        expect((rows[0]!.content as { content: { data: { message: string } } }).content.data.message).toBe('thinking')
+    })
+})

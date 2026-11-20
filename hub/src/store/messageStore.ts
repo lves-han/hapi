@@ -2,11 +2,13 @@ import type { Database } from './database'
 
 import { hasConversationMessageContent } from '@hapi/protocol/messages'
 import { decodeMessageContent } from './contentCodec'
+import { prepareCached } from './statementCache'
 
 import type { StoredMessage } from './types'
 import {
     addMessage,
     upsertToolCallMessage,
+    getLiveToolWork,
     syncNativeQueuedMessage,
     addImportedMessage,
     cancelQueuedMessage,
@@ -40,8 +42,11 @@ import {
     moveUninvokedMessages,
     copyMessageToSession as copyStoredMessageToSession,
     copyMessagesToSession as copyStoredMessagesToSession,
+    addMessageSweepingLiveSnapshots,
+    deleteLiveTextSnapshots,
     getAllMessages,
     getMessagesAfterSeq,
+    getMaxSeq,
     getMinSeq,
     getMessageSeqById,
     getMessageById,
@@ -52,6 +57,7 @@ import {
     type LocalMessageState,
     type MessagePosition,
     type UpsertToolCallResult,
+    type AddMessageSweepResult,
 } from './messages'
 import {
     hasPotentiallyIncompleteMessageContent,
@@ -77,9 +83,28 @@ export class MessageStore {
     async addMessage(sessionId: string, content: unknown, localId?: string, scheduledAt?: number | null, createdAt?: number): Promise<StoredMessage> {
         return this.db.operation(() => addMessage(this.db, sessionId, content, localId, scheduledAt, createdAt), true)
     }
+    async addMessageSweepingLiveSnapshots(
+        sessionId: string,
+        content: unknown,
+        localId?: string,
+        scheduledAt?: number | null,
+        createdAt?: number
+    ): Promise<AddMessageSweepResult> {
+        return this.db.operation(() => addMessageSweepingLiveSnapshots(this.db, sessionId, content, localId, scheduledAt, createdAt), true)
+    }
+
+    async deleteLiveTextSnapshots(sessionId: string, streamId: string, keepMessageId?: string): Promise<number> {
+        return this.db.operation(() => deleteLiveTextSnapshots(this.db, sessionId, streamId, keepMessageId), true)
+    }
 
     async upsertToolCallMessage(sessionId: string, content: unknown, callId: string, localId?: string, createdAt?: number): Promise<UpsertToolCallResult> {
         return this.db.operation(() => upsertToolCallMessage(this.db, sessionId, content, callId, localId, createdAt), true)
+    }
+
+    /** Whether the session tail still holds unsettled tool work (see
+     *  getLiveToolWork in messages.ts for the liveness contract). */
+    async getLiveToolWork(sessionId: string): Promise<boolean> {
+        return this.db.operation(() => getLiveToolWork(this.db, sessionId), false)
     }
 
     async syncNativeQueuedMessage(sessionId: string, localId: string, text: string): Promise<StoredMessage> {
@@ -114,6 +139,10 @@ export class MessageStore {
 
     async getMessagesAfterSeq(sessionId: string, afterSeq: number): Promise<StoredMessage[]> {
         return this.db.operation(() => getMessagesAfterSeq(this.db, sessionId, afterSeq), false)
+    }
+
+    async getMaxSeq(sessionId: string): Promise<number> {
+        return this.db.operation(() => getMaxSeq(this.db, sessionId), false)
     }
 
     async getMinSeq(sessionId: string): Promise<number | null> {
@@ -196,19 +225,27 @@ export class MessageStore {
     // ponytail: scans through leading bookkeeping; index content if that prefix becomes costly.
     async hasConversationContent(sessionId: string): Promise<boolean> {
         return this.db.operation(async () => {
-            const query = this.db.prepare<{ content: string | Uint8Array }, [string]>(
-                'SELECT content FROM messages WHERE session_id = ? ORDER BY seq ASC'
+            const statement = prepareCached(
+                this.db,
+                'SELECT seq, content FROM messages WHERE session_id = ? AND seq > ? ORDER BY seq ASC LIMIT 16'
             )
-            try {
-                for await (const row of query.iterate(sessionId)) {
-                    if (hasConversationMessageContent(decodeMessageContent(row.content))) return true
+            let afterSeq = -1
+            while (true) {
+                const rows = (await statement.all(sessionId, afterSeq)) as Array<{ seq: number; content: string | Uint8Array }>
+                if (rows.length === 0) {
+                    return false
                 }
-                return false
-            } finally {
-                query.finalize()
+                for (const row of rows) {
+                    if (hasConversationMessageContent(decodeMessageContent(row.content))) {
+                        return true
+                    }
+                }
+                if (rows.length < 16) {
+                    return false
+                }
+                afterSeq = rows[rows.length - 1]!.seq
             }
-
-}, false)
+        }, false)
     }
 
     async countMessages(sessionId: string): Promise<number> {
@@ -283,8 +320,9 @@ export class MessageStore {
             localId?: string | null
             createdAt?: number
             invokedAt?: number | null
-        }> = []
+        }> = [],
+        upToSeq?: number
     ): Promise<{ deleted: number; inserted: number; epoch: number }> {
-        return this.db.operation(() => truncateMessagesFromLocalId(this.db, sessionId, localId, replacement), true)
+        return this.db.operation(() => truncateMessagesFromLocalId(this.db, sessionId, localId, replacement, upToSeq), true)
     }
 }

@@ -223,6 +223,27 @@ describe('archived Codex fork coordination', () => {
             expect(f.counts()).toEqual({ forks: 0, spawns: 0 })
         } finally { await f.engine.stop() }
     })
+
+    it('refuses an attached runtime source before the other eligibility checks', async () => {
+        const f = await fixture()
+        try {
+            const current = (await f.store.sessions.getSession(f.source.id))!
+            await f.store.sessions.updateSessionMetadata(f.source.id, {
+                ...current.metadata as Record<string, unknown>,
+                codexRuntime: { kind: 'attached', bindingId: randomUUID(), state: 'detached' },
+                codexSessionId: null
+            }, current.metadataVersion, 'ns')
+            await (f.engine as unknown as { sessionCache: { refreshSession(id: string): Promise<unknown> } }).sessionCache.refreshSession(f.source.id)
+            // The attached refusal must win even though the source would
+            // also fail the later eligibility guard (no native session id).
+            expect(await f.engine.forkConversation(f.source.id, 'ns')).toEqual({
+                type: 'error',
+                message: 'Fork external threads in the owning desktop, then use hapi attach. The source was not reopened; retry the same fork to reconcile a pending operation.'
+            })
+            expect(f.counts()).toEqual({ forks: 0, spawns: 0 })
+        } finally { await f.engine.stop() }
+    })
+
     it('preserves a pending reservation across sparse CLI writes and releases it explicitly after success', async () => {
         const f = (await fixture())
         try {

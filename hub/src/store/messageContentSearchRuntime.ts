@@ -3,6 +3,7 @@ import {
     extractInjectedTurnUuid,
     extractMessageRenderKey,
     extractSearchableMessageText,
+    getLiveReasoningStreamId,
     isLiveStreamSnapshot,
     unwrapRoleWrappedRecordEnvelope
 } from '@hapi/protocol/messages'
@@ -122,7 +123,7 @@ function toMatch(row: SearchRow, query: string): MessageContentSearchMatch {
 }
 
 export function postgresSearchEntry(message: IndexableMessage, injectedTurnUuids?: ReadonlySet<string>): PostgresSearchEntry | null {
-    if (message.invokedAt === null || isLiveStreamSnapshot(message.content)) return null
+    if (message.invokedAt === null || isLiveStreamSnapshot(message.content) || getLiveReasoningStreamId(message.content) !== null) return null
     const searchable = extractSearchableMessageText(message.content, {
         maxSourceCharacters: MAX_INDEXED_MESSAGE_CHARACTERS,
         ...(injectedTurnUuids ? { injectedTurnUuids } : {})
@@ -144,7 +145,7 @@ export async function indexMessageContent(db: Database, message: IndexableMessag
         sqliteIndex(db.sqliteDatabase, message)
         return
     }
-    if (isLiveStreamSnapshot(message.content)) return
+    if (isLiveStreamSnapshot(message.content) || getLiveReasoningStreamId(message.content) !== null) return
     const renderKey = extractMessageRenderKey(message.content)
     const searchKey = renderKey ? `${message.sessionId}:${renderKey}` : message.id
     await db.prepare('DELETE FROM hapi_message_content_search WHERE target_message_id = ? OR search_key = ?')

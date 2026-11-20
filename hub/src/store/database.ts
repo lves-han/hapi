@@ -1,6 +1,7 @@
 import { AsyncLocalStorage } from 'node:async_hooks'
 import type { Database as SQLite, Statement } from 'bun:sqlite'
 import { SQL, type TransactionSQL } from 'bun'
+import { clearCachedStatements } from './statementCache'
 
 export interface AsyncStatement<Row = unknown, Params extends unknown[] = unknown[]> {
     get(...params: Params): Promise<Row | undefined>
@@ -71,7 +72,7 @@ export class SQLiteDatabase implements Database {
             }
         }
     }
-    async close(): Promise<void> { await this.tail; this.db.close() }
+    async close(): Promise<void> { await this.tail; clearCachedStatements(this); clearCachedStatements(this.db); this.db.close() }
 }
 
 /** Translate the small SQL dialect shared by the existing storage helpers. */
@@ -80,7 +81,7 @@ export function postgresQuery(source: string, params: unknown[]): { sql: string;
         .replace(/\browid\b/g, 'insertion_order')
         .replace(/MAX\(usage_scan_state\.last_seq, excluded\.last_seq\)/g, 'GREATEST(usage_scan_state.last_seq, excluded.last_seq)')
         .replace(/\bAS (nextSeq|maxSeq|minSeq)\b/g, 'AS "$1"')
-        .replace(/SELECT (id, )?content FROM messages/g, 'SELECT $1content, content_encoding FROM messages')
+        .replace(/SELECT ((?:(?:id|seq),\s*)*)content FROM messages/g, 'SELECT $1content, content_encoding FROM messages')
     const ignore = /INSERT OR IGNORE/i.test(sql)
     sql = sql.replace(/INSERT OR IGNORE/gi, 'INSERT')
     if (ignore) sql = sql.trim().replace(/;$/, '') + ' ON CONFLICT DO NOTHING'
@@ -194,5 +195,5 @@ export class PostgresDatabase implements Database {
             return tx ? tx.savepoint(() => callback()) as Promise<T> : this.operation(callback, true)
         }
     }
-    async close(): Promise<void> { await this.writeTail; await this.sql.close() }
+    async close(): Promise<void> { await this.writeTail; clearCachedStatements(this); await this.sql.close() }
 }
